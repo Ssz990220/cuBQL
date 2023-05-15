@@ -14,81 +14,13 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
+#pragma once
+
 #include "cuBQL/common.h"
 #include <vector>
 #include <cuda_runtime.h>
 
-namespace cubql {
-
-#define CUBQL_CUDA_CHECK( call )                                              \
-  {                                                                     \
-    cudaError_t rc = call;                                              \
-    if (rc != cudaSuccess) {                                            \
-      fprintf(stderr,                                                   \
-              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
-              #call, rc, __LINE__, cudaGetErrorString(rc));             \
-      CUBQL_RAISE("fatal cuda error");                                    \
-    }                                                                   \
-  }
-
-#define CUBQL_CUDA_CALL(call) CUBQL_CUDA_CHECK(cuda##call)
-
-#define CUBQL_CUDA_CHECK2( where, call )                                      \
-  {                                                                     \
-    cudaError_t rc = call;                                              \
-    if(rc != cudaSuccess) {                                             \
-      if (where)                                                        \
-        fprintf(stderr, "at %s: CUDA call (%s) "                        \
-                "failed with code %d (line %d): %s\n",                  \
-                where,#call, rc, __LINE__, cudaGetErrorString(rc));     \
-      fprintf(stderr,                                                   \
-              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
-              #call, rc, __LINE__, cudaGetErrorString(rc));             \
-      CUBQL_RAISE("fatal cuda error");                                    \
-    }                                                                   \
-  }
-
-#define CUBQL_CUDA_SYNC_CHECK()                                       \
-  {                                                             \
-    cudaDeviceSynchronize();                                    \
-    cudaError_t rc = cudaGetLastError();                        \
-    if (rc != cudaSuccess) {                                    \
-      fprintf(stderr, "error (%s: line %d): %s\n",              \
-              __FILE__, __LINE__, cudaGetErrorString(rc));      \
-      CUBQL_RAISE("fatal cuda error");                            \
-    }                                                           \
-  }
-
-
-
-#define CUBQL_CUDA_CHECK_NOTHROW( call )                                      \
-  {                                                                     \
-    cudaError_t rc = call;                                              \
-    if (rc != cudaSuccess) {                                            \
-      fprintf(stderr,                                                   \
-              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
-              #call, rc, __LINE__, cudaGetErrorString(rc));             \
-      exit(2);                                                          \
-    }                                                                   \
-  }
-
-#define CUBQL_CUDA_CALL_NOTHROW(call) CUBQL_CUDA_CHECK_NOTHROW(cuda##call)
-
-#define CUBQL_CUDA_CHECK2_NOTHROW( where, call )                              \
-  {                                                                     \
-    cudaError_t rc = call;                                              \
-    if(rc != cudaSuccess) {                                             \
-      if (where)                                                        \
-        fprintf(stderr, "at %s: CUDA call (%s) "                        \
-                "failed with code %d (line %d): %s\n",                  \
-                where,#call, rc, __LINE__, cudaGetErrorString(rc));     \
-      fprintf(stderr,                                                   \
-              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
-              #call, rc, __LINE__, cudaGetErrorString(rc));             \
-      exit(2);                                                          \
-    }                                                                   \
-  }
-
+namespace cuBQL {
   
   struct DeviceMem {
     inline static void alloc(void **pointer, size_t numBytes)
@@ -104,7 +36,7 @@ namespace cubql {
     }
   };
   
-  template<typename T, typename Allocator=cubql::DeviceMem>
+  template<typename T, typename Allocator=cuBQL::DeviceMem>
   struct CUDAArray {
 
     inline CUDAArray() {}
@@ -212,6 +144,7 @@ namespace cubql {
   std::vector<T> CUDAArray<T,Allocator>::download() const
   {
     std::vector<T> host(N);
+    PRINT(N);
     CUBQL_CUDA_CALL(Memcpy(host.data(),d_data,N*sizeof(T),cudaMemcpyDefault));
     CUBQL_CUDA_SYNC_CHECK();
     return host;

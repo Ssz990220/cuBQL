@@ -14,31 +14,13 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "cuBQL/bvh.h"
-#include "cuBQL/DevMem.h"
-#include <fstream>
-#include <vector>
-
 #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
-#include "cuBQL/gpu_builder.h"
+#include "cuBQL/bvh.h"
 
+#include "testing/helper.h"
 
 namespace testing {
   
-  using cubql::divRoundUp;
-  
-  template<typename T>
-  std::vector<T> loadData(const std::string &fileName)
-  {
-    std::ifstream in(fileName.c_str(),std::ios::binary);
-    size_t count;
-    in.read((char*)&count,sizeof(count));
-
-    std::vector<T> data(count);
-    in.read((char*)data.data(),count*sizeof(T));
-    return data;
-  }
-
   void usage(const std::string &error = "")
   {
     if (!error.empty()) {
@@ -53,21 +35,25 @@ namespace testing {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numPoints) return;
     float3 point = points[tid];
-    boxes[tid] = { point,point };
+    boxes[tid].lower = point;
+    boxes[tid].upper = point;
   }
 
-  void testFCP(const std::vector<float3> &dataPoints,
-               const std::vector<float3> &queryPoints)
+  void testFCP(const std::vector<float3> &h_dataPoints,
+               const std::vector<float3> &h_queryPoints,
+               int maxLeafSize)
   {
-    cubql::CUDAArray<box3f> boxes(dataPoints.size());
+    cuBQL::CUDAArray<float3> dataPoints;
+    dataPoints.upload(h_dataPoints);
+    cuBQL::CUDAArray<box3f> boxes(dataPoints.size());
     {
       int bs = 256;
       int nb = divRoundUp((int)dataPoints.size(),bs);
       makeBoxes<<<nb,bs>>>(boxes.data(),dataPoints.data(),(int)dataPoints.size());
     };
     
-    cubql::BinaryBVH bvh;
-    cubql::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+    cuBQL::BinaryBVH bvh;
+    cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
   }
 }
 
@@ -91,6 +77,6 @@ int main(int ac, char **av)
     std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
     std::vector<float3> queryPoints = loadData<float3>(fileNames[1]);
 
-    testing::testFCP(dataPoints,queryPoints,,maxLeafSize);
+    testing::testFCP(dataPoints,queryPoints,maxLeafSize);
     return 0;
   }

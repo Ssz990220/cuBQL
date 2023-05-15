@@ -18,7 +18,7 @@
 
 #include "cuBQL/common.h"
 
-namespace cubql {
+namespace cuBQL {
 
   struct box3f {
     enum { numDims = 3 };
@@ -47,6 +47,21 @@ namespace cubql {
     uint32_t  numPrims;
   };
 
+  /*! builds a wide-bvh over a given set of primitmive bounding boxes.
+
+    builder runs on the GPU; boxes[] must be a device-readable array
+    (managed or device mem); bvh arrays will be allocated in device mem 
+
+    primitives may be marked as "inactive/invalid" by using a bounding
+    box whose lower/upper coordinates are inverted; such primitmives
+    will be ignored, and will thus neither be visited during traversal
+    nor mess up the tree in any way, shape, or form
+  */
+  void gpuBuilder(BinaryBVH &bvh,
+                  const box3f *boxes,
+                  uint32_t numBoxes,
+                  int maxLeafSize);
+  
   // template<typename prim_t, int BVH_WIDTH>
   // struct WideBVH {
   //   using box_t = typename prim_traits<prim_t>::box_t;
@@ -67,3 +82,9 @@ namespace cubql {
   
 }
 
+#if CUBQL_GPU_BUILDER_IMPLEMENTATION
+# include "cuBQL/impl/gpu_builder.h"  
+#endif
+
+
+  

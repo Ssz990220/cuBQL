@@ -35,18 +35,21 @@
 #include <execinfo.h>
 #include <sys/time.h>
 #endif
+#ifdef __CUDACC__
+#  include <cuda_runtime.h>
+#endif
 
 #ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <Windows.h>
-#ifdef min
-#undef min
-#endif
-#ifdef max
-#undef max
-#endif
+# ifndef WIN32_LEAN_AND_MEAN
+#  define WIN32_LEAN_AND_MEAN
+# endif
+# include <Windows.h>
+# ifdef min
+#  undef min
+# endif
+# ifdef max
+#  undef max
+# endif
 #endif
 
 #if !defined(WIN32)
@@ -64,25 +67,9 @@
 #  define CUBQL_DLL_IMPORT
 #endif
 
-// #if 1
 # define CUBQL_INTERFACE /* nothing - currently not building any special 'cubql.dll' */
-// #else
-// //#if defined(CUBQL_DLL_INTERFACE)
-// #  ifdef cubql_EXPORTS
-// #    define CUBQL_INTERFACE CUBQL_DLL_EXPORT
-// #  else
-// #    define CUBQL_INTERFACE CUBQL_DLL_IMPORT
-// #  endif
-// //#else
-// //#  define CUBQL_INTERFACE /*static lib*/
-// //#endif
-// #endif
 
-//#ifdef __WIN32__
-//#define  __PRETTY_FUNCTION__ __FUNCTION__ 
-//#endif
 #if defined(_MSC_VER)
-//&& !defined(__PRETTY_FUNCTION__)
 #  define __PRETTY_FUNCTION__ __FUNCTION__
 #endif
 
@@ -113,7 +100,7 @@
 #define MAYBE_UNUSED
 #endif
 
-namespace cubql {
+namespace cuBQL {
   namespace detail {
     inline static std::string backtrace()
     {
@@ -159,9 +146,6 @@ namespace cubql {
   }
 }
 
-#define CUBQL_RAISE(MSG) ::cubql::detail::cubqlRaise_impl(MSG);
-
-
 #define CUBQL_NOTIMPLEMENTED throw std::runtime_error(std::string(__PRETTY_FUNCTION__)+" not implemented")
 
 #ifdef WIN32
@@ -204,7 +188,7 @@ namespace cubql {
 
 
 
-namespace cubql {
+namespace cuBQL {
 
   inline __both__ float  rcp(float f)      { return 1.f/f; }
   inline __both__ double rcp(double d)    { return 1./d; }
@@ -307,5 +291,84 @@ namespace cubql {
   {
     return s.substr(s.size()-suffix.size()) == suffix;
   }
-    
+
+
+
 } // ::cubql
+
+
+
+#ifdef __CUDACC__
+
+#define CUBQL_RAISE(MSG) ::cuBQL::detail::cubqlRaise_impl(MSG);
+
+#define CUBQL_CUDA_CHECK( call )                                        \
+  {                                                                     \
+    cudaError_t rc = call;                                              \
+    if (rc != cudaSuccess) {                                            \
+      fprintf(stderr,                                                   \
+              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
+              #call, rc, __LINE__, cudaGetErrorString(rc));             \
+      CUBQL_RAISE("fatal cuda error");                                  \
+    }                                                                   \
+  }
+
+#define CUBQL_CUDA_CALL(call) CUBQL_CUDA_CHECK(cuda##call)
+
+#define CUBQL_CUDA_CHECK2( where, call )                                \
+  {                                                                     \
+    cudaError_t rc = call;                                              \
+    if(rc != cudaSuccess) {                                             \
+      if (where)                                                        \
+        fprintf(stderr, "at %s: CUDA call (%s) "                        \
+                "failed with code %d (line %d): %s\n",                  \
+                where,#call, rc, __LINE__, cudaGetErrorString(rc));     \
+      fprintf(stderr,                                                   \
+              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
+              #call, rc, __LINE__, cudaGetErrorString(rc));             \
+      CUBQL_RAISE("fatal cuda error");                                  \
+    }                                                                   \
+  }
+
+#define CUBQL_CUDA_SYNC_CHECK()                                 \
+  {                                                             \
+    cudaDeviceSynchronize();                                    \
+    cudaError_t rc = cudaGetLastError();                        \
+    if (rc != cudaSuccess) {                                    \
+      fprintf(stderr, "error (%s: line %d): %s\n",              \
+              __FILE__, __LINE__, cudaGetErrorString(rc));      \
+      CUBQL_RAISE("fatal cuda error");                          \
+    }                                                           \
+  }
+
+
+
+#define CUBQL_CUDA_CHECK_NOTHROW( call )                                \
+  {                                                                     \
+    cudaError_t rc = call;                                              \
+    if (rc != cudaSuccess) {                                            \
+      fprintf(stderr,                                                   \
+              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
+              #call, rc, __LINE__, cudaGetErrorString(rc));             \
+      exit(2);                                                          \
+    }                                                                   \
+  }
+
+#define CUBQL_CUDA_CALL_NOTHROW(call) CUBQL_CUDA_CHECK_NOTHROW(cuda##call)
+
+#define CUBQL_CUDA_CHECK2_NOTHROW( where, call )                        \
+  {                                                                     \
+    cudaError_t rc = call;                                              \
+    if(rc != cudaSuccess) {                                             \
+      if (where)                                                        \
+        fprintf(stderr, "at %s: CUDA call (%s) "                        \
+                "failed with code %d (line %d): %s\n",                  \
+                where,#call, rc, __LINE__, cudaGetErrorString(rc));     \
+      fprintf(stderr,                                                   \
+              "CUDA call (%s) failed with code %d (line %d): %s\n",     \
+              #call, rc, __LINE__, cudaGetErrorString(rc));             \
+      exit(2);                                                          \
+    }                                                                   \
+  }
+#endif
+

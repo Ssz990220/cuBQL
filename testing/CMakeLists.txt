@@ -16,3 +16,16 @@
 
 add_executable(cuBQL_fcp fcp.cu)
 target_link_libraries(cuBQL_fcp PUBLIC cuBQL)
+
+if (NOT CUBQL_IS_SUBMODULE)
+  add_library(cuBQL_testing 
+    helper/triangles.cu
+    )
+  target_link_libraries(cuBQL_testing PUBLIC cuBQL)
+  
+  add_executable(makePoints_uniform makePoints_uniform.cu)
+  target_link_libraries(makePoints_uniform PUBLIC cuBQL_testing cuBQL)
+
+  add_executable(makePoints_sampleOBJ makePoints_sampleOBJ.cu)
+  target_link_libraries(makePoints_sampleOBJ PUBLIC cuBQL_testing)
+endif()
