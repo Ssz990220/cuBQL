@@ -35,7 +35,7 @@ namespace cuBQL {
   };
 
   struct BinaryBVH {
-    struct Node {
+    struct CUBQL_ALIGN(16) Node {
       box3f    bounds;
       uint64_t offset : 48;
       uint64_t count  : 16;
@@ -79,12 +79,18 @@ namespace cuBQL {
   //   uint32_t *primIDs;
   //   uint32_t  numPrims;
   // };
-  
+
+  void gpuBuilder(BinaryBVH   &bvh,
+                  const box3f *boxes,
+                  uint32_t     numBoxes,
+                  int          maxLeafSize);
+  void free(BinaryBVH   &bvh);
 }
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/gpu_builder.h"  
 #endif
+
 
 
   

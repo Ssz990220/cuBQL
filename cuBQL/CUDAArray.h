@@ -41,6 +41,7 @@ namespace cuBQL {
 
     inline CUDAArray() {}
     inline CUDAArray(size_t initSize) { resize(initSize); };
+    inline ~CUDAArray() { free(); }
     
     /*! number of bytes allocated on the device */
     inline size_t numBytes() const { return N * sizeof(T); }

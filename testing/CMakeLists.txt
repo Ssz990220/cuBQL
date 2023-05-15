@@ -23,8 +23,11 @@ if (NOT CUBQL_IS_SUBMODULE)
     )
   target_link_libraries(cuBQL_testing PUBLIC cuBQL)
   
+  add_executable(buildPerf_points buildPerf_points.cu)
+  target_link_libraries(buildPerf_points PUBLIC cuBQL_testing)
+
   add_executable(makePoints_uniform makePoints_uniform.cu)
-  target_link_libraries(makePoints_uniform PUBLIC cuBQL_testing cuBQL)
+  target_link_libraries(makePoints_uniform PUBLIC cuBQL_testing)
 
   add_executable(makePoints_sampleOBJ makePoints_sampleOBJ.cu)
   target_link_libraries(makePoints_sampleOBJ PUBLIC cuBQL_testing)

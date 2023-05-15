@@ -23,6 +23,9 @@
 namespace testing {
   using cuBQL::divRoundUp;
   using cuBQL::box3f;
+  using cuBQL::getCurrentTime;
+  using cuBQL::prettyNumber;
+  using cuBQL::prettyDouble;
 
   inline __both__ float3 operator-(float3 a, float3 b)
   { return make_float3(a.x-b.x,a.y-b.y,a.z-b.z); }
