@@ -19,45 +19,58 @@
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 #include "cuBQL/bvh.h"
 #include <cub/cub.cuh>
-#include "cuBQL/CUDAArray.h"
 
 namespace cuBQL {
   namespace gpuBuilder_impl {
 
+    template<typename T, typename count_t>
+    inline void _ALLOC(T *&ptr, count_t count, cudaStream_t s)
+    { CUBQL_CUDA_CALL(MallocAsync((void**)&ptr,count*sizeof(T),s)); }
+    
+    template<typename T>
+    inline void _FREE(T *&ptr, cudaStream_t s)
+    { CUBQL_CUDA_CALL(FreeAsync((void*)ptr,s)); ptr = 0; }
+    
     inline __device__ float3 min(float3 a, float3 b)
     { return make_float3(::min(a.x,b.x),::min(a.y,b.y),::min(a.z,b.z)); }
     inline __device__ float3 max(float3 a, float3 b)
     { return make_float3(::max(a.x,b.x),::max(a.y,b.y),::max(a.z,b.z)); }
-      
+
     struct PrimState {
-      int      nodeID; //!< node the given prim is (currently) in.
-      uint32_t done  : 1;
-      uint32_t primID:31; //!< prim we're talking about
+      uint64_t nodeID:32; //!< node the given prim is (currently) in.
+      uint64_t done  : 1;
+      uint64_t primID:31; //!< prim we're talking about
     };
 
-    typedef enum { OPEN_BRANCH, OPEN_NODE, DONE_NODE } NodeState;
+    typedef enum : int8_t { OPEN_BRANCH, OPEN_NODE, DONE_NODE } NodeState;
     
     template<typename box_t>
     struct AtomicBox {
       inline __device__ void set_empty();
-      inline __device__ void atomic_grow(const box_t &box);
-      inline __device__ float get_center(int dim) const
-      {
-        return 0.5f*(decode(lower[dim])+decode(upper[dim]));
-      }
+      inline __device__ float get_center(int dim) const;
       inline __device__ box_t make_box() const;
-      
+
+      inline __device__ float get_lower(int dim) const { return decode(lower[dim]); }
+      inline __device__ float get_upper(int dim) const { return decode(upper[dim]); }
+
       int32_t lower[box_t::numDims];
       int32_t upper[box_t::numDims];
 
-    private:
       inline static __device__ int32_t encode(float f);
       inline static __device__ float   decode(int32_t bits);
     };
-      
+    
     template<typename box_t>
-    inline __device__ box_t AtomicBox<box_t>::make_box() const {
+    inline __device__ float AtomicBox<box_t>::get_center(int dim) const
+    {
+      return 0.5f*(decode(lower[dim])+decode(upper[dim]));
+    }
+
+    template<typename box_t>
+    inline __device__ box_t AtomicBox<box_t>::make_box() const
+    {
       box_t box;
+#pragma unroll
       for (int d=0;d<box_t::numDims;d++) {
         box.lower[d] = decode(lower[d]);
         box.upper[d] = decode(upper[d]);
@@ -85,17 +98,21 @@ namespace cuBQL {
     template<typename box_t>
     inline __device__ void AtomicBox<box_t>::set_empty()
     {
+#pragma unroll
       for (int d=0;d<box_t::numDims;d++) {
         lower[d] = encode(+FLT_MAX);
         upper[d] = encode(-FLT_MAX);
       }
     }
-    template<typename box_t>
-    inline __device__ void AtomicBox<box_t>::atomic_grow(const box_t &other)
+    template<typename box_t, typename prim_box_t>
+    inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const prim_box_t &other)
     {
+#pragma unroll
       for (int d=0;d<box_t::numDims;d++) {
-        atomicMin(&lower[d],encode(other.get_lower(d)));
-        atomicMax(&upper[d],encode(other.get_upper(d)));
+        const int32_t enc_lower = AtomicBox<box_t>::encode(other.get_lower(d));
+        const int32_t enc_upper = AtomicBox<box_t>::encode(other.get_upper(d));
+        if (enc_lower < abox.lower[d]) atomicMin(&abox.lower[d],enc_lower);
+        if (enc_upper > abox.upper[d]) atomicMax(&abox.upper[d],enc_upper);
       }
     }
     
@@ -104,18 +121,18 @@ namespace cuBQL {
         struct {
           AtomicBox<box3f> centBounds;
           uint32_t         count;
+          uint32_t         unused;
         } openBranch;
         struct {
           uint32_t offset;
           int      dim;
-          union {
-            uint32_t tieBreaker;
-            float    pos;
-          };
+          uint32_t tieBreaker;
+          float    pos;
         } openNode;
         struct {
           uint32_t offset;
           uint32_t count;
+          uint32_t unused[2];
         } doneNode;
       };
     };
@@ -131,18 +148,20 @@ namespace cuBQL {
     {
       buildState->nodes = nodes;
       buildState->numNodes = 2;
-      nodeStates[0] = OPEN_BRANCH;
+      
+      nodeStates[0]             = OPEN_BRANCH;
       nodes[0].openBranch.count = 0;
       nodes[0].openBranch.centBounds.set_empty();
 
-      nodeStates[1] = DONE_NODE;
+      nodeStates[1]            = DONE_NODE;
       nodes[1].doneNode.offset = 0;
-      nodes[1].doneNode.count = 0;
+      nodes[1].doneNode.count  = 0;
     }
   
+    template<typename prim_box_t>
     __global__ void initPrims(TempNode    *nodes,
                               PrimState   *primState,
-                              const box3f *primBoxes,
+                              const prim_box_t *primBoxes,
                               uint32_t     numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -151,14 +170,15 @@ namespace cuBQL {
       auto &me = primState[primID];
       me.primID = primID;
                                                     
-      const box3f box = primBoxes[primID];
+      const prim_box_t box = primBoxes[primID];
       if (box.get_lower(0) <= box.get_upper(0)) {
         me.nodeID = 0;
         me.done   = false;
+        // this could be made faster by block-reducing ...
         atomicAdd(&nodes[0].openBranch.count,1);
-        nodes[0].openBranch.centBounds.atomic_grow(box);
+        atomic_grow(nodes[0].openBranch.centBounds,box);
       } else {
-        me.nodeID = -1;
+        me.nodeID = (uint32_t)-1;
         me.done   = true;
       }
     }
@@ -180,9 +200,9 @@ namespace cuBQL {
       
       if (nodeState == OPEN_NODE) {
         // this node was open in the last pass, can close it.
-        nodeState = DONE_NODE;
-        int offset = nodes[nodeID].openNode.offset;
-        auto &done = nodes[nodeID].doneNode;
+        nodeState   = DONE_NODE;
+        int offset  = nodes[nodeID].openNode.offset;
+        auto &done  = nodes[nodeID].doneNode;
         done.count  = 0;
         done.offset = offset;
         return;
@@ -190,18 +210,19 @@ namespace cuBQL {
       
       auto in = nodes[nodeID].openBranch;
       if (in.count < maxLeafSize) {
-        auto &done = nodes[nodeID].doneNode;
+        auto &done  = nodes[nodeID].doneNode;
         done.count  = in.count;
         // set this to max-value, so the prims can later do atomicMin
         // with their position ion the leaf list; this value is
         // greater than any prim position.
         done.offset = (uint32_t)-1;
-        nodeState = DONE_NODE;
+        nodeState   = DONE_NODE;
       } else {
         float widestWidth = 0.f;
         int   widestDim   = -1;
-        for (int d=0;d<box3f::numDims;d++) {
-          float width = in.centBounds.upper[d] - in.centBounds.lower[d];
+#pragma unroll
+        for (int d=0;d<3;d++) {
+          float width = in.centBounds.get_upper(d) - in.centBounds.get_lower(d);
           if (width <= widestWidth)
             continue;
           widestWidth = width;
@@ -212,23 +233,26 @@ namespace cuBQL {
         open.dim = widestDim;
         if (widestDim >= 0) 
           open.pos = in.centBounds.get_center(widestDim);
+        // this will be epensive - could make this faster by block-reducing
         open.offset = atomicAdd(&buildState->numNodes,2);
+#pragma unroll
         for (int side=0;side<2;side++) {
           const int childID = open.offset+side;
           auto &child = nodes[childID].openBranch;
           child.centBounds.set_empty();
-          child.count = 0;
+          child.count         = 0;
           nodeStates[childID] = OPEN_BRANCH;
         }
         nodeState = OPEN_NODE;
       }
     }
 
+    template<typename prim_box_t>
     __global__
     void updatePrims(NodeState       *nodeStates,
                      TempNode        *nodes,
                      PrimState       *primStates,
-                     const box3f     *primBoxes,
+                     const prim_box_t     *primBoxes,
                      int numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -245,9 +269,10 @@ namespace cuBQL {
       }
 
       auto &split = nodes[me.nodeID].openNode;
-      const box3f primBox = primBoxes[me.primID];
+      const prim_box_t primBox = primBoxes[me.primID];
       int side = 0;
       if (split.dim == -1) {
+        // could block-reduce this, but will likely not happen often, anyway
         side = (atomicAdd(&split.tieBreaker,1) & 1);
       } else {
         const float center = 0.5f*(primBox.get_lower(split.dim)+
@@ -257,7 +282,7 @@ namespace cuBQL {
       int newNodeID = split.offset+side;
       auto &myBranch = nodes[newNodeID].openBranch;
       atomicAdd(&myBranch.count,1);
-      myBranch.centBounds.atomic_grow(primBox);
+      atomic_grow(myBranch.centBounds,primBox);
       me.nodeID = newNodeID;
     }
 
@@ -297,7 +322,7 @@ namespace cuBQL {
       if (nodeID >= numNodes) return;
 
       finalNodes[nodeID].offset = tempNodes[nodeID].doneNode.offset;
-      finalNodes[nodeID].count = tempNodes[nodeID].doneNode.count;
+      finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
     }
 
     /*! pretty-prints the current bvh for debugging; must use managed
@@ -323,25 +348,33 @@ namespace cuBQL {
                  node.offset+1,indent+1);
       }
     }
-    
+
+    template<typename prim_box_t>
     void build(BinaryBVH &bvh,
-               const box3f *boxes,
+               const prim_box_t *boxes,
                int numPrims,
-               int maxLeafSize)
+               int maxLeafSize,
+               cudaStream_t s)
     {
       // ==================================================================
       // do build on temp nodes
       // ==================================================================
-      CUDAArray<TempNode>    tempNodes(2*numPrims);
-      CUDAArray<NodeState>   nodeStates(2*numPrims);
-      CUDAArray<PrimState>   primStates(numPrims);
-      CUDAArray<BuildState>  buildState(1);
-      initState<<<1,1>>>(buildState.data(),
-                         nodeStates.data(),
-                         tempNodes.data());
-      initPrims<<<divRoundUp(numPrims,1024),1024>>>
-        (tempNodes.data(),
-         primStates.data(),boxes,numPrims);
+      TempNode   *tempNodes = 0;
+      NodeState  *nodeStates = 0;
+      PrimState  *primStates = 0;
+      BuildState *buildState = 0;
+      _ALLOC(tempNodes,2*numPrims,s);
+      _ALLOC(nodeStates,2*numPrims,s);
+      _ALLOC(primStates,numPrims,s);
+      _ALLOC(buildState,1,s);
+      initState<<<1,1,0,s>>>(buildState,
+                         nodeStates,
+                         tempNodes);
+      initPrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
+        (tempNodes,
+         primStates,boxes,numPrims);
+        // (tempNodes.data(),
+        //  primStates.data(),boxes,numPrims);
 
       int numDone = 0;
       int numNodes;
@@ -349,60 +382,80 @@ namespace cuBQL {
 
       // ------------------------------------------------------------------      
       while (true) {
-        CUBQL_CUDA_CALL(Memcpy(&numNodes,&buildState.data()->numNodes,
-                               sizeof(numNodes),cudaMemcpyDeviceToHost));
+        CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
+                                    sizeof(numNodes),cudaMemcpyDeviceToHost,s));
+        CUBQL_CUDA_CALL(StreamSynchronize(s));
+        // CUBQL_CUDA_CALL(Memcpy(&numNodes,&buildState.data()->numNodes,
+        //                        sizeof(numNodes),cudaMemcpyDeviceToHost));
         if (numNodes == numDone)
           break;
 
-        selectSplits<<<divRoundUp(numNodes,1024),1024>>>
-          (buildState.data(),
-           nodeStates.data(),tempNodes.data(),numNodes,
+        selectSplits<<<divRoundUp(numNodes,1024),1024,0,s>>>
+          (buildState,
+           nodeStates,tempNodes,numNodes,
            maxLeafSize);
+          // (buildState.data(),
+          //  nodeStates.data(),tempNodes.data(),numNodes,
+          //  maxLeafSize);
         
         numDone = numNodes;
 
-        updatePrims<<<divRoundUp(numPrims,1024),1024>>>
-          (nodeStates.data(),tempNodes.data(),
-           primStates.data(),boxes,numPrims);
+        updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
+          (nodeStates,tempNodes,
+           primStates,boxes,numPrims);
+          // (nodeStates.data(),tempNodes.data(),
+          //  primStates.data(),boxes,numPrims);
       }
-
       // ==================================================================
       // sort {item,nodeID} list
       // ==================================================================
       
       // set up sorting of prims
-      void *d_temp_storage = NULL;
+      uint8_t *d_temp_storage = NULL;
       size_t temp_storage_bytes = 0;
-      CUDAArray<PrimState> sortedPrimStates(numPrims);
-      cub::DeviceRadixSort::SortKeys(d_temp_storage, temp_storage_bytes,
-                                     (uint64_t*)primStates.data(),
-                                     (uint64_t*)sortedPrimStates.data(),
-                                     numPrims,32,64);
-
-      CUBQL_CUDA_CALL(Malloc(&d_temp_storage,temp_storage_bytes));
-      cub::DeviceRadixSort::SortKeys(d_temp_storage, temp_storage_bytes,
-                                     (uint64_t*)primStates.data(),
-                                     (uint64_t*)sortedPrimStates.data(),
-                                     numPrims,32,64);
-      CUBQL_CUDA_CALL(Free(d_temp_storage));
-      primStates.free();
-
+      // CUDAArray<PrimState> sortedPrimStates(numPrims);
+      PrimState *sortedPrimStates;
+      _ALLOC(sortedPrimStates,numPrims,s);
+      cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
+                                     (uint64_t*)primStates,//.data(),
+                                     (uint64_t*)sortedPrimStates,//.data(),
+                                     numPrims,32,64,s);
+      // CUBQL_CUDA_CALL(Malloc(&d_temp_storage,temp_storage_bytes));
+      _ALLOC(d_temp_storage,temp_storage_bytes,s);
+      cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
+                                     (uint64_t*)primStates,//.data(),
+                                     (uint64_t*)sortedPrimStates,//.data(),
+                                     numPrims,32,64,s);
+      // CUBQL_CUDA_CALL(Free(d_temp_storage));
+      CUBQL_CUDA_CALL(StreamSynchronize(s));
+      _FREE(d_temp_storage,s);
+      // primStates.free();
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
 
       bvh.numPrims = numPrims;
-      CUBQL_CUDA_CALL(Malloc(&bvh.primIDs,numPrims*sizeof(int)));
-      writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024>>>
-        (tempNodes.data(),bvh.primIDs,sortedPrimStates.data(),numPrims);
+      // CUBQL_CUDA_CALL(Malloc(&bvh.primIDs,numPrims*sizeof(int)));
+      _ALLOC(bvh.primIDs,numPrims,s);
+      writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
+        (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
+        // (tempNodes.data(),bvh.primIDs,sortedPrimStates.data(),numPrims);
 
       // ==================================================================
       // allocate and write final nodes
       // ==================================================================
       bvh.numNodes = numNodes;
-      CUBQL_CUDA_CALL(Malloc(&bvh.nodes,numNodes*sizeof(BinaryBVH::Node)));
-      writeNodes<<<divRoundUp(numNodes,1024),1024>>>
-        (bvh.nodes,tempNodes.data(),numNodes);
+      // CUBQL_CUDA_CALL(Malloc(&bvh.nodes,numNodes*sizeof(BinaryBVH::Node)));
+      _ALLOC(bvh.nodes,numNodes,s);
+      writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
+        // (bvh.nodes,tempNodes.data(),numNodes);
+        (bvh.nodes,tempNodes,numNodes);
+      CUBQL_CUDA_CALL(StreamSynchronize(s));
+      _FREE(sortedPrimStates,s);
+      _FREE(tempNodes,s);
+      _FREE(nodeStates,s);
+      _FREE(primStates,s);
+      _FREE(buildState,s);
     }
 
     __global__ void refit_init(const BinaryBVH::Node *nodes,
@@ -419,9 +472,10 @@ namespace cuBQL {
       refitData[node.offset+1] = nodeID << 1;
     }
     
+    template<typename prim_box_t>
     __global__ void refit_run(BinaryBVH bvh,
                               uint32_t *refitData,
-                              const box3f *boxes)
+                              const prim_box_t *boxes)
     {
       int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= bvh.numNodes) return;
@@ -433,7 +487,7 @@ namespace cuBQL {
 
       box3f bounds; bounds.set_empty();
       for (int i=0;i<node->count;i++) {
-        box3f primBox = boxes[bvh.primIDs[node->offset+i]];
+        const prim_box_t primBox = boxes[bvh.primIDs[node->offset+i]];
         bounds.lower = min(bounds.lower,primBox.lower);
         bounds.upper = max(bounds.upper,primBox.upper);
       }
@@ -460,16 +514,21 @@ namespace cuBQL {
         bounds.upper = max(l.bounds.upper,r.bounds.upper);
       }
     }
-    
+
+    template<typename prim_box_t>
     void refit(BinaryBVH &bvh,
-               const box3f *boxes)
+               const prim_box_t *boxes,
+               cudaStream_t s=0)
     {
-      CUDAArray<uint32_t> refitData(bvh.numNodes);
+      uint32_t *refitData;
+      CUBQL_CUDA_CALL(MallocAsync((void**)&refitData,bvh.numNodes*sizeof(int),s));
       int numNodes = bvh.numNodes;
-      refit_init<<<divRoundUp(numNodes,1024),1024>>>
-        (bvh.nodes,refitData.data(),bvh.numNodes);
-      refit_run<<<divRoundUp(numNodes,32),32>>>
-        (bvh,refitData.data(),boxes);
+      refit_init<<<divRoundUp(numNodes,1024),1024,0,s>>>
+        (bvh.nodes,refitData,bvh.numNodes);
+      refit_run<<<divRoundUp(numNodes,32),32,0,s>>>
+        (bvh,refitData,boxes);
+      CUBQL_CUDA_CALL(StreamSynchronize(s));
+      CUBQL_CUDA_CALL(FreeAsync((void*)refitData,s));
     }
     
   }
@@ -477,16 +536,32 @@ namespace cuBQL {
   void gpuBuilder(BinaryBVH   &bvh,
                   const box3f *boxes,
                   uint32_t     numBoxes,
-                  int          maxLeafSize)
+                  int          maxLeafSize,
+                  cudaStream_t s)
   {
-    gpuBuilder_impl::build(bvh,boxes,numBoxes,maxLeafSize);
-    gpuBuilder_impl::refit(bvh,boxes);
+    gpuBuilder_impl::build(bvh,boxes,numBoxes,maxLeafSize,s);
+    gpuBuilder_impl::refit(bvh,boxes,s);
+    CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
 
-  void free(BinaryBVH   &bvh)
+  void gpuBuilder(BinaryBVH    &bvh,
+                  const float4 *boxes,
+                  uint32_t      numBoxes,
+                  int           maxLeafSize,
+                  cudaStream_t s)
   {
-    CUBQL_CUDA_CALL(Free(bvh.primIDs));
-    CUBQL_CUDA_CALL(Free(bvh.nodes));
+    gpuBuilder_impl::build(bvh,(const box3fa*)boxes,numBoxes,maxLeafSize,s);
+    gpuBuilder_impl::refit(bvh,(const box3fa*)boxes,s);
+    CUBQL_CUDA_CALL(StreamSynchronize(s));
+  }
+
+  void free(BinaryBVH   &bvh,
+            cudaStream_t s)
+  {
+    CUBQL_CUDA_CALL(StreamSynchronize(s));
+    CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
+    CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
+    CUBQL_CUDA_CALL(StreamSynchronize(s));
     bvh.primIDs = 0;
   }
 }

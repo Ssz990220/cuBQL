@@ -23,15 +23,35 @@ namespace cuBQL {
   struct box3f {
     enum { numDims = 3 };
 
-    inline __device__ float get_lower(int d) const { return (&lower.x)[d]; }
-    inline __device__ float get_upper(int d) const { return (&upper.x)[d]; }
-  
+    inline __device__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
+    inline __device__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
     inline __device__ void set_empty() {
       lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
       upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
     }
     
     float3 lower, upper;
+  };
+
+  struct CUBQL_ALIGN(16) box3fa {
+    enum { numDims = 3 };
+
+    inline __device__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
+    inline __device__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
+  
+    inline __device__ void set_empty() {
+      lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
+      upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
+    }
+
+    union {
+      float3 lower;
+      float4 lower4;
+    };
+    union {
+      float3 upper;
+      float4 upper4;
+    };
   };
 
   struct BinaryBVH {
@@ -57,10 +77,18 @@ namespace cuBQL {
     will be ignored, and will thus neither be visited during traversal
     nor mess up the tree in any way, shape, or form
   */
-  void gpuBuilder(BinaryBVH &bvh,
+  void gpuBuilder(BinaryBVH   &bvh,
                   const box3f *boxes,
-                  uint32_t numBoxes,
-                  int maxLeafSize);
+                  uint32_t     numBoxes,
+                  int          maxLeafSize,
+                  cudaStream_t s=0);
+  void gpuBuilder(BinaryBVH    &bvh,
+                  const float4 *boxes,
+                  uint32_t      numBoxes,
+                  int           maxLeafSize,
+                  cudaStream_t  s=0);
+  void free(BinaryBVH   &bvh,
+            cudaStream_t s=0);
   
   // template<typename prim_t, int BVH_WIDTH>
   // struct WideBVH {
@@ -80,11 +108,6 @@ namespace cuBQL {
   //   uint32_t  numPrims;
   // };
 
-  void gpuBuilder(BinaryBVH   &bvh,
-                  const box3f *boxes,
-                  uint32_t     numBoxes,
-                  int          maxLeafSize);
-  void free(BinaryBVH   &bvh);
 }
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
