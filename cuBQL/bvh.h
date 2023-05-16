@@ -87,6 +87,11 @@ namespace cuBQL {
                   uint32_t      numBoxes,
                   int           maxLeafSize,
                   cudaStream_t  s=0);
+  void gpuBuilder(BinaryBVH    &bvh,
+                  const box3fa *boxes,
+                  uint32_t      numBoxes,
+                  int           maxLeafSize,
+                  cudaStream_t  s=0);
   void free(BinaryBVH   &bvh,
             cudaStream_t s=0);
   

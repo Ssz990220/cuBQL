@@ -554,6 +554,16 @@ namespace cuBQL {
     gpuBuilder_impl::refit(bvh,(const box3fa*)boxes,s);
     CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
+  void gpuBuilder(BinaryBVH    &bvh,
+                  const box3fa *boxes,
+                  uint32_t      numBoxes,
+                  int           maxLeafSize,
+                  cudaStream_t s)
+  {
+    gpuBuilder_impl::build(bvh,(const box3fa*)boxes,numBoxes,maxLeafSize,s);
+    gpuBuilder_impl::refit(bvh,(const box3fa*)boxes,s);
+    CUBQL_CUDA_CALL(StreamSynchronize(s));
+  }
 
   void free(BinaryBVH   &bvh,
             cudaStream_t s)

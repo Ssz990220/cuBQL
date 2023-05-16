@@ -17,9 +17,12 @@
 #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
 
+#include "cuBQL/CUDAArray.h"
 #include "testing/helper.h"
 
 namespace testing {
+
+  typedef cuBQL::box3fa box_t;
   
   void usage(const std::string &error = "")
   {
@@ -30,7 +33,7 @@ namespace testing {
     exit(error.empty()?0:1);
   }
 
-  __global__ void makeBoxes(box3f *boxes, float3 *points, int numPoints)
+  __global__ void makeBoxes(box_t *boxes, float3 *points, int numPoints)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numPoints) return;
@@ -45,7 +48,7 @@ namespace testing {
   {
     cuBQL::CUDAArray<float3> dataPoints;
     dataPoints.upload(h_dataPoints);
-    cuBQL::CUDAArray<box3f> boxes(dataPoints.size());
+    cuBQL::CUDAArray<box_t> boxes(dataPoints.size());
     {
       int bs = 256;
       int nb = divRoundUp((int)dataPoints.size(),bs);
