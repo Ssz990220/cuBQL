@@ -22,6 +22,7 @@ int main(int ac, char **av)
 {
   float3 lower = make_float3(0.f,0.f,0.f);
   float3 upper = make_float3(1.f,1.f,1.f);
+  int tc = 0;
   std::string outFileName;
   int numPoints = 100000;
   for (int i=1;i<ac;i++) {
@@ -38,6 +39,8 @@ int main(int ac, char **av)
       upper.x = std::stof(av[++i]);
       upper.y = std::stof(av[++i]);
       upper.z = std::stof(av[++i]);
+    } else if (arg == "-tc") {
+      tc = std::stoi(av[++i]);
     } else
       throw std::runtime_error("./makePoints_uniform -n numPoints -o outFileName [--lower x y z][--upper x y z]");
   }
@@ -48,6 +51,28 @@ int main(int ac, char **av)
   std::vector<float3> points;
   for (int i=0;i<numPoints;i++)
     points.push_back(make_float3(drand48(),drand48(),drand48()));
+  for (auto &p : points) {
+    switch (tc) {
+    case 1:
+      p.x = p.x * 0.8 + 0.1;
+      p.y = p.y * 0.2 + 0.7;
+      p.z = p.z * 0.5 + 0.3;
+      break;
+    case 2:
+      p.x = p.x * 1.2 - 0.1;
+      p.y = p.y * 1.2 - 0.1;
+      p.z = p.z * 1.2 - 0.1;
+      break;
+    case 3:
+      p.x = p.x * 2 - 1;
+      p.y = p.y * 2 - 1;
+      p.z = p.z * 2 - 1;
+      break;
+    default: /* leave on uniform [0,1] */
+      ;
+    }
+  }         
+      
   saveData(points,outFileName);
   return 0;
 }

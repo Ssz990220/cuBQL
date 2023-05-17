@@ -19,6 +19,7 @@
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 #include "cuBQL/bvh.h"
 #include <cub/cub.cuh>
+#include "cuBQL/math.h"
 
 namespace cuBQL {
   namespace gpuBuilder_impl {
@@ -31,15 +32,18 @@ namespace cuBQL {
     inline void _FREE(T *&ptr, cudaStream_t s)
     { CUBQL_CUDA_CALL(FreeAsync((void*)ptr,s)); ptr = 0; }
     
-    inline __device__ float3 min(float3 a, float3 b)
-    { return make_float3(::min(a.x,b.x),::min(a.y,b.y),::min(a.z,b.z)); }
-    inline __device__ float3 max(float3 a, float3 b)
-    { return make_float3(::max(a.x,b.x),::max(a.y,b.y),::max(a.z,b.z)); }
-
     struct PrimState {
-      uint64_t nodeID:32; //!< node the given prim is (currently) in.
-      uint64_t done  : 1;
-      uint64_t primID:31; //!< prim we're talking about
+      union {
+        /* careful with this order - this is intentionally chosen such
+           that all item with nodeID==-1 will end up at the end of the
+           list; and all others will be sorted by nodeID */
+        struct {
+          uint64_t primID:31; //!< prim we're talking about
+          uint64_t done  : 1;
+          uint64_t nodeID:32; //!< node the given prim is (currently) in.
+        };
+        uint64_t bits;
+      };
     };
 
     typedef enum : int8_t { OPEN_BRANCH, OPEN_NODE, DONE_NODE } NodeState;
@@ -181,6 +185,9 @@ namespace cuBQL {
         me.nodeID = (uint32_t)-1;
         me.done   = true;
       }
+      // auto asDone = me;
+      // asDone.done = true;
+      // printf(" prim %i me %lx asDone %lx\n",primID,me.bits,asDone.bits);
     }
 
     __global__

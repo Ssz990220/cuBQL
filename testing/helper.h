@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cuBQL/bvh.h"
+#include "cuBQL/math.h"
 #include <fstream>
 #include <vector>
 
@@ -26,28 +27,7 @@ namespace testing {
   using cuBQL::getCurrentTime;
   using cuBQL::prettyNumber;
   using cuBQL::prettyDouble;
-
-  inline __both__ float3 operator-(float3 a, float3 b)
-  { return make_float3(a.x-b.x,a.y-b.y,a.z-b.z); }
-  inline __both__ float3 operator+(float3 a, float3 b)
-  { return make_float3(a.x+b.x,a.y+b.y,a.z+b.z); }
-
-  inline __both__ float3 operator*(float3 a, float3 b)
-  { return make_float3(a.x*b.x,a.y*b.y,a.z*b.z); }
-
-  inline __both__ float3 operator*(float a, float3 b)
-  { return make_float3(a,a,a)*b; }
-  
-  inline __both__ float dot(float3 a, float3 b)
-  { return a.x*b.x+a.y*b.y+a.z*b.z; }
-  
-  inline __both__ float3 cross(float3 b, float3 c)
-  { return make_float3(b.y*c.z-b.z*c.y,
-                       b.z*c.x-b.x*c.z,
-                       b.x*c.y-b.y*c.x); }
-  
-  inline __both__ float length(float3 a)
-  { return sqrtf(dot(a,a)); }
+  using namespace cuBQL;
   
   /*! computes a seed value for a random number generator, in a way
       that is reproducible for same filename, but different for
