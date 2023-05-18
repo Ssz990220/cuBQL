@@ -147,7 +147,7 @@ within your own code, do the following:
   
 
 
-## Building as a standalone project
+## Building as a standalone project (and running some tests)
 
 In the former case, build via cmake:
 
