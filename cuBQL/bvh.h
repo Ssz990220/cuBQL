@@ -94,29 +94,60 @@ namespace cuBQL {
                   cudaStream_t  s=0);
   void free(BinaryBVH   &bvh,
             cudaStream_t s=0);
-  
-  // template<typename prim_t, int BVH_WIDTH>
-  // struct WideBVH {
-  //   using box_t = typename prim_traits<prim_t>::box_t;
-  
-  //   struct Node {
-  //     box_t bounds[BVH_WIDTH];
-  //     struct {
-  //       uint64_t offset : 48;
-  //       uint64_t count  : 16;
-  //     } child[BVH_WIDTH];
-  //   };
 
-  //   Node     *nodes;
-  //   uint32_t  numNodes;
-  //   uint32_t *primIDs;
-  //   uint32_t  numPrims;
-  // };
+  /*! a 'wide' BVH in which each node has a fixed number of
+    `BVH_WIDTH` children (some of those children can be un-used) */
+  template<int BVH_WIDTH>
+  struct WideBVH {
 
-}
+    /*! a n-wide node of this BVH; note that unlike BinaryBVH::Node
+      this is not a "single" node, but actually N nodes merged
+      together */
+    struct CUBQL_ALIGN(16) Node {
+      box3f bounds[BVH_WIDTH];
+      struct {
+        uint64_t valid  :  1;
+        uint64_t offset : 45;
+        uint64_t count  : 16;
+      } child[BVH_WIDTH];
+    };
+
+    Node     *nodes;
+    //! number of (multi-)nodes on this WideBVH
+    uint32_t  numNodes;
+    uint32_t *primIDs;
+    uint32_t  numPrims;
+  };
+
+  template<int N>
+  void gpuBuilder(WideBVH<N>  &bvh,
+                  const box3f *boxes,
+                  uint32_t     numBoxes,
+                  int          maxLeafSize,
+                  cudaStream_t s=0);
+  template<int N>
+  void gpuBuilder(WideBVH<N>   &bvh,
+                  const float4 *boxes,
+                  uint32_t      numBoxes,
+                  int           maxLeafSize,
+                  cudaStream_t  s=0);
+  template<int N>
+  void gpuBuilder(WideBVH<N>   &bvh,
+                  const box3fa *boxes,
+                  uint32_t      numBoxes,
+                  int           maxLeafSize,
+                  cudaStream_t  s=0);
+  template<int N>
+  void free(WideBVH<N>  &bvh,
+            cudaStream_t s=0);
+
+} // ::cuBQL
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/gpu_builder.h"  
+#endif
+#if CUBQL_GPU_BUILDER_IMPLEMENTATION
+# include "cuBQL/impl/wide_gpu_builder.h"  
 #endif
 
 
