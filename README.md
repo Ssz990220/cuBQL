@@ -100,11 +100,11 @@ the BVH.
 A few notes:
 
 - Optionally you can also pass a `cudaStream_t` if desired. All
-operations, synchronization, and memory allocs should happen in that
-stream.
+  operations, synchronization, and memory allocs should happen in that
+  stream.
 
 - The builder uses `cudaMallocAsync`; this means the first build may
-be slower than subsequent ones.
+  be slower than subsequent ones.
 
 - Following the same pattern as other libraries like tinyOBJ or STB,
   this library has most of its actual algorithms conditionally visible
@@ -114,3 +114,62 @@ be slower than subsequent ones.
   implementation.
 
 # Building
+
+This library can be used/built in two ways: either standalone (with
+various test cases and samples), or as a submodule for another
+project.
+
+## Use as a cmake submodule
+
+If you are only interested in using the builder (and maybe queries)
+within your own code, do the following:
+
+- first, include this library in your own project, in a separate subdirectory
+  (git submodules are a great way of doing this)
+  
+- within your own cmake file include this library
+
+```
+    # root CMakeLists.txt (your own)
+    add_subdirectory(<pathTo>/cuBQL EXCLUDE_FROM_ALL)
+```
+- cmake-link to your owl project
+```
+    # root CMakeLists.txt (your own)
+    add_executable(userExec .... myFile.cu otherFile.cpp)
+	target_link_libraries(userExec cuBQL)
+```
+- The previous step should make sure that include paths to cuBQL etc are
+  properly set for your own code. Now simply `#include "cuBQL/bvh.h" etc.
+  
+- In *one* of your files, `#define `CUBQL_GPU_BUILDER_IMPLEMENTATION
+1` before including `cuBQL/bvh.h`.
+  
+
+
+## Building as a standalone project
+
+In the former case, build via cmake:
+
+```
+   mkdir build
+   cd build
+   cmake ..
+   make
+```
+You can then, for example, run some simple benchmarks:
+
+```
+   # generate 1M uniform random points in [0,1]^3
+   ./cuBQL_makePoints_uniform -n 1000000 -o dataPoints-1M
+   # measure build perf for these points
+   ./cuBQL_buildPerf dataPoints-1M
+   ...
+   # generate another 1M uniform random points in [0,1]^3
+   ./cuBQL_makePoints_uniform -n 1000000 -o queryPoints-1M
+   # run sample 'fcp' (find closest point) query
+   ./cuBQL_fcp dataPoints-1M queryPoints-1M
+```
+
+
+
