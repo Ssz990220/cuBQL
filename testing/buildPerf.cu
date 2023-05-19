@@ -34,32 +34,17 @@ namespace testing {
     exit(error.empty()?0:1);
   }
 
-  __global__ void makeBoxes(box_t *boxes, float3 *points, int numPoints)
-  {
-    int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    if (tid >= numPoints) return;
-    float3 point = points[tid];
-    boxes[tid].lower = point;
-    boxes[tid].upper = point;
-  }
-
   template<typename bvh_t>
-  void buildPerf(const std::vector<float3> &h_dataPoints,
+  void buildPerf(const std::vector<box_t> &h_boxes,
                  int maxLeafSize,
                  bool sah,
                  float numSecsAvg)
   {
-    int numPrims = h_dataPoints.size();
+    int numPrims = h_boxes.size();
     std::cout << "measuring build performance for "
               << prettyNumber(numPrims) << " prims" << std::endl;
-    cuBQL::CUDAArray<float3> dataPoints;
-    dataPoints.upload(h_dataPoints);
-    cuBQL::CUDAArray<box_t> boxes(dataPoints.size());
-    {
-      int bs = 256;
-      int nb = divRoundUp((int)dataPoints.size(),bs);
-      makeBoxes<<<nb,bs>>>(boxes.data(),dataPoints.data(),(int)dataPoints.size());
-    };
+    cuBQL::CUDAArray<box_t> boxes;
+    boxes.upload(h_boxes);
 
     std::cout << "... initial warm-up build" << std::endl;
     bvh_t bvh;
@@ -67,7 +52,7 @@ namespace testing {
       cuBQL::gpuSAHBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
     else
       cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
-
+    std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
     double t0 = getCurrentTime();
     int thisRunSize = 1;
     while (true) {
@@ -75,13 +60,20 @@ namespace testing {
       double t0 = getCurrentTime();
       for (int i=0;i<thisRunSize;i++) {
         cuBQL::free(bvh);
-        cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+        if (sah)
+          cuBQL::gpuSAHBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+        else
+          cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
       }
       double t1 = getCurrentTime();
       
       double buildsPerSecond = thisRunSize / (t1-t0);
       double primsPerSecond = (thisRunSize*(double)numPrims) / (t1-t0);
-      std::cout << " ...done " << thisRunSize << " builds in " << prettyDouble(t1-t0) << "s, that's " << prettyDouble(buildsPerSecond) << " builds/s (or " << prettyDouble(1.f/buildsPerSecond) << "s/build); or " << prettyDouble(primsPerSecond) << "prims/s" << std::endl;
+      std::cout << " ...done " << thisRunSize << " builds in "
+                << prettyDouble(t1-t0) << "s, that's "
+                << prettyDouble(buildsPerSecond) << " builds/s (or "
+                << prettyDouble(1.f/buildsPerSecond) << "s/build); or "
+                << prettyDouble(primsPerSecond) << "prims/s" << std::endl;
 
       if ((t1 - t0) > numSecsAvg) {
         std::cout << "MSPB " << int(1000*(t1-t0)/thisRunSize+.5f) << std::endl;
@@ -121,23 +113,31 @@ int main(int ac, char **av)
     }
     if (fileNames.size() != 1)
       usage("unexpected number of data file names");
+    std::vector<box3f> boxes;
+#if EXPECT_TRIS
+    boxes = loadData<box3f>(fileNames[0]);
+#endif
+#if EXPECT_POINTS
     std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
+    for (auto point : dataPoints) 
+      boxes.push_back({point,point});
+#endif
 
     if (bvhType == "binary")
       testing::buildPerf<cuBQL::BinaryBVH>
-        (dataPoints,maxLeafSize,sah,numSecsAvg);
+        (boxes,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh2")
       testing::buildPerf<cuBQL::WideBVH<2>>
-        (dataPoints,maxLeafSize,sah,numSecsAvg);
+        (boxes,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh4")
       testing::buildPerf<cuBQL::WideBVH<4>>
-        (dataPoints,maxLeafSize,sah,numSecsAvg);
+        (boxes,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh8")
       testing::buildPerf<cuBQL::WideBVH<8>>
-        (dataPoints,maxLeafSize,sah,numSecsAvg);
+        (boxes,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh16")
       testing::buildPerf<cuBQL::WideBVH<16>>
-        (dataPoints,maxLeafSize,sah,numSecsAvg);
+        (boxes,maxLeafSize,sah,numSecsAvg);
     else
       throw std::runtime_error("unsupported bvh type '"+bvhType+"'");
     return 0;

@@ -484,6 +484,7 @@ namespace cuBQL {
     {
       int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= bvh.numNodes) return;
+      if (nodeID == 1) return;
       
       BinaryBVH::Node *node = &bvh.nodes[nodeID];
       if (node->count == 0)
@@ -534,6 +535,50 @@ namespace cuBQL {
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       CUBQL_CUDA_CALL(FreeAsync((void*)refitData,s));
     }
+
+    __global__
+    void computeNodeCosts(BinaryBVH bvh, float *nodeCosts)
+    {
+      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
+      if (nodeID >= bvh.numNodes) return;
+
+      if (nodeID == 1) { nodeCosts[nodeID] = 0.f; return; }
+
+      auto node = bvh.nodes[nodeID];
+      float area = surfaceArea(node.bounds) / surfaceArea(bvh.nodes[0].bounds);
+      if (node.count == 0)
+        nodeCosts[nodeID] = 2*area;
+      else 
+        nodeCosts[nodeID] = area * node.count;
+    }
+    
+    float computeSAH(const BinaryBVH &bvh)
+    {
+      float *nodeCosts;
+      float *reducedCosts;
+      CUBQL_CUDA_CALL(MallocManaged((void**)&nodeCosts,bvh.numNodes*sizeof(float)));
+      CUBQL_CUDA_CALL(MallocManaged((void**)&reducedCosts,sizeof(float)));
+      computeNodeCosts<<<divRoundUp(int(bvh.numNodes),1024),1024>>>(bvh,nodeCosts);
+
+      // Determine temporary device storage requirements
+      void     *d_temp_storage = NULL;
+      size_t   temp_storage_bytes = 0;
+      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes,
+                             nodeCosts, reducedCosts, bvh.numPrims);
+      // Allocate temporary storage
+      CUBQL_CUDA_CALL(Malloc(&d_temp_storage, temp_storage_bytes));
+      // Run sum-reduction
+      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, 
+                             nodeCosts, reducedCosts, bvh.numPrims);
+      
+      CUBQL_CUDA_SYNC_CHECK();
+      float result = reducedCosts[0];
+
+      CUBQL_CUDA_CALL(Free(d_temp_storage));
+      CUBQL_CUDA_CALL(Free(nodeCosts));
+      CUBQL_CUDA_CALL(Free(reducedCosts));
+      return result;
+    }
     
   }
   
@@ -548,6 +593,11 @@ namespace cuBQL {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
 
+  float computeSAH(const BinaryBVH &bvh)
+  {
+    return gpuBuilder_impl::computeSAH(bvh);
+  }
+  
   void free(BinaryBVH   &bvh,
             cudaStream_t s)
   {

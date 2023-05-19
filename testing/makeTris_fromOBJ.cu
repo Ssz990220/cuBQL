@@ -22,15 +22,12 @@ int main(int ac, char **av)
 {
   std::string outFileName;
   std::string inFileName;
-  int numPoints = 100000;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
     if (arg == "-o") {
       outFileName = av[++i];
-    } else if (arg == "-n") {
-      numPoints = std::stoi(av[++i]);
     } else if (arg[0] == '-')
-      throw std::runtime_error("./cuBQL_makePoints_sampleOBJ inFile.obj -n numPoints -o outFileName");
+      throw std::runtime_error("./cuBQL_makeTris_fromOBJ inFile.obj -o outFileName");
     else
       inFileName = arg;
   }
@@ -40,21 +37,17 @@ int main(int ac, char **av)
     throw std::runtime_error("no input (obj) filename specified");
 
   srand48(computeSeed(outFileName));
+  
   std::cout << "attempting to load triangles from '"
             << inFileName << "'" << std::endl;
   std::vector<Triangle> triangles = loadOBJ(inFileName);
-  
   std::cout << "done loading '" << inFileName
             << "', got " << prettyNumber(triangles.size())
             << std::endl;
-  
-  std::cout << "generating " << prettyNumber(numPoints)
-            << " samples on those triangles..." << std::endl;
-  std::vector<float3> points = sample(triangles,numPoints);
-  
-  std::cout << "saving " << points.size()
-            << " sampled points to " << outFileName << std::endl;
-  saveData(points,outFileName);
+
+  std::cout << "saving " << triangles.size()
+            << " triangles to " << outFileName << std::endl;
+  saveData(triangles,outFileName);
   
   return 0;
 }

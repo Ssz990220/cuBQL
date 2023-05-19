@@ -33,6 +33,15 @@ namespace cuBQL {
     float3 lower, upper;
   };
 
+  inline __device__
+  float surfaceArea(box3f box)
+  {
+    float sx = box.get_upper(0)-box.get_lower(0);
+    float sy = box.get_upper(1)-box.get_lower(1);
+    float sz = box.get_upper(2)-box.get_lower(2);
+    return sx*sy + sx*sz + sy*sz;
+  }
+    
   struct BinaryBVH {
     struct CUBQL_ALIGN(16) Node {
       box3f    bounds;
@@ -109,6 +118,11 @@ namespace cuBQL {
   void free(WideBVH<N>  &bvh,
             cudaStream_t s=0);
 
+
+  float computeSAH(const BinaryBVH &bvh);
+  
+  template<int N>
+  float computeSAH(const WideBVH<N> &bvh);
 } // ::cuBQL
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION

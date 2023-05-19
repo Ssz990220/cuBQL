@@ -229,6 +229,13 @@ namespace cuBQL {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
     bvh.primIDs = 0;
   }
+
+  template<int N>
+  float computeSAH(const WideBVH<N> &bvh)
+  {
+    return -1.f;
+  }
+  
   
 } // :: cuBQL
 

@@ -23,12 +23,21 @@ if (NOT CUBQL_IS_SUBMODULE)
     )
   target_link_libraries(cuBQL_testing PUBLIC cuBQL)
   
-  add_executable(cuBQL_buildPerf_points buildPerf_points.cu)
+  add_executable(cuBQL_buildPerf_points buildPerf.cu)
   target_link_libraries(cuBQL_buildPerf_points PUBLIC cuBQL_testing)
+  target_compile_definitions(cuBQL_buildPerf_points PUBLIC -DEXPECT_POINTS=1)
+    
+  add_executable(cuBQL_buildPerf_tris buildPerf.cu)
+  target_link_libraries(cuBQL_buildPerf_tris PUBLIC cuBQL_testing)
+  target_compile_definitions(cuBQL_buildPerf_tris PUBLIC -DEXPECT_TRIS=1)
 
   add_executable(cuBQL_makePoints_uniform makePoints_uniform.cu)
   target_link_libraries(cuBQL_makePoints_uniform PUBLIC cuBQL_testing)
 
   add_executable(cuBQL_makePoints_sampleOBJ makePoints_sampleOBJ.cu)
   target_link_libraries(cuBQL_makePoints_sampleOBJ PUBLIC cuBQL_testing)
+
+  add_executable(cuBQL_makeTris_fromOBJ makeTris_fromOBJ.cu)
+  target_link_libraries(cuBQL_makeTris_fromOBJ PUBLIC cuBQL_testing)
+
 endif()
