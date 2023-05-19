@@ -30,7 +30,7 @@ int main(int ac, char **av)
     } else if (arg == "-n") {
       numPoints = std::stoi(av[++i]);
     } else if (arg[0] == '-')
-      throw std::runtime_error("./makePoints_uniform -n numPoints -o outFileName [--lower x y z][--upper x y z]");
+      throw std::runtime_error("./cuBQL_makePoints_sampleOBJ inFile.obj -n numPoints -o outFileName");
     else
       inFileName = arg;
   }
@@ -40,8 +40,21 @@ int main(int ac, char **av)
     throw std::runtime_error("no input (obj) filename specified");
 
   srand48(computeSeed(outFileName));
+  std::cout << "attempting to load triangles from '"
+            << inFileName << "'" << std::endl;
   std::vector<Triangle> triangles = loadOBJ(inFileName);
+  
+  std::cout << "done loading '" << inFileName
+            << "', got " << prettyNumber(triangles.size())
+            << std::endl;
+  
+  std::cout << "generating " << prettyNumber(numPoints)
+            << " samples on those triangles..." << std::endl;
   std::vector<float3> points = sample(triangles,numPoints);
+  
+  std::cout << "saving " << points.size()
+            << " sampled points to " << outFileName << std::endl;
   saveData(points,outFileName);
+  
   return 0;
 }

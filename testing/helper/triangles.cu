@@ -76,6 +76,48 @@ namespace testing {
     return triangles;
   }
   
+  void saveOBJ(const std::vector<Triangle> &triangles,
+               const std::string &outFileName)
+  {
+    std::ofstream out(outFileName.c_str());
+    for (auto tri : triangles) {
+      out << "v " << tri.a.x << " " << tri.a.y << " " << tri.a.z << std::endl;
+      out << "v " << tri.b.x << " " << tri.b.y << " " << tri.b.z << std::endl;
+      out << "v " << tri.c.x << " " << tri.c.y << " " << tri.c.z << std::endl;
+      out << "f -1 -2 -3" << std::endl;
+    }
+  }
+  
+  std::vector<Triangle> triangulate(const std::vector<box3f> &boxes)
+  {
+    std::vector<Triangle> triangles;
+    int indices[] = {0,1,3, 2,3,0,
+                     5,7,6, 5,6,4,
+                     0,4,5, 0,5,1,
+                     2,3,7, 2,7,6,
+                     1,5,7, 1,7,3,
+                     4,0,2, 4,2,6};
+    Triangle tri;
+    for (auto box : boxes) {
+      float3 vertices[8], *vtx = vertices;
+      for (int iz=0;iz<2;iz++)
+        for (int iy=0;iy<2;iy++)
+          for (int ix=0;ix<2;ix++) {
+            vtx->x = (ix?box.lower:box.upper).x;
+            vtx->y = (iy?box.lower:box.upper).y;
+            vtx->z = (iz?box.lower:box.upper).z;
+            vtx++;
+          }
+      for (int i=0;i<12;i++) {
+        tri.a = vertices[indices[3*i+0]];
+        tri.b = vertices[indices[3*i+1]];
+        tri.c = vertices[indices[3*i+2]];
+        triangles.push_back(tri);
+      }
+    }
+    return triangles;
+  }
+  
   std::vector<float3> sample(const std::vector<Triangle> &triangles, size_t numSamples)
   {
     std::vector<float> cdf;

@@ -25,8 +25,9 @@ namespace testing {
   };
 
   std::vector<Triangle> loadOBJ(const std::string &fileName);
+  std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
 
   std::vector<float3> sample(const std::vector<Triangle> &triangles, size_t numSamples);
-  
+  void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
 }
 

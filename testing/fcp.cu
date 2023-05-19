@@ -23,7 +23,7 @@
 
 namespace testing {
 
-  typedef cuBQL::box3fa box_t;
+  using box_t = cuBQL::box3f;
 
   void usage(const std::string &error = "")
   {
@@ -125,12 +125,12 @@ int main(int ac, char **av)
         maxLeafSize = std::stoi(av[++i]);
       else
         usage("unknown cmd-line argument '"+arg+"'");
-    }
-    if (fileNames.size() != 2)
-      usage("unexpected number of data file names");
-    std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
-    std::vector<float3> queryPoints = loadData<float3>(fileNames[1]);
-
-    testing::testFCP(dataPoints,queryPoints,maxLeafSize);
-    return 0;
   }
+  if (fileNames.size() != 2)
+    usage("unexpected number of data file names");
+  std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
+  std::vector<float3> queryPoints = loadData<float3>(fileNames[1]);
+  
+  testing::testFCP(dataPoints,queryPoints,maxLeafSize);
+  return 0;
+}

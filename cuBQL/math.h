@@ -22,11 +22,15 @@ namespace cuBQL {
 
   using ::min;
   using ::max;
+
+  using ::make_float3;
   
-  inline __device__ float3 min(float3 a, float3 b)
+  inline __both__ float3 make_float3(float f) { return make_float3(f,f,f); }
+    
+  inline __both__ float3 min(float3 a, float3 b)
   { return make_float3(::min(a.x,b.x),::min(a.y,b.y),::min(a.z,b.z)); }
   
-  inline __device__ float3 max(float3 a, float3 b)
+  inline __both__ float3 max(float3 a, float3 b)
   { return make_float3(::max(a.x,b.x),::max(a.y,b.y),::max(a.z,b.z)); }
 
   inline __both__ float3 operator-(float3 a, float3 b)
@@ -58,5 +62,45 @@ namespace cuBQL {
   { return sqrLength(a-b); }
   
   
+  struct box3f {
+    enum { numDims = 3 };
+
+    inline __both__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
+    inline __both__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
+    inline __both__ void set_empty() {
+      lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
+      upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
+    }
+    inline __both__ void grow(const float3 p)
+    {
+      lower = min(lower,p);
+      upper = max(upper,p);
+    }
+    inline __both__ void grow(const box3f other)
+    {
+      lower = min(lower,other.lower);
+      upper = max(upper,other.upper);
+    }
+    float3 lower, upper;
+  };
+
+  inline __both__
+  box3f make_box3f(float3 lower, float3 upper) { return {lower,upper}; }
+                   
+  inline __both__
+  void grow(box3f &box, const float3 &other) { box.grow(other); }
+  
+  inline __both__
+  void grow(box3f &box, const box3f &other) { box.grow(other); }
+    
+  inline __both__
+  float surfaceArea(box3f box)
+  {
+    float sx = box.get_upper(0)-box.get_lower(0);
+    float sy = box.get_upper(1)-box.get_lower(1);
+    float sz = box.get_upper(2)-box.get_lower(2);
+    return sx*sy + sx*sz + sy*sz;
+  }
+    
 }
 
