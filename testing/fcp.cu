@@ -23,7 +23,7 @@
 
 namespace testing {
 
-  typedef cuBQL::box3fa box_t;
+  using box_t = cuBQL::box3f;
 
   void usage(const std::string &error = "")
   {

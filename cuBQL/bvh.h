@@ -33,27 +33,6 @@ namespace cuBQL {
     float3 lower, upper;
   };
 
-  struct CUBQL_ALIGN(16) box3fa {
-    enum { numDims = 3 };
-
-    inline __device__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
-    inline __device__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
-  
-    inline __device__ void set_empty() {
-      lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
-      upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
-    }
-
-    union {
-      float3 lower;
-      float4 lower4;
-    };
-    union {
-      float3 upper;
-      float4 upper4;
-    };
-  };
-
   struct BinaryBVH {
     struct CUBQL_ALIGN(16) Node {
       box3f    bounds;
@@ -82,16 +61,11 @@ namespace cuBQL {
                   uint32_t     numBoxes,
                   int          maxLeafSize,
                   cudaStream_t s=0);
-  void gpuBuilder(BinaryBVH    &bvh,
-                  const float4 *boxes,
-                  uint32_t      numBoxes,
-                  int           maxLeafSize,
-                  cudaStream_t  s=0);
-  void gpuBuilder(BinaryBVH    &bvh,
-                  const box3fa *boxes,
-                  uint32_t      numBoxes,
-                  int           maxLeafSize,
-                  cudaStream_t  s=0);
+  void gpuSAHBuilder(BinaryBVH   &bvh,
+                  const box3f *boxes,
+                  uint32_t     numBoxes,
+                  int          maxLeafSize,
+                  cudaStream_t s=0);
   void free(BinaryBVH   &bvh,
             cudaStream_t s=0);
 
@@ -126,17 +100,11 @@ namespace cuBQL {
                   int          maxLeafSize,
                   cudaStream_t s=0);
   template<int N>
-  void gpuBuilder(WideBVH<N>   &bvh,
-                  const float4 *boxes,
-                  uint32_t      numBoxes,
-                  int           maxLeafSize,
-                  cudaStream_t  s=0);
-  template<int N>
-  void gpuBuilder(WideBVH<N>   &bvh,
-                  const box3fa *boxes,
-                  uint32_t      numBoxes,
-                  int           maxLeafSize,
-                  cudaStream_t  s=0);
+  void gpuSAHBuilder(WideBVH<N>   &bvh,
+                  const box3f *boxes,
+                  uint32_t     numBoxes,
+                  int          maxLeafSize,
+                  cudaStream_t s=0);
   template<int N>
   void free(WideBVH<N>  &bvh,
             cudaStream_t s=0);
@@ -145,6 +113,9 @@ namespace cuBQL {
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/gpu_builder.h"  
+#endif
+#if CUBQL_GPU_BUILDER_IMPLEMENTATION
+# include "cuBQL/impl/sah_builder.h"  
 #endif
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/wide_gpu_builder.h"  

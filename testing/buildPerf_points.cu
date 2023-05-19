@@ -22,7 +22,8 @@
 
 namespace testing {
 
-  typedef cuBQL::box3fa box_t;
+  // typedef cuBQL::box3f box_t;
+  using box_t = cuBQL::box3f;
 
   void usage(const std::string &error = "")
   {
@@ -45,6 +46,7 @@ namespace testing {
   template<typename bvh_t>
   void buildPerf(const std::vector<float3> &h_dataPoints,
                  int maxLeafSize,
+                 bool sah,
                  float numSecsAvg)
   {
     int numPrims = h_dataPoints.size();
@@ -61,7 +63,10 @@ namespace testing {
 
     std::cout << "... initial warm-up build" << std::endl;
     bvh_t bvh;
-    cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+    if (sah)
+      cuBQL::gpuSAHBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+    else
+      cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
 
     double t0 = getCurrentTime();
     int thisRunSize = 1;
@@ -96,6 +101,7 @@ int main(int ac, char **av)
 {
   int maxLeafSize = 8;
   float numSecsAvg = 5.f;
+  bool sah = false;
   std::string bvhType = "binary";
   std::vector<std::string> fileNames;
   for (int i=1;i<ac;i++) {
@@ -108,6 +114,8 @@ int main(int ac, char **av)
       numSecsAvg = std::stof(av[++i]);
     else if (arg == "--bvh-type")
       bvhType = av[++i];
+    else if (arg == "-sah")
+      sah = true;
     else
       usage("unknown cmd-line argument '"+arg+"'");
     }
@@ -117,19 +125,19 @@ int main(int ac, char **av)
 
     if (bvhType == "binary")
       testing::buildPerf<cuBQL::BinaryBVH>
-        (dataPoints,maxLeafSize,numSecsAvg);
+        (dataPoints,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh2")
       testing::buildPerf<cuBQL::WideBVH<2>>
-        (dataPoints,maxLeafSize,numSecsAvg);
+        (dataPoints,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh4")
       testing::buildPerf<cuBQL::WideBVH<4>>
-        (dataPoints,maxLeafSize,numSecsAvg);
+        (dataPoints,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh8")
       testing::buildPerf<cuBQL::WideBVH<8>>
-        (dataPoints,maxLeafSize,numSecsAvg);
+        (dataPoints,maxLeafSize,sah,numSecsAvg);
     else if (bvhType == "bvh16")
       testing::buildPerf<cuBQL::WideBVH<16>>
-        (dataPoints,maxLeafSize,numSecsAvg);
+        (dataPoints,maxLeafSize,sah,numSecsAvg);
     else
       throw std::runtime_error("unsupported bvh type '"+bvhType+"'");
     return 0;

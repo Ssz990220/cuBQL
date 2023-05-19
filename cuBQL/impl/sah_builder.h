@@ -17,109 +17,19 @@
 #pragma once
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
-#include "cuBQL/bvh.h"
-#include <cub/cub.cuh>
-#include "cuBQL/math.h"
 
 namespace cuBQL {
-  namespace gpuBuilder_impl {
+  namespace sahBuilder_impl {
+    using gpuBuilder_impl::AtomicBox;
+    using gpuBuilder_impl::PrimState;
+    using gpuBuilder_impl::NodeState;
+    using gpuBuilder_impl::BuildState;
+    using gpuBuilder_impl::OPEN_NODE;
+    using gpuBuilder_impl::DONE_NODE;
+    using gpuBuilder_impl::OPEN_BRANCH;
+    using gpuBuilder_impl::_ALLOC;
+    using gpuBuilder_impl::_FREE;
 
-    template<typename T, typename count_t>
-    inline void _ALLOC(T *&ptr, count_t count, cudaStream_t s)
-    { CUBQL_CUDA_CALL(MallocAsync((void**)&ptr,count*sizeof(T),s)); }
-    
-    template<typename T>
-    inline void _FREE(T *&ptr, cudaStream_t s)
-    { CUBQL_CUDA_CALL(FreeAsync((void*)ptr,s)); ptr = 0; }
-    
-    struct PrimState {
-      union {
-        /* careful with this order - this is intentionally chosen such
-           that all item with nodeID==-1 will end up at the end of the
-           list; and all others will be sorted by nodeID */
-        struct {
-          uint64_t primID:31; //!< prim we're talking about
-          uint64_t done  : 1;
-          uint64_t nodeID:32; //!< node the given prim is (currently) in.
-        };
-        uint64_t bits;
-      };
-    };
-
-    typedef enum : int8_t { OPEN_BRANCH, OPEN_NODE, DONE_NODE } NodeState;
-    
-    template<typename box_t>
-    struct AtomicBox {
-      inline __device__ void set_empty();
-      inline __device__ float get_center(int dim) const;
-      inline __device__ box_t make_box() const;
-
-      inline __device__ float get_lower(int dim) const { return decode(lower[dim]); }
-      inline __device__ float get_upper(int dim) const { return decode(upper[dim]); }
-
-      int32_t lower[box_t::numDims];
-      int32_t upper[box_t::numDims];
-
-      inline static __device__ int32_t encode(float f);
-      inline static __device__ float   decode(int32_t bits);
-    };
-    
-    template<typename box_t>
-    inline __device__ float AtomicBox<box_t>::get_center(int dim) const
-    {
-      return 0.5f*(decode(lower[dim])+decode(upper[dim]));
-    }
-
-    template<typename box_t>
-    inline __device__ box_t AtomicBox<box_t>::make_box() const
-    {
-      box_t box;
-#pragma unroll
-      for (int d=0;d<box_t::numDims;d++) {
-        (&box.lower.x)[d] = decode(lower[d]);
-        (&box.upper.x)[d] = decode(upper[d]);
-      }
-      return box;
-    }
-    
-    template<typename box_t>
-    inline __device__ int32_t AtomicBox<box_t>::encode(float f)
-    {
-      const int32_t sign = 0x80000000;
-      int32_t bits = __float_as_int(f);
-      if (bits & sign) bits ^= 0x7fffffff;
-      return bits;
-    }
-      
-    template<typename box_t>
-    inline __device__ float AtomicBox<box_t>::decode(int32_t bits)
-    {
-      const int32_t sign = 0x80000000;
-      if (bits & sign) bits ^= 0x7fffffff;
-      return __int_as_float(bits);
-    }
-    
-    template<typename box_t>
-    inline __device__ void AtomicBox<box_t>::set_empty()
-    {
-#pragma unroll
-      for (int d=0;d<box_t::numDims;d++) {
-        lower[d] = encode(+FLT_MAX);
-        upper[d] = encode(-FLT_MAX);
-      }
-    }
-    template<typename box_t, typename prim_box_t>
-    inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const prim_box_t &other)
-    {
-#pragma unroll
-      for (int d=0;d<box_t::numDims;d++) {
-        const int32_t enc_lower = AtomicBox<box_t>::encode(other.get_lower(d));
-        const int32_t enc_upper = AtomicBox<box_t>::encode(other.get_upper(d));
-        if (enc_lower < abox.lower[d]) atomicMin(&abox.lower[d],enc_lower);
-        if (enc_upper > abox.upper[d]) atomicMax(&abox.upper[d],enc_upper);
-      }
-    }
-    
     struct CUBQL_ALIGN(16) TempNode {
       union {
         struct {
@@ -128,10 +38,10 @@ namespace cuBQL {
           uint32_t         unused;
         } openBranch;
         struct {
+          AtomicBox<box3f> centBounds;
           uint32_t offset;
-          int      dim;
-          uint32_t tieBreaker;
-          float    pos;
+          int8_t   dim;
+          int8_t   bin;
         } openNode;
         struct {
           uint32_t offset;
@@ -141,11 +51,75 @@ namespace cuBQL {
       };
     };
     
-    struct BuildState {
-      uint32_t  numNodes;
-      // TempNode *nodes;
+    struct SAHBins {
+      enum { numBins = 16 };
+      struct {
+        struct CUBQL_ALIGN(16) {
+          AtomicBox<box3f> bounds;
+          int   count;
+        } bins[numBins];
+      } dims[3];
     };
 
+    inline __device__
+    void grow(box3f &tgt, box3f addtl)
+    {
+      tgt.lower = min(tgt.lower,addtl.lower);
+      tgt.upper = max(tgt.upper,addtl.upper);
+    }
+    
+    inline __device__
+    float surfaceArea(box3f box)
+    {
+      float sx = box.get_upper(0)-box.get_lower(0);
+      float sy = box.get_upper(1)-box.get_lower(1);
+      float sz = box.get_upper(2)-box.get_lower(2);
+      return sx*sy + sx*sz + sy*sz;
+    }
+    
+    inline __device__
+    void evaluateSAH(int &splitDim,
+                     int &splitBin,
+                     const SAHBins &sah)
+    {
+      float bestCost = INFINITY;
+      
+      float rAreas[sah.numBins];
+      for (int d=0;d<3;d++) {
+        box3f box; box.set_empty();
+        int   rCount = 0;
+        for (int b=sah.numBins-1;b>=0;--b) {
+          auto bin = sah.dims[d].bins[b];
+          grow(box,bin.bounds.make_box());
+          rCount += bin.count;
+          rAreas[b] = surfaceArea(box);
+        }
+        const float leafCost = rAreas[0] * rCount;
+        if (leafCost < bestCost) {
+          bestCost = leafCost;
+          splitDim = -1;
+        }
+        box.set_empty();
+        int lCount = 0;
+        for (int b=0;b<sah.numBins;b++) {
+          float rArea = rAreas[b];
+          float lArea = surfaceArea(box);
+          if (lCount>0 && rCount>0) {
+            float cost = lArea*lCount+rArea*rCount;
+            if (cost < bestCost) {
+              bestCost = cost;
+              splitDim = d;
+              splitBin = b;
+            }
+          }
+          auto bin = sah.dims[d].bins[b];
+          grow(box,bin.bounds.make_box());
+          lCount += bin.count;
+          rCount -= bin.count;
+        }
+      }
+    }
+    
     __global__ void initState(BuildState *buildState,
                               NodeState  *nodeStates,
                               TempNode   *nodes)
@@ -161,7 +135,7 @@ namespace cuBQL {
       nodes[1].doneNode.offset = 0;
       nodes[1].doneNode.count  = 0;
     }
-  
+
     __global__ void initPrims(TempNode    *nodes,
                               PrimState   *primState,
                               const box3f *primBoxes,
@@ -189,21 +163,60 @@ namespace cuBQL {
       // printf(" prim %i me %lx asDone %lx\n",primID,me.bits,asDone.bits);
     }
 
+    
     __global__
-    void selectSplits(BuildState *buildState,
-                      NodeState  *nodeStates,
-                      TempNode   *nodes,
-                      uint32_t    numNodes,
-                      int         maxLeafSize)
+    void binPrims(SAHBins          *sahBins,
+                  int               sahNodeBegin,
+                  int               sahNodeEnd,
+                  TempNode         *nodes,
+                  PrimState        *primState,
+                  const box3f      *primBoxes,
+                  uint32_t          numPrims)
+    {
+      const int primID = threadIdx.x+blockIdx.x*blockDim.x;
+      if (primID >= numPrims) return;
+
+      auto ps = primState[primID];
+      if (ps.done) return;
+
+      int nodeID = ps.nodeID;
+      if (nodeID < sahNodeBegin || nodeID >= sahNodeEnd)
+        return;
+
+      const box3f primBox = primBoxes[primID];
+      
+      auto &sah = sahBins[nodeID-sahNodeBegin];
+      box3f centBounds = nodes[nodeID].openBranch.centBounds.make_box();
+#pragma unroll(3)
+      for (int d=0;d<3;d++) {
+        int bin = 0;
+        float lo = centBounds.get_lower(d);
+        float hi = centBounds.get_upper(d);
+        if (hi > lo) {
+          float prim_d = 0.5f*(primBox.get_lower(d)+primBox.get_upper(d));
+          float rel
+            = (prim_d - centBounds.get_lower(d))
+            / (centBounds.get_upper(d)-centBounds.get_lower(d));
+          bin = int(rel*SAHBins::numBins);
+          bin = max(0,min(SAHBins::numBins-1,bin));
+        }
+        auto &myBin = sah.dims[d].bins[bin];
+        atomic_grow(myBin.bounds,primBox);
+        atomicAdd(&myBin.count,1);
+      }
+    }
+    
+    __global__
+    void closeOpenNodes(BuildState *buildState,
+                        NodeState  *nodeStates,
+                        TempNode   *nodes,
+                        int numNodes)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= numNodes) return;
-
       NodeState &nodeState = nodeStates[nodeID];
       if (nodeState == DONE_NODE)
         // this node was already closed before
         return;
-      
       if (nodeState == OPEN_NODE) {
         // this node was open in the last pass, can close it.
         nodeState   = DONE_NODE;
@@ -213,33 +226,49 @@ namespace cuBQL {
         done.offset = offset;
         return;
       }
+      // cannot be anything else...
+    }
+    
+    __global__
+    void selectSplits(BuildState *buildState,
+                      SAHBins    *sahBins,
+                      int         sahNodeBegin,
+                      int         sahNodeEnd,
+                      NodeState  *nodeStates,
+                      TempNode   *nodes,
+                      int         maxLeafSize)
+    {
+      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
+      if (nodeID < sahNodeBegin || nodeID >= sahNodeEnd) return;
+
+      NodeState &nodeState = nodeStates[nodeID];
+      if (nodeState == DONE_NODE || nodeState == OPEN_NODE) {
+        printf("error - cannot happen (324347) %i %i %i\n",nodeID,sahNodeBegin,sahNodeEnd);
+        return;
+      }
       
       auto in = nodes[nodeID].openBranch;
-      if (in.count < maxLeafSize) {
+      auto &sah = sahBins[nodeID-sahNodeBegin];
+      int   splitDim = -1;
+      int   splitBin;
+      if (in.count >= maxLeafSize) {
+        evaluateSAH(splitDim,splitBin,sah);
+      }
+      if (splitDim == 0) {
+        nodeState   = DONE_NODE;
         auto &done  = nodes[nodeID].doneNode;
         done.count  = in.count;
         // set this to max-value, so the prims can later do atomicMin
         // with their position ion the leaf list; this value is
         // greater than any prim position.
         done.offset = (uint32_t)-1;
-        nodeState   = DONE_NODE;
       } else {
-        float widestWidth = 0.f;
-        int   widestDim   = -1;
-#pragma unroll
-        for (int d=0;d<3;d++) {
-          float width = in.centBounds.get_upper(d) - in.centBounds.get_lower(d);
-          if (width <= widestWidth)
-            continue;
-          widestWidth = width;
-          widestDim   = d;
-        }
-      
-        auto &open = nodes[nodeID].openNode;
-        open.dim = widestDim;
-        if (widestDim >= 0) 
-          open.pos = in.centBounds.get_center(widestDim);
-        // this will be epensive - could make this faster by block-reducing
+        nodeState = OPEN_NODE;
+        
+        auto &open      = nodes[nodeID].openNode;
+        open.dim = splitDim;
+        open.bin = /* this is a int - that's ok*/splitBin;
+        open.centBounds = in.centBounds;
         open.offset = atomicAdd(&buildState->numNodes,2);
 #pragma unroll
         for (int side=0;side<2;side++) {
@@ -249,7 +278,6 @@ namespace cuBQL {
           child.count         = 0;
           nodeStates[childID] = OPEN_BRANCH;
         }
-        nodeState = OPEN_NODE;
       }
     }
 
@@ -273,18 +301,22 @@ namespace cuBQL {
         return;
       }
 
-      auto &split = nodes[me.nodeID].openNode;
+      auto open = nodes[me.nodeID].openNode;
       const box3f primBox = primBoxes[me.primID];
-      int side = 0;
-      if (split.dim == -1) {
-        // could block-reduce this, but will likely not happen often, anyway
-        side = (atomicAdd(&split.tieBreaker,1) & 1);
-      } else {
-        const float center = 0.5f*(primBox.get_lower(split.dim)+
-                                   primBox.get_upper(split.dim));
-        side = (center >= split.pos);
-      }
-      int newNodeID = split.offset+side;
+
+      const int d = open.dim;
+      float lo = open.centBounds.get_lower(d);
+      float hi = open.centBounds.get_upper(d);
+      
+      float prim_d = 0.5f*(primBox.get_lower(d)+primBox.get_upper(d));
+      float rel
+        = (prim_d - lo)
+        / (hi - lo);
+      int prim_bin = int(rel*SAHBins::numBins);
+      prim_bin = max(0,min(SAHBins::numBins-1,prim_bin));
+      
+      int side = prim_bin > d;
+      int newNodeID = open.offset+side;
       auto &myBranch = nodes[newNodeID].openBranch;
       atomicAdd(&myBranch.count,1);
       atomic_grow(myBranch.centBounds,primBox);
@@ -330,35 +362,13 @@ namespace cuBQL {
       finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
     }
 
-    /*! pretty-prints the current bvh for debugging; must use managed
-      memory or download bvh data to host */
-    void printBVH(TempNode *nodes, int numNodes,
-                  uint32_t *primIDs, int numPrims,
-                  int nodeID=0, int indent=0)
-    {
-      auto &node = nodes[nodeID].doneNode;
-      for (int i=0;i<indent;i++) std::cout << " ";
-      std::cout << "Node, offset = " << node.offset
-                << ", count = " << node.count << std::endl;
-      if (node.count) {
-        for (int i=0;i<indent;i++) std::cout << " ";
-        std::cout << "Leaf:";
-        for (int i=0;i<node.count;i++)
-          std::cout << " " << primIDs[node.offset+i];
-        std::cout << std::endl;
-      } else {
-        printBVH(nodes,numNodes,primIDs,numPrims,
-                 node.offset+0,indent+1);
-        printBVH(nodes,numNodes,primIDs,numPrims,
-                 node.offset+1,indent+1);
-      }
-    }
 
-    void build(BinaryBVH &bvh,
-               const box3f *boxes,
-               int numPrims,
-               int maxLeafSize,
-               cudaStream_t s)
+    
+    void sahBuilder(BinaryBVH  &bvh,
+                    const box3f *boxes,
+                    int          numPrims,
+                    int          maxLeafSize,
+                    cudaStream_t s)
     {
       // ==================================================================
       // do build on temp nodes
@@ -367,15 +377,22 @@ namespace cuBQL {
       NodeState  *nodeStates = 0;
       PrimState  *primStates = 0;
       BuildState *buildState = 0;
+      SAHBins    *sahBins    = 0;
+      int maxActiveSAHs = 1+numPrims/(8*SAHBins::numBins);
       _ALLOC(tempNodes,2*numPrims,s);
       _ALLOC(nodeStates,2*numPrims,s);
       _ALLOC(primStates,numPrims,s);
       _ALLOC(buildState,1,s);
+      _ALLOC(sahBins,maxActiveSAHs,s);
       initState<<<1,1,0,s>>>(buildState,
                              nodeStates,
                              tempNodes);
       initPrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,
+         primStates,boxes,numPrims);
+      binPrims<<<divRoundUp(1,1024),1024,0,s>>>
+        (sahBins,0,1,
+         tempNodes,
          primStates,boxes,numPrims);
       // (tempNodes.data(),
       //  primStates.data(),boxes,numPrims);
@@ -383,7 +400,10 @@ namespace cuBQL {
       int numDone = 0;
       int numNodes;
 
-
+      // binPrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
+      //   (sahBins,0,1,
+      //    nodes,
+      //    primState,primBoxes,numPrims);
       // ------------------------------------------------------------------      
       while (true) {
         CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
@@ -394,10 +414,29 @@ namespace cuBQL {
         if (numNodes == numDone)
           break;
 
-        selectSplits<<<divRoundUp(numNodes,1024),1024,0,s>>>
-          (buildState,
-           nodeStates,tempNodes,numNodes,
-           maxLeafSize);
+        // close all nodes that might still be open in last round
+        closeOpenNodes<<<divRoundUp(numDone,1024),1024,0,s>>>
+          (buildState,nodeStates,tempNodes,numDone);
+        
+        const int openBegin = numDone;
+        const int openEnd   = numNodes;
+        for (int sahBegin=openBegin;sahBegin<openEnd;sahBegin+=maxActiveSAHs) {
+          int sahEnd = std::min(sahBegin+maxActiveSAHs,openEnd);
+          int numSAH = sahEnd-sahBegin;
+          binPrims<<<divRoundUp(numSAH,1024),1024,0,s>>>
+            (sahBins,sahBegin,sahEnd,
+             tempNodes,
+             primStates,boxes,numPrims);
+
+          selectSplits<<<divRoundUp(numSAH,32),32,0,s>>>
+            (buildState,
+             sahBins,sahBegin,sahEnd,
+             nodeStates,tempNodes,
+             maxLeafSize);
+        }
+        
+
+        
         // (buildState.data(),
         //  nodeStates.data(),tempNodes.data(),numNodes,
         //  maxLeafSize);
@@ -460,103 +499,20 @@ namespace cuBQL {
       _FREE(nodeStates,s);
       _FREE(primStates,s);
       _FREE(buildState,s);
+      _FREE(sahBins,s);
     }
 
-    __global__ void
-    refit_init(const BinaryBVH::Node *nodes,
-               uint32_t              *refitData,
-               int numNodes)
-    {
-      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= numNodes) return;
-      if (nodeID == 0)
-        refitData[0] = 0;
-      const auto &node = nodes[nodeID];
-      if (node.count) return;
-      refitData[node.offset+0] = nodeID << 1;
-      refitData[node.offset+1] = nodeID << 1;
-    }
-    
-    __global__
-    void refit_run(BinaryBVH bvh,
-                   uint32_t *refitData,
-                   const box3f *boxes)
-    {
-      int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= bvh.numNodes) return;
-      
-      BinaryBVH::Node *node = &bvh.nodes[nodeID];
-      if (node->count == 0)
-        // this is a inner node - exit
-        return;
+  } // ::cuBQL::sahBuilder_impl
 
-      box3f bounds; bounds.set_empty();
-      for (int i=0;i<node->count;i++) {
-        const box3f primBox = boxes[bvh.primIDs[node->offset+i]];
-        bounds.lower = min(bounds.lower,primBox.lower);
-        bounds.upper = max(bounds.upper,primBox.upper);
-      }
-        
-      int parentID = (refitData[nodeID] >> 1);
-      while (true) {
-        node->bounds = bounds;
-        __threadfence();
-        if (node == bvh.nodes)
-          break;
-
-        uint32_t refitBits = atomicAdd(&refitData[parentID],1u);
-        if ((refitBits & 1) == 0)
-          // we're the first one - let other one do it
-          break;
-        
-        nodeID   = parentID;
-        node     = &bvh.nodes[parentID];
-        parentID = (refitBits >> 1);
-        
-        BinaryBVH::Node l = bvh.nodes[node->offset+0];
-        BinaryBVH::Node r = bvh.nodes[node->offset+1];
-        bounds.lower = min(l.bounds.lower,r.bounds.lower);
-        bounds.upper = max(l.bounds.upper,r.bounds.upper);
-      }
-    }
-
-    void refit(BinaryBVH &bvh,
-               const box3f *boxes,
-               cudaStream_t s=0)
-    {
-      uint32_t *refitData;
-      CUBQL_CUDA_CALL(MallocAsync((void**)&refitData,bvh.numNodes*sizeof(int),s));
-      int numNodes = bvh.numNodes;
-      refit_init<<<divRoundUp(numNodes,1024),1024,0,s>>>
-        (bvh.nodes,refitData,bvh.numNodes);
-      refit_run<<<divRoundUp(numNodes,32),32,0,s>>>
-        (bvh,refitData,boxes);
-      CUBQL_CUDA_CALL(StreamSynchronize(s));
-      CUBQL_CUDA_CALL(FreeAsync((void*)refitData,s));
-    }
-    
-  }
-  
-  void gpuBuilder(BinaryBVH   &bvh,
-                  const box3f *boxes,
-                  uint32_t     numBoxes,
-                  int          maxLeafSize,
-                  cudaStream_t s)
+  void gpuSAHBuilder(BinaryBVH   &bvh,
+                     const box3f *boxes,
+                     uint32_t     numBoxes,
+                     int          maxLeafSize,
+                     cudaStream_t s)
   {
-    gpuBuilder_impl::build(bvh,boxes,numBoxes,maxLeafSize,s);
-    gpuBuilder_impl::refit(bvh,boxes,s);
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
+    sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,maxLeafSize,s);
   }
 
-  void free(BinaryBVH   &bvh,
-            cudaStream_t s)
-  {
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
-    CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
-    CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
-    bvh.primIDs = 0;
-  }
-}
+} // :: cuBQL
+
 #endif
-
