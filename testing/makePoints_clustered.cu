@@ -15,6 +15,7 @@
 // ======================================================================== //
 
 #include "testing/helper.h"
+#include <random>
 
 using namespace testing;
 
@@ -22,15 +23,17 @@ int main(int ac, char **av)
 {
   float3 lower = make_float3(0.f,0.f,0.f);
   float3 upper = make_float3(1.f,1.f,1.f);
-  int tc = 0;
   std::string outFileName;
   int numPoints = 100000;
+  float power = 2.f;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
     if (arg == "-o") {
       outFileName = av[++i];
     } else if (arg == "-n") {
       numPoints = std::stoi(av[++i]);
+    } else if (arg == "-p") {
+      power = std::stof(av[++i]);
     } else if (arg == "--lower") {
       lower.x = std::stof(av[++i]);
       lower.y = std::stof(av[++i]);
@@ -39,40 +42,34 @@ int main(int ac, char **av)
       upper.x = std::stof(av[++i]);
       upper.y = std::stof(av[++i]);
       upper.z = std::stof(av[++i]);
-    } else if (arg == "-tc") {
-      tc = std::stoi(av[++i]);
     } else
-      throw std::runtime_error("./makePoints_uniform -n numPoints -o outFileName [--lower x y z][--upper x y z]");
+      throw std::runtime_error("./makePoints_clustered -n numPoints -o outFileName [--lower x y z][--upper x y z]");
   }
   if (outFileName.empty())
     throw std::runtime_error("no output filename specified");
 
-  srand48(computeSeed(outFileName));
-  std::vector<float3> points;
-  for (int i=0;i<numPoints;i++)
-    points.push_back(make_float3(drand48(),drand48(),drand48()));
-  for (auto &p : points) {
-    switch (tc) {
-    case 1:
-      p.x = p.x * 0.8 + 0.1;
-      p.y = p.y * 0.2 + 0.7;
-      p.z = p.z * 0.5 + 0.3;
-      break;
-    case 2:
-      p.x = p.x * 1.2 - 0.1;
-      p.y = p.y * 1.2 - 0.1;
-      p.z = p.z * 1.2 - 0.1;
-      break;
-    case 3:
-      p.x = p.x * 2 - 1;
-      p.y = p.y * 2 - 1;
-      p.z = p.z * 2 - 1;
-      break;
-    default: /* leave on uniform [0,1] */
-      ;
-    }
-  }         
+  std::default_random_engine rng;
+  rng.seed(computeSeed(outFileName));
 
+  int numClusters = 1+int(powf(numPoints,1.f/power));
+  float meanDist = 0.25f * 1./sqrtf(numClusters);
+  
+  std::uniform_real_distribution<double> uniform(0.f,1.f);
+  std::vector<float3> clusterCenters;
+  for (int i=0;i<numClusters;i++)
+    clusterCenters.push_back(make_float3(uniform(rng),uniform(rng),uniform(rng)));
+  
+  std::normal_distribution<double> gaussian(0.f,meanDist);
+  
+  
+  std::vector<float3> points;
+  for (int i=0;i<numPoints;i++) {
+    float3 point = make_float3(gaussian(rng),gaussian(rng),gaussian(rng));
+    int whichCluster = int(numClusters*uniform(rng)) % numClusters;
+    point = clusterCenters[whichCluster] + point;
+    points.push_back(point);
+  }         
+      
   for (auto &p : points) {
     p = lower + p * (upper - lower);
   }

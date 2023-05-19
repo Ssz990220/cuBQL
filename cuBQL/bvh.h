@@ -17,31 +17,10 @@
 #pragma once
 
 #include "cuBQL/common.h"
+#include "cuBQL/math.h"
 
 namespace cuBQL {
 
-  struct box3f {
-    enum { numDims = 3 };
-
-    inline __device__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
-    inline __device__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
-    inline __device__ void set_empty() {
-      lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
-      upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
-    }
-    
-    float3 lower, upper;
-  };
-
-  inline __device__
-  float surfaceArea(box3f box)
-  {
-    float sx = box.get_upper(0)-box.get_lower(0);
-    float sy = box.get_upper(1)-box.get_lower(1);
-    float sz = box.get_upper(2)-box.get_lower(2);
-    return sx*sy + sx*sz + sy*sz;
-  }
-    
   struct BinaryBVH {
     struct CUBQL_ALIGN(16) Node {
       box3f    bounds;

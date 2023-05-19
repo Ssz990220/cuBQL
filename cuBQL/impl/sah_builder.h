@@ -62,13 +62,6 @@ namespace cuBQL {
     };
 
     inline __device__
-    void grow(box3f &tgt, box3f addtl)
-    {
-      tgt.lower = min(tgt.lower,addtl.lower);
-      tgt.upper = max(tgt.upper,addtl.upper);
-    }
-    
-    inline __device__
     void evaluateSAH(int &splitDim,
                      int &splitBin,
                      const SAHBins &sah)
@@ -406,133 +399,111 @@ namespace cuBQL {
       _ALLOC(buildState,1,s);
       _ALLOC(sahBins,maxActiveSAHs,s);
       
-      // PING; CUBQL_CUDA_SYNC_CHECK();
-      
       initState<<<1,1,0,s>>>(buildState,
                              nodeStates,
                              tempNodes);
       initPrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,
          primStates,boxes,numPrims);
-      // PING; CUBQL_CUDA_SYNC_CHECK();
-      clearBins<<<1,32,0,s>>>
-        (sahBins,1);
-      // PING; CUBQL_CUDA_SYNC_CHECK();
 
       int numDone = 0;
       int numNodes = 0;
 
       while (true) {
-        // CUBQL_CUDA_SYNC_CHECK();
         CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
                                     sizeof(numNodes),cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(StreamSynchronize(s));
-        // std::cout << "----- done/nodes " << numDone << " / " << numNodes << std::endl;
         if (numNodes == numDone)
           break;
 
         // close all nodes that might still be open in last round
-        // PING; CUBQL_CUDA_SYNC_CHECK();
         if (numDone > 0)
           closeOpenNodes<<<divRoundUp(numDone,1024),1024,0,s>>>
             (buildState,nodeStates,tempNodes,numDone);
-        
-        // PING; CUBQL_CUDA_SYNC_CHECK();
+
+        // compute which nodes (by defintion, at the of the array) are
+        // currently open and need binning/sah plane selection
         const int openBegin = numDone;
         const int openEnd   = numNodes;
+
+        // go over these nodes in blocks of 'maxActiveSAH' nodes
+        // (because that's all we have SAH bin storage for), and do
+        // these sah bin-and-select steps
         for (int sahBegin=openBegin;sahBegin<openEnd;sahBegin+=maxActiveSAHs) {
-          // CUBQL_CUDA_SYNC_CHECK();
-          int sahEnd = std::min(sahBegin+maxActiveSAHs,openEnd);
-          int numSAH = sahEnd-sahBegin;
-          // std::cout << "RANGE " << sahBegin << " .. " << sahEnd << std::endl;
-          // PING; CUBQL_CUDA_SYNC_CHECK();
-          // std::cout << "----clearing bins ...." << std::endl;;
+          const int sahEnd = std::min(sahBegin+maxActiveSAHs,openEnd);
+          const int numSAH = sahEnd-sahBegin;
+
+          // clear as many of our current set of bins as we might need.
           clearBins<<<divRoundUp(numSAH,32),32,0,s>>>
             (sahBins,numSAH);
-          // PING; CUBQL_CUDA_SYNC_CHECK();
-          // std::cout << "----binning prims .... node range " << sahBegin << ".." << sahEnd << std::endl;;
+
+          // bin all prims into those bins; note this will
+          // automatically do an immediate return/no-op for all prims
+          // that are not in an yof the currently processed nodes.
           binPrims<<<divRoundUp(numPrims,128),128,0,s>>>
             (sahBins,sahBegin,sahEnd,
              tempNodes,
              primStates,boxes,numPrims);
 
-          // CUBQL_CUDA_SYNC_CHECK();
-
-          // PING; CUBQL_CUDA_SYNC_CHECK();
-          // std::cout << "----selecting splits num = " << numSAH << " .... node range " << sahBegin << ".." << sahEnd << std::endl;;
+          // now that we have SAH bin information for all those nodes,
+          // go over those active nodes and select their split plane
+          // (or make them into a leaf)
           selectSplits<<<divRoundUp(numSAH,32),32,0,s>>>
             (buildState,
              sahBins,sahBegin,sahEnd,
              nodeStates,tempNodes,
              maxLeafSize);
-          
-          // PING; CUBQL_CUDA_SYNC_CHECK();
-          // CUBQL_CUDA_SYNC_CHECK();
         }
-        
 
-        
-        // (buildState.data(),
-        //  nodeStates.data(),tempNodes.data(),numNodes,
-        //  maxLeafSize);
-        
+        // done with this wave; all those nodes we had looked at so
+        // far are not done. there's possibly some additional set of
+        // active nodes on the device that got created in the last few
+        // steps, but we first have to download that counter to know
+        // how many those are - and we'll do that in the next step.
         numDone = numNodes;
 
-        // CUBQL_CUDA_SYNC_CHECK();
-        // std::cout << "UPDATING -------------------------------------------------------" << std::endl;
-        // std::cout << "updateprims, node range "  << numDone << " / " << numNodes << std::endl;
-        // PING; CUBQL_CUDA_SYNC_CHECK();
+        // now last step as in the simple algorithm as well: go over
+        // all prims, and "move" them to their respect left or right
+        // subtree (or mark as done if their node just became a leaf)
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
-        // CUBQL_CUDA_SYNC_CHECK();
-        // (nodeStates.data(),tempNodes.data(),
-        //  primStates.data(),boxes,numPrims);
       }
-       // PING; CUBQL_CUDA_SYNC_CHECK();
       // ==================================================================
       // sort {item,nodeID} list
       // ==================================================================
       
       // set up sorting of prims
-      uint8_t *d_temp_storage = NULL;
-      size_t temp_storage_bytes = 0;
-      // CUDAArray<PrimState> sortedPrimStates(numPrims);
+      uint8_t   *d_temp_storage = NULL;
+      size_t     temp_storage_bytes = 0;
       PrimState *sortedPrimStates;
       _ALLOC(sortedPrimStates,numPrims,s);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
-                                     (uint64_t*)primStates,//.data(),
-                                     (uint64_t*)sortedPrimStates,//.data(),
+                                     (uint64_t*)primStates,
+                                     (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      // CUBQL_CUDA_CALL(Malloc(&d_temp_storage,temp_storage_bytes));
       _ALLOC(d_temp_storage,temp_storage_bytes,s);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
-                                     (uint64_t*)primStates,//.data(),
-                                     (uint64_t*)sortedPrimStates,//.data(),
+                                     (uint64_t*)primStates,
+                                     (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      // CUBQL_CUDA_CALL(Free(d_temp_storage));
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(d_temp_storage,s);
-      // primStates.free();
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
 
       bvh.numPrims = numPrims;
-      // CUBQL_CUDA_CALL(Malloc(&bvh.primIDs,numPrims*sizeof(int)));
       _ALLOC(bvh.primIDs,numPrims,s);
       writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
-      // (tempNodes.data(),bvh.primIDs,sortedPrimStates.data(),numPrims);
 
       // ==================================================================
       // allocate and write final nodes
       // ==================================================================
       bvh.numNodes = numNodes;
-      // CUBQL_CUDA_CALL(Malloc(&bvh.nodes,numNodes*sizeof(BinaryBVH::Node)));
       _ALLOC(bvh.nodes,numNodes,s);
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
-        // (bvh.nodes,tempNodes.data(),numNodes);
         (bvh.nodes,tempNodes,numNodes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(sortedPrimStates,s);
@@ -541,9 +512,6 @@ namespace cuBQL {
       _FREE(primStates,s);
       _FREE(buildState,s);
       _FREE(sahBins,s);
-      // PING; CUBQL_CUDA_SYNC_CHECK();
-
-      // std::cout << "#######################################################" << std::endl;
     }
 
   } // ::cuBQL::sahBuilder_impl
