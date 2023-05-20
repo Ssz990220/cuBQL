@@ -14,14 +14,13 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-add_executable(cuBQL_fcp fcp.cu)
-target_link_libraries(cuBQL_fcp PUBLIC cuBQL)
-
 if (NOT CUBQL_IS_SUBMODULE)
-  add_library(cuBQL_testing 
+  add_library(cuBQL_testing
+    helper/CUDAArray.h
+    helper/triangles.h
     helper/triangles.cu
     )
-  target_link_libraries(cuBQL_testing PUBLIC cuBQL)
+  target_link_libraries(cuBQL_testing PUBLIC cuBQL_impl)
 
 
   # ==================================================================
@@ -64,5 +63,9 @@ if (NOT CUBQL_IS_SUBMODULE)
   add_executable(cuBQL_buildPerf_tris buildPerf.cu)
   target_link_libraries(cuBQL_buildPerf_tris PUBLIC cuBQL_testing)
   target_compile_definitions(cuBQL_buildPerf_tris PUBLIC -DEXPECT_TRIS=1)
+
+  
+  add_executable(cuBQL_fcp fcp.cu)
+  target_link_libraries(cuBQL_fcp PUBLIC cuBQL_testing)
 
 endif()

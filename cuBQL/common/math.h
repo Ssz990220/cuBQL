@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "cuBQL/common.h"
+#include "cuBQL/common/common.h"
 
 namespace cuBQL {
 

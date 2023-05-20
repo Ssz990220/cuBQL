@@ -68,14 +68,34 @@ else()
   endforeach()
 endif()
 
-
-add_library(cuBQL INTERFACE)
-target_sources(cuBQL INTERFACE
-  cuBQL/common.h
+# a interface-only library that only sets include paths etc; when
+# using this the user has to manulaly set CUBQL_BUILDER_INSTANTIATION
+# in one of his/her source files
+add_library(cuBQL_interface INTERFACE)
+target_sources(cuBQL_interface INTERFACE
+  # "public" stuff
   cuBQL/bvh.h
+  cuBQL/queries/fcp.h
+  # internal stuff
+  cuBQL/common/common.h
+  cuBQL/common/math.h
+  cuBQL/impl/builder_common.h
+  cuBQL/impl/sm_builder.h
+  cuBQL/impl/sah_builder.h
+  cuBQL/impl/gpu_builder.h
+  cuBQL/impl/wide_gpu_builder.h
   )
-target_include_directories(cuBQL INTERFACE
+target_include_directories(cuBQL_interface INTERFACE
   ${PROJECT_SOURCE_DIR}/
+  )
+
+# builds an actual static library that already contains
+# template-instantiations of the builder(s), helper functions, etc
+add_library(cuBQL_impl STATIC
+  cuBQL/impl/instantiate_builders.cu
+  )
+target_link_libraries(cuBQL_impl PUBLIC
+  cuBQL_interface
   )
 
 add_subdirectory(testing)

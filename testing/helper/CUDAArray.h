@@ -16,12 +16,14 @@
 
 #pragma once
 
-#include "cuBQL/common.h"
+#include "cuBQL/common/math.h"
 #include <vector>
 #include <cuda_runtime.h>
 
-namespace cuBQL {
-  
+namespace testing {
+
+  /*! allocator for testing::CUDAArray that will make this class
+      allocate device memory */
   struct DeviceMem {
     inline static void alloc(void **pointer, size_t numBytes)
     {
@@ -29,14 +31,18 @@ namespace cuBQL {
     }
   };
   
+  /*! allocator for testing::CUDAArray that will make this class
+      allocate managed memory */
   struct ManagedMem {
     inline static void alloc(void **pointer, size_t numBytes)
     {
       CUBQL_CUDA_CALL(MallocManaged(pointer,numBytes));
     }
   };
-  
-  template<typename T, typename Allocator=cuBQL::DeviceMem>
+
+  /*! helper class or device (and/or managed) memory that operates
+      similat to a std::vector, with upload/download hepers etc */
+  template<typename T, typename Allocator=testing::DeviceMem>
   struct CUDAArray {
 
     inline CUDAArray() {}

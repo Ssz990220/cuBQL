@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include "cuBQL/math.h"
 #include "cuBQL/bvh.h"
 
 namespace cuBQL {

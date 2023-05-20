@@ -16,7 +16,7 @@
 
 #pragma once
 
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
+#include "cuBQL/impl/sm_builder.h"
 
 namespace cuBQL {
   namespace sahBuilder_impl {
@@ -104,9 +104,10 @@ namespace cuBQL {
       }
     }
     
-    __global__ void initState(BuildState *buildState,
-                              NodeState  *nodeStates,
-                              TempNode   *nodes)
+    __global__
+    void initState(BuildState *buildState,
+                   NodeState  *nodeStates,
+                   TempNode   *nodes)
     {
       // buildState->nodes = nodes;
       buildState->numNodes = 2;
@@ -120,10 +121,11 @@ namespace cuBQL {
       nodes[1].doneNode.count  = 0;
     }
 
-    __global__ void initPrims(TempNode    *nodes,
-                              PrimState   *primState,
-                              const box3f *primBoxes,
-                              uint32_t     numPrims)
+    __global__
+    void initPrims(TempNode    *nodes,
+                   PrimState   *primState,
+                   const box3f *primBoxes,
+                   uint32_t     numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
       if (primID >= numPrims) return;
@@ -232,7 +234,7 @@ namespace cuBQL {
                       int         sahNodeEnd,
                       NodeState  *nodeStates,
                       TempNode   *nodes,
-                      int         maxLeafSize)
+                      BuildConfig buildConfig)
     {
       const int nodeID = sahNodeBegin + threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID == 1) return;
@@ -244,7 +246,7 @@ namespace cuBQL {
       auto &sah = sahBins[nodeID-sahNodeBegin];
       int   splitDim = -1;
       int   splitBin;
-      if (in.count >= maxLeafSize) {
+      if (in.count > buildConfig.makeLeafThreshold) {
         evaluateSAH(splitDim,splitBin,sah);
         // printf("evaluated sah, result is dim %i bin %i\n",splitDim,splitBin);
       }
@@ -375,12 +377,10 @@ namespace cuBQL {
       finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
     }
 
-
-    
     void sahBuilder(BinaryBVH  &bvh,
                     const box3f *boxes,
                     int          numPrims,
-                    int          maxLeafSize,
+                    BuildConfig  buildConfig,
                     cudaStream_t s)
     {
       // std::cout << "#######################################################" << std::endl;
@@ -452,7 +452,7 @@ namespace cuBQL {
             (buildState,
              sahBins,sahBegin,sahEnd,
              nodeStates,tempNodes,
-             maxLeafSize);
+             buildConfig);
         }
 
         // done with this wave; all those nodes we had looked at so
@@ -515,18 +515,5 @@ namespace cuBQL {
     }
 
   } // ::cuBQL::sahBuilder_impl
-
-  void gpuSAHBuilder(BinaryBVH   &bvh,
-                     const box3f *boxes,
-                     uint32_t     numBoxes,
-                     int          maxLeafSize,
-                     cudaStream_t s)
-  {
-    sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,maxLeafSize,s);
-    gpuBuilder_impl::refit(bvh,boxes,s);
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
-  }
-
 } // :: cuBQL
 
-#endif

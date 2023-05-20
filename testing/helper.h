@@ -17,7 +17,6 @@
 #pragma once
 
 #include "cuBQL/bvh.h"
-#include "cuBQL/math.h"
 #include <fstream>
 #include <vector>
 

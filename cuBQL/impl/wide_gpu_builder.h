@@ -158,15 +158,11 @@ namespace cuBQL {
     void gpuBuilder(WideBVH<N>  &wideBVH,
                     const box_t *boxes,
                     uint32_t     numBoxes,
-                    int          maxLeafSize,
-                    cudaStream_t s,
-                    bool sah = false)
+                    BuildConfig  buildConfig,
+                    cudaStream_t s)
     {
       BinaryBVH binaryBVH;
-      if (sah)
-        gpuBuilder(binaryBVH,boxes,numBoxes,maxLeafSize,s);
-      else
-        gpuSAHBuilder(binaryBVH,boxes,numBoxes,maxLeafSize,s);
+      gpuBuilder(binaryBVH,boxes,numBoxes,buildConfig,s);
 
       int          *d_numWideNodes;
       CollapseInfo *d_infos;
@@ -197,26 +193,68 @@ namespace cuBQL {
       free(binaryBVH,s);
     }
 
+    template<int N>
+    __global__
+    void computeNodeCosts(WideBVH<N> bvh, float *nodeCosts)
+    {
+      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
+      if (nodeID >= bvh.numNodes) return;
+
+      auto &node = bvh.nodes[nodeID];
+      float area = 0.f;
+      for (int i=0;i<N;i++) {
+        box3f box = node.bounds[i];
+        if (box.lower.x > box.upper.x) continue;
+        area += surfaceArea(box);
+      }
+      box3f rootBox; rootBox.set_empty();
+      for (int i=0;i<N;i++)
+        rootBox.grow(bvh.nodes[0].bounds[i]);
+      area /= surfaceArea(rootBox);
+      nodeCosts[nodeID] = area;
+    }
+
+    template<int N>
+    float computeSAH(const WideBVH<N> &bvh)
+    {
+      float *nodeCosts;
+      float *reducedCosts;
+      CUBQL_CUDA_CALL(MallocManaged((void**)&nodeCosts,bvh.numNodes*sizeof(float)));
+      CUBQL_CUDA_CALL(MallocManaged((void**)&reducedCosts,sizeof(float)));
+      computeNodeCosts<<<divRoundUp(int(bvh.numNodes),1024),1024>>>(bvh,nodeCosts);
+
+      CUBQL_CUDA_SYNC_CHECK();
+      
+      // Determine temporary device storage requirements
+      void     *d_temp_storage = NULL;
+      size_t   temp_storage_bytes = 0;
+      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes,
+                             nodeCosts, reducedCosts, bvh.numNodes);
+      // Allocate temporary storage
+      CUBQL_CUDA_CALL(Malloc(&d_temp_storage, temp_storage_bytes));
+      // Run sum-reduction
+      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, 
+                             nodeCosts, reducedCosts, bvh.numNodes);
+      
+      CUBQL_CUDA_SYNC_CHECK();
+      float result = reducedCosts[0];
+
+      CUBQL_CUDA_CALL(Free(d_temp_storage));
+      CUBQL_CUDA_CALL(Free(nodeCosts));
+      CUBQL_CUDA_CALL(Free(reducedCosts));
+      return result;
+    }
+    
   } // ::cuBQL::gpuBuilder_impl
 
   template<int N>
   void gpuBuilder(WideBVH<N>   &bvh,
                   const box3f *boxes,
                   uint32_t     numBoxes,
-                  int          maxLeafSize,
+                  BuildConfig  buildConfig,
                   cudaStream_t s)
   {
-    gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,maxLeafSize,s);
-  }
-
-  template<int N>
-  void gpuSAHBuilder(WideBVH<N>   &bvh,
-                     const box3f *boxes,
-                     uint32_t     numBoxes,
-                     int          maxLeafSize,
-                     cudaStream_t s)
-  {
-    gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,maxLeafSize,s,true);
+    gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,buildConfig,s);
   }
 
   template<int N>
@@ -233,9 +271,8 @@ namespace cuBQL {
   template<int N>
   float computeSAH(const WideBVH<N> &bvh)
   {
-    return -1.f;
+    return gpuBuilder_impl::computeSAH(bvh);
   }
-  
   
 } // :: cuBQL
 

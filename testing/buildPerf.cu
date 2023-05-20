@@ -14,10 +14,10 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
+// #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
 
-#include "cuBQL/CUDAArray.h"
+#include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
 
 namespace testing {
@@ -36,22 +36,18 @@ namespace testing {
 
   template<typename bvh_t>
   void buildPerf(const std::vector<box_t> &h_boxes,
-                 int maxLeafSize,
-                 bool sah,
+                 cuBQL::BuildConfig buildConfig,
                  float numSecsAvg)
   {
     int numPrims = h_boxes.size();
     std::cout << "measuring build performance for "
               << prettyNumber(numPrims) << " prims" << std::endl;
-    cuBQL::CUDAArray<box_t> boxes;
+    CUDAArray<box_t> boxes;
     boxes.upload(h_boxes);
 
     std::cout << "... initial warm-up build" << std::endl;
     bvh_t bvh;
-    if (sah)
-      cuBQL::gpuSAHBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
-    else
-      cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+    cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
     std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
     double t0 = getCurrentTime();
     int thisRunSize = 1;
@@ -60,10 +56,7 @@ namespace testing {
       double t0 = getCurrentTime();
       for (int i=0;i<thisRunSize;i++) {
         cuBQL::free(bvh);
-        if (sah)
-          cuBQL::gpuSAHBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
-        else
-          cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
+        cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
       }
       double t1 = getCurrentTime();
       
@@ -91,23 +84,22 @@ using namespace testing;
 
 int main(int ac, char **av)
 {
-  int maxLeafSize = 8;
+  cuBQL::BuildConfig buildConfig;
   float numSecsAvg = 5.f;
-  bool sah = false;
   std::string bvhType = "binary";
   std::vector<std::string> fileNames;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
     if (av[i][0] != '-')
       fileNames.push_back(arg);
-    else if (arg == "-mls" || arg == "-ls")
-      maxLeafSize = std::stoi(av[++i]);
+    else if (arg == "-mlt" || arg == "-lt")
+      buildConfig.makeLeafThreshold = std::stoi(av[++i]);
     else if (arg == "-ns")
       numSecsAvg = std::stof(av[++i]);
     else if (arg == "--bvh-type")
       bvhType = av[++i];
     else if (arg == "-sah")
-      sah = true;
+      buildConfig.buildMethod = buildConfig.SAH;
     else
       usage("unknown cmd-line argument '"+arg+"'");
     }
@@ -125,19 +117,19 @@ int main(int ac, char **av)
 
     if (bvhType == "binary")
       testing::buildPerf<cuBQL::BinaryBVH>
-        (boxes,maxLeafSize,sah,numSecsAvg);
+        (boxes,buildConfig,numSecsAvg);
     else if (bvhType == "bvh2")
       testing::buildPerf<cuBQL::WideBVH<2>>
-        (boxes,maxLeafSize,sah,numSecsAvg);
+        (boxes,buildConfig,numSecsAvg);
     else if (bvhType == "bvh4")
       testing::buildPerf<cuBQL::WideBVH<4>>
-        (boxes,maxLeafSize,sah,numSecsAvg);
+        (boxes,buildConfig,numSecsAvg);
     else if (bvhType == "bvh8")
       testing::buildPerf<cuBQL::WideBVH<8>>
-        (boxes,maxLeafSize,sah,numSecsAvg);
+        (boxes,buildConfig,numSecsAvg);
     else if (bvhType == "bvh16")
       testing::buildPerf<cuBQL::WideBVH<16>>
-        (boxes,maxLeafSize,sah,numSecsAvg);
+        (boxes,buildConfig,numSecsAvg);
     else
       throw std::runtime_error("unsupported bvh type '"+bvhType+"'");
     return 0;

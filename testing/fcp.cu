@@ -14,11 +14,11 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
+// #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
-#include "cuBQL/fcp.h"
+#include "cuBQL/queries/fcp.h"
 
-#include "cuBQL/CUDAArray.h"
+#include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
 
 namespace testing {
@@ -34,7 +34,8 @@ namespace testing {
     exit(error.empty()?0:1);
   }
 
-  __global__ void makeBoxes(box_t *boxes, float3 *points, int numPoints)
+  __global__
+  void makeBoxes(box_t *boxes, float3 *points, int numPoints)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numPoints) return;
@@ -43,18 +44,20 @@ namespace testing {
     boxes[tid].upper = point;
   }
 
-  __global__ void resetResults(int *results, int numQueries)
+  __global__
+  void resetResults(int *results, int numQueries)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numQueries) return;
     results[tid] = -1;
   }
-
-  __global__ void runFCP(int *results,
-                         BinaryBVH bvh,
-                         const float3 *dataPoints,
-                         const float3 *queries,
-                         int numQueries)
+  
+  __global__
+  void runFCP(int *results,
+              BinaryBVH bvh,
+              const float3 *dataPoints,
+              const float3 *queries,
+              int numQueries)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numQueries) return;
@@ -64,27 +67,27 @@ namespace testing {
   
   void testFCP(const std::vector<float3> &h_dataPoints,
                const std::vector<float3> &h_queryPoints,
-               int maxLeafSize,
+               BuildConfig buildConfig,
                float maxTimeThreshold = 10.f
                )
   {
-    cuBQL::CUDAArray<float3> dataPoints;
+    CUDAArray<float3> dataPoints;
     dataPoints.upload(h_dataPoints);
-    cuBQL::CUDAArray<box_t> boxes(dataPoints.size());
+    CUDAArray<box_t> boxes(dataPoints.size());
     {
       int bs = 256;
       int nb = divRoundUp((int)dataPoints.size(),bs);
       makeBoxes<<<nb,bs>>>(boxes.data(),dataPoints.data(),(int)dataPoints.size());
     };
-    
-    cuBQL::BinaryBVH bvh;
-    cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),maxLeafSize);
 
-    cuBQL::CUDAArray<float3> queryPoints;
+    cuBQL::BinaryBVH bvh;
+    cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
+
+    CUDAArray<float3> queryPoints;
     queryPoints.upload(h_queryPoints);
     
     int numQueries = queryPoints.size();
-    cuBQL::CUDAArray<int> closest(numQueries);
+    CUDAArray<int> closest(numQueries);
 
     int numPerRun = 1;
     while (true) {
@@ -115,22 +118,24 @@ using namespace testing;
 
 int main(int ac, char **av)
 {
-  int maxLeafSize = 8;
+  BuildConfig buildConfig;
   std::vector<std::string> fileNames;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
     if (av[i][0] != '-')
       fileNames.push_back(arg);
-      else if (arg == "-mls" || arg == "-ls")
-        maxLeafSize = std::stoi(av[++i]);
-      else
-        usage("unknown cmd-line argument '"+arg+"'");
+    else if (arg == "-sah" || arg == "--sah")
+      buildConfig.enableSAH();
+    else if (arg == "-mlt" || arg == "-lt")
+      buildConfig.makeLeafThreshold = std::stoi(av[++i]);
+    else
+      usage("unknown cmd-line argument '"+arg+"'");
   }
   if (fileNames.size() != 2)
     usage("unexpected number of data file names");
   std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
   std::vector<float3> queryPoints = loadData<float3>(fileNames[1]);
   
-  testing::testFCP(dataPoints,queryPoints,maxLeafSize);
+  testing::testFCP(dataPoints,queryPoints,buildConfig);
   return 0;
 }
