@@ -104,6 +104,17 @@ namespace cuBQL {
         if (enc_upper > abox.upper[d]) atomicMax(&abox.upper[d],enc_upper);
       }
     }
+
+    template<typename box_t>
+    inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const float3 &other)
+    {
+#pragma unroll
+      for (int d=0;d<box_t::numDims;d++) {
+        const int32_t enc = AtomicBox<box_t>::encode(get(other,d));
+        if (enc < abox.lower[d]) atomicMin(&abox.lower[d],enc);
+        if (enc > abox.upper[d]) atomicMax(&abox.upper[d],enc);
+      }
+    }
     
     struct BuildState {
       uint32_t  numNodes;

@@ -139,7 +139,7 @@ namespace cuBQL {
         me.done   = false;
         // this could be made faster by block-reducing ...
         atomicAdd(&nodes[0].openBranch.count,1);
-        atomic_grow(nodes[0].openBranch.centBounds,box);
+        atomic_grow(nodes[0].openBranch.centBounds,centerOf(box));
       } else {
         me.nodeID = (uint32_t)-1;
         me.done   = true;
@@ -321,7 +321,7 @@ namespace cuBQL {
       int newNodeID = open.offset+side;
       auto &myBranch = nodes[newNodeID].openBranch;
       atomicAdd(&myBranch.count,1);
-      atomic_grow(myBranch.centBounds,primBox);
+      atomic_grow(myBranch.centBounds,centerOf(primBox));
       me.nodeID = newNodeID;
     }
 

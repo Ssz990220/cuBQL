@@ -61,7 +61,6 @@ namespace cuBQL {
                    NodeState  *nodeStates,
                    TempNode   *nodes)
     {
-      // buildState->nodes = nodes;
       buildState->numNodes = 2;
       
       nodeStates[0]             = OPEN_BRANCH;
@@ -90,14 +89,11 @@ namespace cuBQL {
         me.done   = false;
         // this could be made faster by block-reducing ...
         atomicAdd(&nodes[0].openBranch.count,1);
-        atomic_grow(nodes[0].openBranch.centBounds,box);
+        atomic_grow(nodes[0].openBranch.centBounds,centerOf(box));
       } else {
         me.nodeID = (uint32_t)-1;
         me.done   = true;
       }
-      // auto asDone = me;
-      // asDone.done = true;
-      // printf(" prim %i me %lx asDone %lx\n",primID,me.bits,asDone.bits);
     }
 
     __global__
@@ -147,9 +143,14 @@ namespace cuBQL {
         }
       
         auto &open = nodes[nodeID].openNode;
-        open.dim = widestDim;
-        if (widestDim >= 0) 
+        if (widestDim >= 0) {
           open.pos = in.centBounds.get_center(widestDim);
+          if (open.pos == in.centBounds.get_lower(widestDim) ||
+              open.pos == in.centBounds.get_upper(widestDim))
+            widestDim = -1;
+        }
+        open.dim = widestDim;
+        
         // this will be epensive - could make this faster by block-reducing
         open.offset = atomicAdd(&buildState->numNodes,2);
 #pragma unroll
@@ -198,10 +199,10 @@ namespace cuBQL {
       int newNodeID = split.offset+side;
       auto &myBranch = nodes[newNodeID].openBranch;
       atomicAdd(&myBranch.count,1);
-      atomic_grow(myBranch.centBounds,primBox);
+      atomic_grow(myBranch.centBounds,centerOf(primBox));
       me.nodeID = newNodeID;
     }
-
+    
     /* given a sorted list of {nodeID,primID} pairs, this kernel does
        two things: a) it extracts the 'primID's and puts them into the
        bvh's primIDs[] array; and b) it writes, for each leaf nod ein
@@ -226,7 +227,6 @@ namespace cuBQL {
       atomicMin(&node.doneNode.offset,offset);
     }
 
-
     /* writes main phase's temp nodes into final bvh.nodes[]
        layout. actual bounds of that will NOT yet bewritten */
     __global__
@@ -239,30 +239,6 @@ namespace cuBQL {
 
       finalNodes[nodeID].offset = tempNodes[nodeID].doneNode.offset;
       finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
-    }
-
-    /*! pretty-prints the current bvh for debugging; must use managed
-      memory or download bvh data to host */
-    void printBVH(TempNode *nodes, int numNodes,
-                  uint32_t *primIDs, int numPrims,
-                  int nodeID=0, int indent=0)
-    {
-      auto &node = nodes[nodeID].doneNode;
-      for (int i=0;i<indent;i++) std::cout << " ";
-      std::cout << "Node, offset = " << node.offset
-                << ", count = " << node.count << std::endl;
-      if (node.count) {
-        for (int i=0;i<indent;i++) std::cout << " ";
-        std::cout << "Leaf:";
-        for (int i=0;i<node.count;i++)
-          std::cout << " " << primIDs[node.offset+i];
-        std::cout << std::endl;
-      } else {
-        printBVH(nodes,numNodes,primIDs,numPrims,
-                 node.offset+0,indent+1);
-        printBVH(nodes,numNodes,primIDs,numPrims,
-                 node.offset+1,indent+1);
-      }
     }
 
     void build(BinaryBVH &bvh,
@@ -288,8 +264,6 @@ namespace cuBQL {
       initPrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,
          primStates,boxes,numPrims);
-      // (tempNodes.data(),
-      //  primStates.data(),boxes,numPrims);
 
       int numDone = 0;
       int numNodes;
@@ -299,8 +273,6 @@ namespace cuBQL {
         CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
                                     sizeof(numNodes),cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(StreamSynchronize(s));
-        // CUBQL_CUDA_CALL(Memcpy(&numNodes,&buildState.data()->numNodes,
-        //                        sizeof(numNodes),cudaMemcpyDeviceToHost));
         if (numNodes == numDone)
           break;
 
@@ -308,17 +280,11 @@ namespace cuBQL {
           (buildState,
            nodeStates,tempNodes,numNodes,
            buildConfig);
-        // (buildState.data(),
-        //  nodeStates.data(),tempNodes.data(),numNodes,
-        //  maxLeafSize);
         
         numDone = numNodes;
-
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
-        // (nodeStates.data(),tempNodes.data(),
-        //  primStates.data(),boxes,numPrims);
       }
       // ==================================================================
       // sort {item,nodeID} list
@@ -327,42 +293,34 @@ namespace cuBQL {
       // set up sorting of prims
       uint8_t *d_temp_storage = NULL;
       size_t temp_storage_bytes = 0;
-      // CUDAArray<PrimState> sortedPrimStates(numPrims);
       PrimState *sortedPrimStates;
       _ALLOC(sortedPrimStates,numPrims,s);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
-                                     (uint64_t*)primStates,//.data(),
-                                     (uint64_t*)sortedPrimStates,//.data(),
+                                     (uint64_t*)primStates,
+                                     (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      // CUBQL_CUDA_CALL(Malloc(&d_temp_storage,temp_storage_bytes));
       _ALLOC(d_temp_storage,temp_storage_bytes,s);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
-                                     (uint64_t*)primStates,//.data(),
-                                     (uint64_t*)sortedPrimStates,//.data(),
+                                     (uint64_t*)primStates,
+                                     (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      // CUBQL_CUDA_CALL(Free(d_temp_storage));
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(d_temp_storage,s);
-      // primStates.free();
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
 
       bvh.numPrims = numPrims;
-      // CUBQL_CUDA_CALL(Malloc(&bvh.primIDs,numPrims*sizeof(int)));
       _ALLOC(bvh.primIDs,numPrims,s);
       writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
-      // (tempNodes.data(),bvh.primIDs,sortedPrimStates.data(),numPrims);
 
       // ==================================================================
       // allocate and write final nodes
       // ==================================================================
       bvh.numNodes = numNodes;
-      // CUBQL_CUDA_CALL(Malloc(&bvh.nodes,numNodes*sizeof(BinaryBVH::Node)));
       _ALLOC(bvh.nodes,numNodes,s);
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
-        // (bvh.nodes,tempNodes.data(),numNodes);
         (bvh.nodes,tempNodes,numNodes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(sortedPrimStates,s);
@@ -494,35 +452,4 @@ namespace cuBQL {
     
   } // ::cuBQL::gpuBuilder_impl
 } // ::cuBQL
-
-  // void gpuBuilder(BinaryBVH   &bvh,
-  //                 const box3f *boxes,
-  //                 uint32_t     numBoxes,
-  //                 BuildConfig  buildConfig,
-  //                 cudaStream_t s)
-  // {
-  //   if (buildConfig.makeLeafThreshold == 0)
-  //     // unless explicitly specified, use default for spatial median
-  //     // builder:
-  //     buildConfig.makeLeafThreshold = 8;
-  //   gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s);
-  //   gpuBuilder_impl::refit(bvh,boxes,s);
-  //   CUBQL_CUDA_CALL(StreamSynchronize(s));
-  // }
-
-  // float computeSAH(const BinaryBVH &bvh)
-  // {
-  //   return gpuBuilder_impl::computeSAH(bvh);
-  // }
-  
-  // void free(BinaryBVH   &bvh,
-  //           cudaStream_t s)
-  // {
-  //   CUBQL_CUDA_CALL(StreamSynchronize(s));
-  //   CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
-  //   CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
-  //   CUBQL_CUDA_CALL(StreamSynchronize(s));
-  //   bvh.primIDs = 0;
-  // }
-// }
 

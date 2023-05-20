@@ -29,14 +29,19 @@ namespace cuBQL {
                   BuildConfig  buildConfig,
                   cudaStream_t s)
   {
-    if (buildConfig.makeLeafThreshold == 0)
-      // unless explicitly specified, use default for spatial median
-      // builder:
-      buildConfig.makeLeafThreshold = 8;
-    if (buildConfig.buildMethod == BuildConfig::SAH)
+    if (buildConfig.buildMethod == BuildConfig::SAH) {
+      if (buildConfig.makeLeafThreshold == 0)
+        // unless explicitly specified, use default for spatial median
+        // builder:
+        buildConfig.makeLeafThreshold = 1;
       sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,buildConfig,s);
-    else
+    } else {
+      if (buildConfig.makeLeafThreshold == 0)
+        // unless explicitly specified, use default for spatial median
+        // builder:
+        buildConfig.makeLeafThreshold = 8;
       gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s);
+    }
     gpuBuilder_impl::refit(bvh,boxes,s);
     CUBQL_CUDA_CALL(StreamSynchronize(s));
   }

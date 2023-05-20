@@ -74,10 +74,10 @@ namespace cuBQL {
       uint64_t count  : 16;
     };
 
-    Node     *nodes;
-    uint32_t  numNodes;
-    uint32_t *primIDs;
-    uint32_t  numPrims;
+    Node     *nodes    = 0;
+    uint32_t  numNodes = 0;
+    uint32_t *primIDs  = 0;
+    uint32_t  numPrims = 0;
   };
 
   /*! a 'wide' BVH in which each node has a fixed number of
@@ -97,11 +97,11 @@ namespace cuBQL {
       } child[BVH_WIDTH];
     };
 
-    Node     *nodes;
+    Node     *nodes    = 0;
     //! number of (multi-)nodes on this WideBVH
-    uint32_t  numNodes;
-    uint32_t *primIDs;
-    uint32_t  numPrims;
+    uint32_t  numNodes = 0;
+    uint32_t *primIDs  = 0;
+    uint32_t  numPrims = 0;
   };
 
   // ------------------------------------------------------------------

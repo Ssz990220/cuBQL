@@ -60,6 +60,9 @@ namespace cuBQL {
   
   inline __both__ float sqrDistance(float3 a, float3 b)
   { return sqrLength(a-b); }
+
+  inline __both__ float get(float3 a, int d)
+  { return (d==0)?a.x:((d==1)?a.y:a.z); }
   
   
   struct box3f {
@@ -101,6 +104,12 @@ namespace cuBQL {
     float sz = box.get_upper(2)-box.get_lower(2);
     return sx*sy + sx*sz + sy*sz;
   }
-    
+
+  inline __both__
+  float3 centerOf(box3f box)
+  {
+    return 0.5f * (box.lower + box.upper);
+  }
+  
 }
 
