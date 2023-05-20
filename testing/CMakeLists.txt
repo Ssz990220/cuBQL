@@ -49,6 +49,9 @@ if (NOT CUBQL_IS_SUBMODULE)
 
   add_executable(cuBQL_makeBoxes_fromPoints makeBoxes_fromPoints.cu)
   target_link_libraries(cuBQL_makeBoxes_fromPoints PUBLIC cuBQL_testing)
+
+  add_executable(cuBQL_makeBoxes_fromTris makeBoxes_fromTris.cu)
+  target_link_libraries(cuBQL_makeBoxes_fromTris PUBLIC cuBQL_testing)
   
 
 
