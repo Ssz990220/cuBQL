@@ -24,10 +24,6 @@ void usage(const std::string &error = "")
     std::cout << "Error: " << error << "\n\n";
 
   std::cout << "Usage: ./cuBQL_makeBoxes_fromTris tris.bin -o boxes.bin [args]\n\n";
-  std::cout << "w/ args:\n";
-  std::cout << " -o outFileName\n";
-  std::cout << " --obj         : save as a obj file, not a data file\n";
-  std::cout << " -bs box-size  : width of each generated box\n";
   exit(error.empty()?0:1);
 }
 
@@ -36,16 +32,10 @@ int main(int ac, char **av)
   std::string outFileName;
   std::string inFileName;
   
-  float boxSize = 0.f;
-  bool useOBJ = false;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
     if (arg == "-o") {
       outFileName = av[++i];
-    } else if (arg == "--obj" || arg == "-obj") {
-      useOBJ = true;
-    } else if (arg == "--box-size" || arg == "-bs") {
-      boxSize = std::stof(av[++i]);
     } else if (arg[0] == '-')
       usage("unknown cmdline arg '"+arg+"'");
     else
@@ -56,35 +46,22 @@ int main(int ac, char **av)
   if (inFileName.empty())
     usage("no input tris file specified");
 
-  if (outFileName.substr(outFileName.size()-4) == ".obj")
-    useOBJ = true;
-                         
   std::cout << "loading tris from '"
             << inFileName << "'" << std::endl;
   std::vector<Triangle> tris = loadData<Triangle>(inFileName);
 
-  if (boxSize <= 0.f) {
-    std::cout << "no box size specified; computing one automatically ..." << std::endl;
-    box3f bbox;
-    bbox.set_empty();
-    for (auto p : tris) grow(bbox,p);
-    boxSize = length(bbox.upper-bbox.lower);
-    boxSize /= sqrtf(tris.size());
-  }
-
   std::cout << "making boxes..." << std::endl;
   std::vector<box3f> boxes;
-  for(auto p : tris) 
-    boxes.push_back(make_box3f(p-make_float3(.5f*boxSize),
-                               p+make_float3(.5f*boxSize)));
-
+  for(auto tri : tris) {
+    box3f bbox;
+    bbox.set_empty();
+    grow(bbox,tri.a);
+    grow(bbox,tri.b);
+    grow(bbox,tri.c);
+    boxes.push_back(bbox);
+  }
   
-  if (useOBJ) {
-    std::cout << "saving as OBJ, to " << outFileName << std::endl;
-    saveOBJ(triangulate(boxes),outFileName);
-  } else {
-    std::cout << "saving as " << outFileName << std::endl;
-    saveData(boxes,outFileName);
-  }  
+  std::cout << "saving as " << outFileName << std::endl;
+  saveData(boxes,outFileName);
   return 0;
 }
