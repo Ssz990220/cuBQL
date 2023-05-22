@@ -292,8 +292,6 @@ namespace cuBQL {
     return s.substr(s.size()-suffix.size()) == suffix;
   }
 
-
-
 } // ::cubql
 
 

@@ -31,7 +31,14 @@ namespace cuBQL {
   inline __device__
   float sqrDistance(BinaryBVH::Node node, float3 point)
   { return sqrDistance(node.bounds,point); }
+
   
+  /*! 'fcp' = "find closest point", on a binary BVH. Given an input
+    query point, and a BVH over point data, find the (index of) the
+    data point that is closest to the given query point. Function
+    also takes a maximum query distance; all data points with
+    distance > this minimum distance will get ignored. If no fcp can
+    be found in given query radius, -1 will be returned */
   inline __device__
   int fcp(BinaryBVH bvh,
           const float3 *dataPoints,
@@ -47,7 +54,6 @@ namespace cuBQL {
     int count  = 0;
     while (true) {
       while (true) {
-        // printf("nodeID %i\n",nodeID);
         offset = bvh.nodes[nodeID].offset;
         count  = bvh.nodes[nodeID].count;
         if (count>0)
@@ -55,23 +61,8 @@ namespace cuBQL {
           break;
         BinaryBVH::Node child0 = bvh.nodes[offset+0];
         BinaryBVH::Node child1 = bvh.nodes[offset+1];
-        // printf(" child0 (%f %f %f)(%f %f %f)\n",
-        //        child0.bounds.lower.x,
-        //        child0.bounds.lower.y,
-        //        child0.bounds.lower.z,
-        //        child0.bounds.upper.x,
-        //        child0.bounds.upper.y,
-        //        child0.bounds.upper.z);
-        // printf(" child1 (%f %f %f)(%f %f %f)\n",
-        //        child1.bounds.lower.x,
-        //        child1.bounds.lower.y,
-        //        child1.bounds.lower.z,
-        //        child1.bounds.upper.x,
-        //        child1.bounds.upper.y,
-        //        child1.bounds.upper.z);
         float dist0 = sqrDistance(child0,query);
         float dist1 = sqrDistance(child1,query);
-        // printf("distances %f %f (vs %f)\n",dist0,dist1,cullDist);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
         if (dist1 <= cullDist) {
           float dist = max(dist0,dist1);
@@ -84,11 +75,9 @@ namespace cuBQL {
         }
         nodeID = closeChild;
       }
-      // printf("--- at leaf %i %i\n",offset,count);
       for (int i=0;i<count;i++) {
         int primID = bvh.primIDs[offset+i];
         float dist = sqrDistance(dataPoints[primID],query);
-        // printf(" > prim %i dist %f\n",primID,dist);
         if (dist >= cullDist) continue;
         cullDist = dist;
         result = primID;
@@ -103,6 +92,118 @@ namespace cuBQL {
       }
     }
   }
+
+  template<int N>
+  struct ChildOrder {
+    inline __device__ void clear(int i) { v[i] = (uint64_t)-1; }
+    inline __device__ void set(int i, float dist, uint32_t payload)
+    { v[i] = (uint64_t(__float_as_int(dist))<<32) | payload; }
+    
+    uint64_t v[N];
+  };
   
-}
+  template<int N>
+  inline __device__ void sort(ChildOrder<N> &children)
+  {
+#pragma unroll
+    for (int i=N-1;i>0;--i) {
+#pragma unroll
+      for (int j=0;j<i;j++) {
+        uint64_t c0 = children.v[j+0];
+        uint64_t c1 = children.v[j+1];
+        children.v[j+0] = min(c0,c1);
+        children.v[j+1] = max(c0,c1);
+      }
+    }
+  }
+  
+  /*! 'fcp' = "find closest point", on a binary BVH. Given an input
+    query point, and a BVH over point data, find the (index of) the
+    data point that is closest to the given query point. Function
+    also takes a maximum query distance; all data points with
+    distance > this minimum distance will get ignored. If no fcp can
+    be found in given query radius, -1 will be returned */
+  template<int N>
+  inline __device__
+  int fcp(WideBVH<N> bvh,
+          const float3 *dataPoints,
+          float3 query,
+          float maxQueryDist = INFINITY)
+  {
+    // int tid = threadIdx.x+blockIdx.x*blockDim.x;
+    // if (tid != 0) return -1;
+
+    float cullDist = maxQueryDist*maxQueryDist;
+    int result = -1;
+
+    enum { stackSize = 64 };
+    uint64_t stackBase[stackSize], *stackPtr = stackBase;
+    int nodeID = 0;
+    ChildOrder<N> childOrder;
+    while (true) {
+      while (true) {
+        while (nodeID == -1) {
+          if (stackPtr == stackBase)
+            return result;
+          uint64_t tos = *--stackPtr;
+          if (__int_as_float(tos>>32) > cullDist)
+            continue;
+          nodeID = (uint32_t)tos;
+          // pop....
+        }
+        if (nodeID & (1<<31))
+          break;
+        
+        const typename WideBVH<N>::Node &node = bvh.nodes[nodeID];
+#pragma unroll(N)
+        for (int c=0;c<N;c++) {
+          const auto child = node.children[c];
+          if (!node.children[c].valid)
+            childOrder.clear(c);
+          else {
+            float dist2 = sqrDistance(child.bounds,query);
+            if (dist2 > cullDist) 
+              childOrder.clear(c);
+            else {
+              uint32_t payload
+                = child.count
+                ? ((1<<31)|(nodeID<<log_of<N>::value)|c)
+                : child.offset;
+              childOrder.set(c,dist2,payload);
+            }
+          }
+        }
+        sort(childOrder);
+#pragma unroll
+        for (int c=N-1;c>0;--c) {
+          uint64_t coc = childOrder.v[c];
+          if (coc != uint64_t(-1)) {
+            *stackPtr++ = coc;
+            // if (stackPtr - stackBase == stackSize)
+            //   printf("stack overrun!\n");
+          }
+        }
+        if (childOrder.v[0] == uint64_t(-1)) {
+          nodeID = -1;
+          continue;
+        }
+        nodeID = uint32_t(childOrder.v[0]);
+      }
+      
+      int c = nodeID & ((1<<log_of<N>::value)-1);
+      int n = (nodeID & 0x7fffffff)  >> log_of<N>::value;
+      int offset = bvh.nodes[n].children[c].offset;
+      int count  = bvh.nodes[n].children[c].count;
+      for (int i=0;i<count;i++) {
+        int primID = bvh.primIDs[offset+i];
+        float dist2 = sqrDistance(dataPoints[primID],query);
+        if (dist2 >= cullDist) continue;
+        cullDist = dist2;
+        result   = primID;
+      }
+      nodeID = -1;
+    }
+  }
+  
+} // ::cuBQL
 

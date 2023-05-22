@@ -151,7 +151,6 @@ namespace testing {
   std::vector<T> CUDAArray<T,Allocator>::download() const
   {
     std::vector<T> host(N);
-    PRINT(N);
     CUBQL_CUDA_CALL(Memcpy(host.data(),d_data,N*sizeof(T),cudaMemcpyDefault));
     CUBQL_CUDA_SYNC_CHECK();
     return host;

@@ -89,12 +89,14 @@ namespace cuBQL {
       this is not a "single" node, but actually N nodes merged
       together */
     struct CUBQL_ALIGN(16) Node {
-      box3f bounds[BVH_WIDTH];
-      struct {
-        uint64_t valid  :  1;
-        uint64_t offset : 45;
-        uint64_t count  : 16;
-      } child[BVH_WIDTH];
+      struct Child {
+        box3f    bounds;
+        struct {
+          uint64_t valid  :  1;
+          uint64_t offset : 45;
+          uint64_t count  : 16;
+        };
+      } children[BVH_WIDTH];
     };
 
     Node     *nodes    = 0;

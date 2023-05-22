@@ -16,6 +16,8 @@
 
 #pragma once
 
+// #include <vector>
+
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 
 namespace cuBQL {
@@ -25,11 +27,17 @@ namespace cuBQL {
       // careful: 'isWideRoot' and ''binaryRoot' get written to in
       // parallel by differnet threads; they must be in different atomic
       // words.
-      union {
+      struct {
         int32_t  parent:31;
         uint32_t isWideRoot:1;
       };
+      /*! for *wide* nodes: the ID of the binary node that is the root
+          of the treelet that this node maps to */
       int32_t binaryRoot;
+      
+      /*! for *binary* nodes that re treelet root nodes: the ID of the
+        wide node that it maps to */
+      int     wideNodeID;
     };
   
     __global__
@@ -44,6 +52,7 @@ namespace cuBQL {
         *d_numWideNodes  =  1;
         d_infos[0].parent = -1;
         d_infos[0].isWideRoot = 1;
+        d_infos[0].wideNodeID = 0;
         d_infos[0].binaryRoot = -1;
       }
 
@@ -61,12 +70,6 @@ namespace cuBQL {
       d_infos[node.offset+1].parent = tid;
       d_infos[node.offset+1].binaryRoot = -1;
     }
-
-    template<int> struct log_of;
-    template<> struct log_of< 2> { enum { value = 1 }; };
-    template<> struct log_of< 4> { enum { value = 2 }; };
-    template<> struct log_of< 8> { enum { value = 3 }; };
-    template<> struct log_of<16> { enum { value = 4 }; };
 
     template<int N>
     __global__
@@ -93,12 +96,12 @@ namespace cuBQL {
         =  /* inner node: */
         (bvh.nodes[tid].count == 0)
         && /* on right level*/
-        ((depth % log_of<N>::value) == 0)
+        ((depth % (log_of<N>::value)) == 0)
 
         || /* special case: single-node BVH */
         (bvh.numNodes == 1);
 
-      if (!isWideNodeRoot)
+      if (!isWideNodeRoot) 
         return;
 
       const int wideNodeID
@@ -107,6 +110,7 @@ namespace cuBQL {
         : atomicAdd(d_numWideNodes,1);
       d_infos[wideNodeID].binaryRoot = tid;
       d_infos[tid].isWideRoot = true;
+      d_infos[tid].wideNodeID = wideNodeID;
     }
 
 
@@ -121,19 +125,24 @@ namespace cuBQL {
         return;
 
       int nodeStack[5], *stackPtr = nodeStack;
-      *stackPtr++ = d_infos[tid].binaryRoot;
+      int binaryRoot = d_infos[tid].binaryRoot;
+      *stackPtr++ = binaryRoot;
 
       typename WideBVH<N>::Node &target = wideBVH.nodes[tid];
       int numWritten = 0;
       while (stackPtr > nodeStack) {
         int nodeID = *--stackPtr;
         auto &node = binary.nodes[nodeID];
-        if (node.count > 0 ||
-            nodeID != tid && d_infos[nodeID].isWideRoot) {
-          target.bounds[numWritten] = node.bounds;
-          target.child[numWritten].offset = node.offset;
-          target.child[numWritten].count  = node.count;
-          target.child[numWritten].valid  = 1;
+        if ((node.count > 0) ||
+            ((nodeID != binaryRoot) && d_infos[nodeID].isWideRoot)) {
+          target.children[numWritten].bounds = node.bounds;
+          if (node.count) {
+            target.children[numWritten].offset = node.offset;
+          } else {
+            target.children[numWritten].offset = d_infos[nodeID].wideNodeID;
+          }
+          target.children[numWritten].count  = node.count;
+          target.children[numWritten].valid  = 1;
           numWritten++;
         } else {
           *stackPtr++ = node.offset+0;
@@ -141,19 +150,17 @@ namespace cuBQL {
         }
       }
       while (numWritten < N) {
-        target.bounds[numWritten].lower
+        target.children[numWritten].bounds.lower
           = make_float3(+INFINITY,+INFINITY,+INFINITY);
-        target.bounds[numWritten].upper
+        target.children[numWritten].bounds.upper
           = make_float3(-INFINITY,-INFINITY,-INFINITY);
-        target.child[numWritten].offset = (uint32_t)-1;
-        target.child[numWritten].count  = (uint32_t)-1;
-        target.child[numWritten].valid  = 0;
+        target.children[numWritten].offset = (uint32_t)-1;
+        target.children[numWritten].count  = (uint32_t)-1;
+        target.children[numWritten].valid  = 0;
         ++numWritten;
       }
     }
 
-  
-  
     template<int N, typename box_t>
     void gpuBuilder(WideBVH<N>  &wideBVH,
                     const box_t *boxes,
@@ -161,6 +168,7 @@ namespace cuBQL {
                     BuildConfig  buildConfig,
                     cudaStream_t s)
     {
+      
       BinaryBVH binaryBVH;
       gpuBuilder(binaryBVH,boxes,numBoxes,buildConfig,s);
 
@@ -171,6 +179,7 @@ namespace cuBQL {
     
       collapseInit<<<divRoundUp((int)binaryBVH.numNodes,1024),1024,0,s>>>
         (d_numWideNodes,d_infos,binaryBVH);
+
       collapseSummarize<N><<<divRoundUp((int)binaryBVH.numNodes,1024),1024,0,s>>>
         (d_numWideNodes,d_infos,binaryBVH);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
@@ -180,6 +189,7 @@ namespace cuBQL {
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _ALLOC(wideBVH.nodes,wideBVH.numNodes,s);
 
+      PRINT(wideBVH.numNodes);
       collapseExecute<<<divRoundUp((int)wideBVH.numNodes,1024),1024,0,s>>>
         (d_infos,wideBVH,binaryBVH);
 
@@ -203,13 +213,13 @@ namespace cuBQL {
       auto &node = bvh.nodes[nodeID];
       float area = 0.f;
       for (int i=0;i<N;i++) {
-        box3f box = node.bounds[i];
+        box3f box = node.children[i].bounds;
         if (box.lower.x > box.upper.x) continue;
         area += surfaceArea(box);
       }
       box3f rootBox; rootBox.set_empty();
       for (int i=0;i<N;i++)
-        rootBox.grow(bvh.nodes[0].bounds[i]);
+        rootBox.grow(bvh.nodes[0].children[i].bounds);
       area /= surfaceArea(rootBox);
       nodeCosts[nodeID] = area;
     }

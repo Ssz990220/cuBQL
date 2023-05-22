@@ -25,6 +25,13 @@ namespace cuBQL {
 
   using ::make_float3;
   
+  template<int N> struct log_of;
+  template<> struct log_of< 2> { enum { value = 1 }; };
+  template<> struct log_of< 4> { enum { value = 2 }; };
+  template<> struct log_of< 8> { enum { value = 3 }; };
+  template<> struct log_of<16> { enum { value = 4 }; };
+
+  inline __both__ float sqr(float f) { return f*f; }
   inline __both__ float3 make_float3(float f) { return make_float3(f,f,f); }
     
   inline __both__ float3 min(float3 a, float3 b)
