@@ -39,6 +39,61 @@ namespace testing {
     return seed;
   }
 
+  template<typename>
+  struct is_std_vector : std::false_type {};
+  
+  template<typename T, typename A>
+  struct is_std_vector<std::vector<T,A>> : std::true_type {};
+
+  template<typename T>
+  T read(std::istream &in);
+  
+  template<typename T>
+  void read(std::istream &in, std::vector<T> &vt)
+  {
+    size_t count;
+    in.read((char *)&count,sizeof(count));
+    vt.resize(count);
+    for (auto &tt : vt) tt = read<T>(in);
+  }
+
+  template<typename T>
+  void read(std::istream &in, T &t)
+  {
+    in.read((char *)&t,sizeof(t));
+  }
+  
+  template<typename T>
+  T read(std::istream &in)
+  {
+    T t;
+    read(in,t);
+    return t;
+  }
+  
+  template<typename T>
+  T read_from(const std::string &fn)
+  {
+    std::ifstream in(fn,std::ios::binary);
+    T t;
+    read(in,t);
+    return t;
+  }
+  
+  template<typename T>
+  void write(std::ostream &out, const T &data)
+  {
+    out.write((const char *)&data,sizeof(data));
+  }
+  template<typename T>
+  void write(std::ostream &out, const std::vector<T> &data)
+  {
+    size_t count = data.size();;
+    out.write((char*)&count,sizeof(count));
+    for (auto &v : data)
+      write(out,v);
+  }
+
   template<typename T>
   std::vector<T> loadData(const std::string &fileName)
   {
