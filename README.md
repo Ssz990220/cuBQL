@@ -1,12 +1,23 @@
 # cuBQL ("cubicle") - A CUDA BVH Build and Query Library
 
-'Cubicle' (cuBQL) is a (intentionally) small library for
-GPU-accelerated building and queries of Bounding Volume Hierarchies
-(BVHs), with a focus on simplicity. I.e., all operations in this
-library are designed to run on the GPU, run in parallel, and be
-"reasonably" fast; but if in doubt this library picks simplicy (and
-thus, maintainability, rubustness, and ease of use) over
-speed-of-light performance.
+'Cubicle' (cuBQL) is a (intentionally) small library for - primarily -
+GPU-accelerated building of bounding volume hierarchies (of various
+forms). cuBQL is mainly intended to serve as same code for a paper on
+GPU BVH construction that I am currently working on, with the goal of
+being able to test, verify, and time the various kernels on various
+forms of input data. To also measure how well the generated BVHes will
+actually do on real-world applications this library also conains a
+(intentinoally) small set of sample query kernels (in CUDA); hwoever,
+the main goal of _this_ library is the easy and GPU-accelerated
+_building_ of BVHes, not to be a library for any type of query for any
+type of data.
+
+A second important point to note is that the builder routine(s) used
+in this library are, first and foremost, designed and intended for
+*simplicity*. I.e., all operations in this library are designed to run
+on the GPU, run in parallel, and be "reasonably" fast; but if in doubt
+this library picks simplicy (and thus, maintainability, rubustness,
+and ease of use) over speed-of-light performance.
 
 To build this library (see below) you need CUDA 11.2 or later, and
 cmake. This library uses "modern CMake".
@@ -39,8 +50,10 @@ children are at offset, and offset+1, respectively); for leaf nodes it
 points into the `BinaryBVH::primIDs` array (i.e., that leaf contains
 `primID[offset+0]`, `primID[offset+1]`, etc).
 
-A `WideBVH<N>` type (templated over BVH width) will soon be introduced
-as well, but is not yet ready for release. 
+A `WideBVH<N>` type (templated over BVH width) is supported as
+well. WideBVH'es always have a fixed number of `N` branches in each
+inner node; however, some of these may be 'null' (marked as not
+valid).
 
 Though most of the algorithms and data types in this library could
 absoltely be templated over both dimensionality and underlying data
@@ -73,7 +86,6 @@ To use that builder, you need to first create a (device-side) array of
 Given such an array, the builder then gets invoked as follows:
 
 ```
-#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
 ...
 	box3f *d_boxes;
@@ -81,7 +93,8 @@ Given such an array, the builder then gets invoked as follows:
 	userCodeForGeneratingPrims(d_boxes,numBoxes);
 	...
     cuBQL::BinaryBVH bvh;
-    cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,maxLeafSize);
+	cuBQL::BuildConfig buildParams;
+    cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,buildParams);
 ...
 ```
 The builder will not modify the `d_boxes[]` array; after the build
@@ -96,6 +109,11 @@ behavior for NaNs, denorms, etc. is not defined. Zero-volume
 primitives are considered valid primitives, and will get included in
 the BVH.
 
+The `BuildConfig` class can be used to influence things like whether
+the BVH shuld be built with a surface area heuristic (SAH) cost metric
+(more expensive build, but faster queries for some types of inputs and
+query operatoins), or how coarse vs fine the BVH should be built (ie,
+at which point to make a leaf).
 
 A few notes:
 
@@ -107,11 +125,12 @@ A few notes:
   be slower than subsequent ones.
 
 - Following the same pattern as other libraries like tinyOBJ or STB,
-  this library has most of its actual algorithms conditionally visible
-  within the header files; by default a included header file will only
-  pull in the type and function *declaration*s, but specifying
-  `CUBQL_GPU_BUILDER_IMPLEMENTATION` will also pull in the
-  implementation.
+  this library *can* be used in a header-only form. By default a
+  included header file will only pull in the type and function
+  *declaration*s, but specifying `CUBQL_GPU_BUILDER_IMPLEMENTATION` to 1
+  will also pull in the implementation. Alternatively you can also
+  link to the cmake `cuBQL_impl` target, which does contain
+  instantiations of the builder.
 
 # Building
 
