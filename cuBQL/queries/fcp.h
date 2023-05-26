@@ -32,20 +32,25 @@ namespace cuBQL {
   float sqrDistance(BinaryBVH::Node node, float3 point)
   { return sqrDistance(node.bounds,point); }
 
-  
   /*! 'fcp' = "find closest point", on a binary BVH. Given an input
     query point, and a BVH over point data, find the (index of) the
     data point that is closest to the given query point. Function
     also takes a maximum query distance; all data points with
     distance > this minimum distance will get ignored. If no fcp can
-    be found in given query radius, -1 will be returned */
+    be found in given query radius, -1 will be returned 
+    
+    Careful, the max query distance is specified as the SQUARE of the
+    maximum search distance because that'll allow to avoid various
+    expensive sqrt operations
+  */
   inline __device__
-  int fcp(BinaryBVH bvh,
-          const float3 *dataPoints,
-          float3 query,
-          float maxQueryDist = INFINITY)
+  int fcp(const BinaryBVH bvh,
+          const float3   *dataPoints,
+          const float3    query,
+          /* in: SQUARE of max search distance; out: sqrDist of closest point */
+          float          &maxQueryDistSquare)
   {
-    float cullDist = maxQueryDist*maxQueryDist;
+#if 1
     int result = -1;
     
     int2 stackBase[32], *stackPtr = stackBase;
@@ -64,12 +69,12 @@ namespace cuBQL {
         float dist0 = sqrDistance(child0,query);
         float dist1 = sqrDistance(child1,query);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
-        if (dist1 <= cullDist) {
+        if (dist1 <= maxQueryDistSquare) {
           float dist = max(dist0,dist1);
           int distBits = __float_as_int(dist);
           *stackPtr++ = make_int2(closeChild^1,distBits);
         }
-        if (min(dist0,dist1) > cullDist) {
+        if (min(dist0,dist1) > maxQueryDistSquare) {
           count = 0;
           break;
         }
@@ -77,20 +82,21 @@ namespace cuBQL {
       }
       for (int i=0;i<count;i++) {
         int primID = bvh.primIDs[offset+i];
-        float dist = sqrDistance(dataPoints[primID],query);
-        if (dist >= cullDist) continue;
-        cullDist = dist;
-        result = primID;
+        float dist2 = sqrDistance(dataPoints[primID],query);
+        if (dist2 >= maxQueryDistSquare) continue;
+        maxQueryDistSquare = dist2;
+        result             = primID;
       }
       while (true) {
         if (stackPtr == stackBase)
           return result;
         --stackPtr;
-        if (__int_as_float(stackPtr->y) > cullDist) continue;
+        if (__int_as_float(stackPtr->y) > maxQueryDistSquare) continue;
         nodeID = stackPtr->x;
         break;
       }
     }
+#endif
   }
 
   template<int N>
@@ -125,15 +131,20 @@ namespace cuBQL {
     be found in given query radius, -1 will be returned */
   template<int N>
   inline __device__
-  int fcp(WideBVH<N> bvh,
-          const float3 *dataPoints,
-          float3 query,
-          float maxQueryDist = INFINITY)
+  int fcp(/*! the bvh that is built over hte points */
+          const WideBVH<N> bvh,
+          
+          /*! the data points that the BVH is actually built over */
+          const float3    *dataPoints,
+          
+          /*! the query position, for which we try to find the
+            closest point */
+          const float3     query,
+          
+          /*! in: SQUARE of max search distance; out: sqrDist of closest point */
+          float           &maxQueryDistSquare)
   {
-    // int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    // if (tid != 0) return -1;
-
-    float cullDist = maxQueryDist*maxQueryDist;
+#if 1
     int result = -1;
 
     enum { stackSize = 64 };
@@ -146,7 +157,7 @@ namespace cuBQL {
           if (stackPtr == stackBase)
             return result;
           uint64_t tos = *--stackPtr;
-          if (__int_as_float(tos>>32) > cullDist)
+          if (__int_as_float(tos>>32) > maxQueryDistSquare)
             continue;
           nodeID = (uint32_t)tos;
           // pop....
@@ -162,7 +173,7 @@ namespace cuBQL {
             childOrder.clear(c);
           else {
             float dist2 = sqrDistance(child.bounds,query);
-            if (dist2 > cullDist) 
+            if (dist2 > maxQueryDistSquare) 
               childOrder.clear(c);
             else {
               uint32_t payload
@@ -197,13 +208,32 @@ namespace cuBQL {
       for (int i=0;i<count;i++) {
         int primID = bvh.primIDs[offset+i];
         float dist2 = sqrDistance(dataPoints[primID],query);
-        if (dist2 >= cullDist) continue;
-        cullDist = dist2;
-        result   = primID;
+        if (dist2 >= maxQueryDistSquare) continue;
+        maxQueryDistSquare = dist2;
+        result             = primID;
       }
       nodeID = -1;
     }
+#endif
   }
-  
+
+
+  /*! for convenience, a fcp variant that doesn't have a max query
+      dist, and returns only the int */
+  template<typename bvh_t>
+  inline __device__
+  int fcp(/*! the bvh that is built over hte points */
+          bvh_t bvh,
+          
+          /*! the data points that the BVH is actually built over */
+          const float3 *dataPoints,
+          
+          /*! the query position, for which we try to find the
+            closest point */
+          const float3 query)
+  {
+    float sqrMaxQueryDist = INFINITY;
+    return fcp(bvh,dataPoints,query);
+  }
 } // ::cuBQL
 

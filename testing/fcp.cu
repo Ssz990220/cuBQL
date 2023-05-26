@@ -61,21 +61,26 @@ namespace testing {
   
   template<typename bvh_t>
   __global__
-  void runFCP(float *results,
-              bvh_t bvh,
+  void runFCP(float        *results,
+              bvh_t         bvh,
               const float3 *dataPoints,
               const float3 *queries,
-              int numQueries)
+              float         maxRadius,
+              int           numQueries)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numQueries) return;
 
     const float3 query = queries[tid];
-    int res = cuBQL::fcp(bvh,dataPoints,query);
+    float sqrMaxQueryDist = maxRadius*maxRadius;
+    int res = cuBQL::fcp(bvh,dataPoints,query,
+                         /* fcp kernel expects SQUARE of radius */
+                         sqrMaxQueryDist);
     if (res == -1)
       results[tid] = INFINITY;
     else
-      results[tid] = sqrDistance(dataPoints[res],query);
+      // results[tid] = sqrDistance(dataPoints[res],query);
+      results[tid] = sqrMaxQueryDist;
   }
 
   template<typename bvh_t>
@@ -116,6 +121,7 @@ namespace testing {
        bvh,
        dataPoints.data(),
        queryPoints.data(),
+       testConfig.maxQueryRadius,
        numQueries);
     CUBQL_CUDA_SYNC_CHECK();
     if (reference.empty()) {
@@ -152,6 +158,7 @@ namespace testing {
            bvh,
            dataPoints.data(),
            queryPoints.data(),
+           testConfig.maxQueryRadius,
            numQueries);
         CUBQL_CUDA_SYNC_CHECK();
       }

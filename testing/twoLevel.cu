@@ -27,17 +27,91 @@ namespace cuBQL {
     float3 *data;
   };
   
+  template<typename bvh_t>
+  inline __device__
+  int2 twoLevel_fcp(bvh_t bvh,
+                    const BLAS<bvh_t> *blases,
+                    float3 query,
+                    float &maxQueryDistSquare);
+
+  /*! fcp kernel for a binary two-level BVH. The 'blases' are a list
+      of the bottom-level acceleration structures (also BinaryBVHs),
+      maxQueryDist isthe maximum search distance. Return value is a
+      int2, where result.x is the index of the BLAS that contained the
+      closest point, and index.y is the ID of the primitive within
+      that BLAS. If no point could be found within the given search
+      radius, this returns result.x==-1 */
+  inline __device__
+  int2 twoLevel_fcp(BinaryBVH bvh,
+                   const BLAS<BinaryBVH> *blases,
+                   float3 query,
+                   float &maxQueryDistSquare)
+  {
+    int2 result = {-1,-1};
+    
+    int2 stackBase[32], *stackPtr = stackBase;
+    int nodeID = 0;
+    int offset = 0;
+    int count  = 0;
+    while (true) {
+      while (true) {
+        offset = bvh.nodes[nodeID].offset;
+        count  = bvh.nodes[nodeID].count;
+        if (count>0)
+          // leaf
+          break;
+        BinaryBVH::Node child0 = bvh.nodes[offset+0];
+        BinaryBVH::Node child1 = bvh.nodes[offset+1];
+        float dist0 = sqrDistance(child0,query);
+        float dist1 = sqrDistance(child1,query);
+        int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
+        if (dist1 <= maxQueryDistSquare) {
+          float dist = max(dist0,dist1);
+          int distBits = __float_as_int(dist);
+          *stackPtr++ = make_int2(closeChild^1,distBits);
+        }
+        if (min(dist0,dist1) > maxQueryDistSquare) {
+          count = 0;
+          break;
+        }
+        nodeID = closeChild;
+      }
+      int offset = bvh.nodes[nodeID].offset;
+      int count  = bvh.nodes[nodeID].count;
+      for (int i=0;i<count;i++) {
+        int blasID = bvh.primIDs[offset+i];
+        auto blas = blases[blasID];
+        int blasResult = fcp(blas.bvh,blas.data,query,maxQueryDistSquare);
+        if (blasResult > -1) {
+          result.x = blasID;
+          result.y = blasResult;
+        }
+      }
+      while (true) {
+        if (stackPtr == stackBase)
+          return result;
+        --stackPtr;
+        if (__int_as_float(stackPtr->y) > maxQueryDistSquare) continue;
+        nodeID = stackPtr->x;
+        break;
+      }
+    }
+  }
+
+  /*! fcp kernel for a binary two-level BVH. The 'blases' are a list
+    of the bottom-level acceleration structures (also BinaryBVHs),
+    maxQueryDist isthe maximum search distance. Return value is a
+    int2, where result.x is the index of the BLAS that contained the
+    closest point, and index.y is the ID of the primitive within
+    that BLAS. If no point could be found within the given search
+    radius, this returns result.x==-1 */
   template<int N>
   inline __device__
   int2 twoLevel_fcp(WideBVH<N> bvh,
-                   const BLAS<WideBVH<N>> *blases,
-                   float3 query,
-                   float maxQueryDist = INFINITY)
+                    const BLAS<WideBVH<N>> *blases,
+                    float3 query,
+                    float &maxQueryDistSquare)
   {
-    // int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    // if (tid != 0) return -1;
-
-    float cullDist = maxQueryDist*maxQueryDist;
     int2 result = {-1,-1};
 
     enum { stackSize = 64 };
@@ -50,7 +124,7 @@ namespace cuBQL {
           if (stackPtr == stackBase)
             return result;
           uint64_t tos = *--stackPtr;
-          if (__int_as_float(tos>>32) > cullDist)
+          if (__int_as_float(tos>>32) > maxQueryDistSquare)
             continue;
           nodeID = (uint32_t)tos;
           // pop....
@@ -66,7 +140,7 @@ namespace cuBQL {
             childOrder.clear(c);
           else {
             float dist2 = sqrDistance(child.bounds,query);
-            if (dist2 > cullDist) 
+            if (dist2 > maxQueryDistSquare) 
               childOrder.clear(c);
             else {
               uint32_t payload
@@ -83,8 +157,6 @@ namespace cuBQL {
           uint64_t coc = childOrder.v[c];
           if (coc != uint64_t(-1)) {
             *stackPtr++ = coc;
-            // if (stackPtr - stackBase == stackSize)
-            //   printf("stack overrun!\n");
           }
         }
         if (childOrder.v[0] == uint64_t(-1)) {
@@ -101,9 +173,8 @@ namespace cuBQL {
       for (int i=0;i<count;i++) {
         int blasID = bvh.primIDs[offset+i];
         auto blas = blases[blasID];
-        int blasResult = fcp(blas.bvh,blas.data,query,sqrtf(cullDist));
+        int blasResult = fcp(blas.bvh,blas.data,query,maxQueryDistSquare);
         if (blasResult > -1) {
-          cullDist = sqrDistance(blas.data[blasResult],query);
           result.x = blasID;
           result.y = blasResult;
         }
@@ -111,6 +182,8 @@ namespace cuBQL {
       nodeID = -1;
     }
   }
+
+
 }
 
 namespace testing {
@@ -157,17 +230,23 @@ namespace testing {
               bvh_t bvh,
               const BLAS<bvh_t> *blases,
               const float3 *queries,
-              int numQueries)
+              float maxQueryRadius,
+              int   numQueries)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numQueries) return;
 
     const float3 query = queries[tid];
-    int2 res = cuBQL::twoLevel_fcp(bvh,blases,query);
+    /* careful: fcp kernel expects SQUARE of maxradius */
+    float sqrMaxDist = maxQueryRadius*maxQueryRadius;
+    int2 res = cuBQL::twoLevel_fcp(bvh,blases,query,
+                                   /* this also serves as return value: */
+                                   sqrMaxDist);
     if (res.x == -1)
       results[tid] = INFINITY;
     else
-      results[tid] = sqrDistance(blases[res.x].data[res.y],query);
+      // results[tid] = sqrDistance(blases[res.x].data[res.y],query);
+      results[tid] = sqrMaxDist;
   }
 
   template<typename bvh_t>
@@ -177,17 +256,12 @@ namespace testing {
                TestConfig testConfig
                )
   {
-    PRINT(h_dataPoints.size());
     std::vector<BLAS<bvh_t>> blases(h_dataPoints.size());
     std::vector<box3f> blasBoxes(h_dataPoints.size());
     std::vector<CUDAArray<float3>> blasDatas(h_dataPoints.size());
     for (int blasID=0;blasID<h_dataPoints.size();blasID++) {
-      PRINT(blasID);
       CUDAArray<float3> &thisBlasData = blasDatas[blasID];
-      PRINT(h_dataPoints.size());
       thisBlasData.upload(h_dataPoints[blasID]);
-      CUBQL_CUDA_SYNC_CHECK();
-      PRINT(thisBlasData.size());
       
       box3f bbox; bbox.set_empty();
       for (auto pt : h_dataPoints[blasID])
@@ -198,8 +272,6 @@ namespace testing {
       {
         int bs = 256;
         int nb = divRoundUp((int)thisBlasData.size(),bs);
-        PRINT(thisBlasData.data());
-        PRINT(boxes.data());
         makeBoxes<<<nb,bs>>>(boxes.data(),thisBlasData.data(),(int)thisBlasData.size());
       };
       CUBQL_CUDA_SYNC_CHECK();
@@ -239,6 +311,7 @@ namespace testing {
        tlas,
        d_blases.data(),
        queryPoints.data(),
+       testConfig.maxQueryRadius,
        numQueries);
     CUBQL_CUDA_SYNC_CHECK();
     if (reference.empty()) {
@@ -275,6 +348,7 @@ namespace testing {
            tlas,
            d_blases.data(),
            queryPoints.data(),
+           testConfig.maxQueryRadius,
            numQueries);
         CUBQL_CUDA_SYNC_CHECK();
       }
@@ -336,8 +410,7 @@ int main(int ac, char **av)
     reference = loadData<float>(referenceFileName);
 
   if (bvhType == "binary")
-    //    testing::testFCP<BinaryBVH>(dataBlocks,queryPoints,buildConfig,testConfig);
-    throw std::runtime_error("not implemented...");
+    testing::testFCP<BinaryBVH>(dataBlocks,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh2")
     testing::testFCP<WideBVH<2>>(dataBlocks,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh4")

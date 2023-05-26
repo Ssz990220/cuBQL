@@ -189,7 +189,6 @@ namespace cuBQL {
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _ALLOC(wideBVH.nodes,wideBVH.numNodes,s);
 
-      PRINT(wideBVH.numNodes);
       collapseExecute<<<divRoundUp((int)wideBVH.numNodes,1024),1024,0,s>>>
         (d_infos,wideBVH,binaryBVH);
 
