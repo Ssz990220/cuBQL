@@ -39,6 +39,9 @@ if (NOT CUBQL_IS_SUBMODULE)
   add_executable(cuBQL_makePoints_clustered makePoints_clustered.cu)
   target_link_libraries(cuBQL_makePoints_clustered PUBLIC cuBQL_testing)
 
+  add_executable(cuBQL_convert_br convert_br.cu)
+  target_link_libraries(cuBQL_convert_br PUBLIC cuBQL_testing)
+
   # generate points on a triangle mesh, using uniform density
   add_executable(cuBQL_makePoints_sampleOBJ makePoints_sampleOBJ.cu)
   target_link_libraries(cuBQL_makePoints_sampleOBJ PUBLIC cuBQL_testing)
@@ -71,4 +74,7 @@ if (NOT CUBQL_IS_SUBMODULE)
   add_executable(cuBQL_fcp fcp.cu)
   target_link_libraries(cuBQL_fcp PUBLIC cuBQL_testing)
 
+  add_executable(cuBQL_twoLevel twoLevel.cu)
+  target_link_libraries(cuBQL_twoLevel PUBLIC cuBQL_testing)
+  
 endif()
