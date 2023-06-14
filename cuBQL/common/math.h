@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cuBQL/common/common.h"
+#include "cuBQL/common/box.h"
 
 namespace cuBQL {
 
@@ -72,33 +73,33 @@ namespace cuBQL {
   { return (d==0)?a.x:((d==1)?a.y:a.z); }
   
   
-  struct box3f {
-    enum { numDims = 3 };
+  // struct box3f {
+  //   enum { numDims = 3 };
 
-    inline __both__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
-    inline __both__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
-    inline __both__ void set_empty() {
-      lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
-      upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
-    }
-    inline __both__ void grow(const float3 p)
-    {
-      lower = min(lower,p);
-      upper = max(upper,p);
-    }
-    inline __both__ void grow(const box3f other)
-    {
-      lower = min(lower,other.lower);
-      upper = max(upper,other.upper);
-    }
-    float3 lower, upper;
-  };
+  //   inline __both__ float get_lower(int d) const { return (d==0)?lower.x:((d==1)?lower.y:lower.z); }
+  //   inline __both__ float get_upper(int d) const { return (d==0)?upper.x:((d==1)?upper.y:upper.z); }
+  //   inline __both__ void set_empty() {
+  //     lower = make_float3(+INFINITY,+INFINITY,+INFINITY);
+  //     upper = make_float3(-INFINITY,-INFINITY,-INFINITY);
+  //   }
+  //   inline __both__ void grow(const float3 p)
+  //   {
+  //     lower = min(lower,p);
+  //     upper = max(upper,p);
+  //   }
+  //   inline __both__ void grow(const box3f other)
+  //   {
+  //     lower = min(lower,other.lower);
+  //     upper = max(upper,other.upper);
+  //   }
+  //   float3 lower, upper;
+  // };
 
   inline __both__
-  box3f make_box3f(float3 lower, float3 upper) { return {lower,upper}; }
+  box3f make_box3f(vec3f lower, vec3f upper) { return {lower,upper}; }
                    
   inline __both__
-  void grow(box3f &box, const float3 &other) { box.grow(other); }
+  void grow(box3f &box, const vec3f &other) { box.grow(other); }
   
   inline __both__
   void grow(box3f &box, const box3f &other) { box.grow(other); }
@@ -106,9 +107,12 @@ namespace cuBQL {
   inline __both__
   float surfaceArea(box3f box)
   {
-    float sx = box.get_upper(0)-box.get_lower(0);
-    float sy = box.get_upper(1)-box.get_lower(1);
-    float sz = box.get_upper(2)-box.get_lower(2);
+    float sx = box.upper[0]-box.lower[0];
+    float sy = box.upper[1]-box.lower[1];
+    float sz = box.upper[2]-box.lower[2];
+    // float sx = box.get_upper(0)-box.get_lower(0);
+    // float sy = box.get_upper(1)-box.get_lower(1);
+    // float sz = box.get_upper(2)-box.get_lower(2);
     return sx*sy + sx*sz + sy*sz;
   }
 
@@ -117,6 +121,6 @@ namespace cuBQL {
   {
     return 0.5f * (box.lower + box.upper);
   }
-  
+
 }
 

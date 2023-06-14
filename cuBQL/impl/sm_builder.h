@@ -35,10 +35,11 @@ namespace cuBQL {
       };
     };
 
+    template<typename box_t>
     struct CUBQL_ALIGN(16) TempNode {
       union {
         struct {
-          AtomicBox<box3f> centBounds;
+          AtomicBox<box_t> centBounds;
           uint32_t         count;
           uint32_t         unused;
         } openBranch;
@@ -56,10 +57,11 @@ namespace cuBQL {
       };
     };
     
+    template<typename box_t>
     __global__
-    void initState(BuildState *buildState,
-                   NodeState  *nodeStates,
-                   TempNode   *nodes)
+    void initState(BuildState      *buildState,
+                   NodeState       *nodeStates,
+                   TempNode<box_t> *nodes)
     {
       buildState->numNodes = 2;
       
@@ -71,11 +73,12 @@ namespace cuBQL {
       nodes[1].doneNode.offset = 0;
       nodes[1].doneNode.count  = 0;
     }
-  
-    __global__ void initPrims(TempNode    *nodes,
-                              PrimState   *primState,
-                              const box3f *primBoxes,
-                              uint32_t     numPrims)
+
+    template<typename box_t>
+    __global__ void initPrims(TempNode<box_t> *nodes,
+                              PrimState       *primState,
+                              const box_t     *primBoxes,
+                              uint32_t         numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
       if (primID >= numPrims) return;
@@ -83,7 +86,7 @@ namespace cuBQL {
       auto &me = primState[primID];
       me.primID = primID;
                                                     
-      const box3f box = primBoxes[primID];
+      const box_t box = primBoxes[primID];
       if (box.get_lower(0) <= box.get_upper(0)) {
         me.nodeID = 0;
         me.done   = false;
@@ -96,12 +99,13 @@ namespace cuBQL {
       }
     }
 
+    template<typename box_t>
     __global__
-    void selectSplits(BuildState *buildState,
-                      NodeState  *nodeStates,
-                      TempNode   *nodes,
-                      uint32_t    numNodes,
-                      BuildConfig buildConfig)
+    void selectSplits(BuildState      *buildState,
+                      NodeState       *nodeStates,
+                      TempNode<box_t> *nodes,
+                      uint32_t         numNodes,
+                      BuildConfig      buildConfig)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= numNodes) return;
@@ -165,11 +169,12 @@ namespace cuBQL {
       }
     }
 
+    template<typename box_t>
     __global__
     void updatePrims(NodeState       *nodeStates,
-                     TempNode        *nodes,
+                     TempNode<box_t> *nodes,
                      PrimState       *primStates,
-                     const box3f     *primBoxes,
+                     const box_t     *primBoxes,
                      int numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -186,7 +191,7 @@ namespace cuBQL {
       }
 
       auto &split = nodes[me.nodeID].openNode;
-      const box3f primBox = primBoxes[me.primID];
+      const box_t primBox = primBoxes[me.primID];
       int side = 0;
       if (split.dim == -1) {
         // could block-reduce this, but will likely not happen often, anyway
@@ -208,8 +213,9 @@ namespace cuBQL {
        bvh's primIDs[] array; and b) it writes, for each leaf nod ein
        the nodes[] array, the node.offset value to point to the first
        of this nodes' items in that bvh.primIDs[] list. */
+    template<typename box_t>
     __global__
-    void writePrimsAndLeafOffsets(TempNode        *nodes,
+    void writePrimsAndLeafOffsets(TempNode<box_t> *nodes,
                                   uint32_t        *bvhItemList,
                                   PrimState       *primStates,
                                   int              numPrims)
@@ -229,9 +235,10 @@ namespace cuBQL {
 
     /* writes main phase's temp nodes into final bvh.nodes[]
        layout. actual bounds of that will NOT yet bewritten */
+    template<typename box_t>
     __global__
-    void writeNodes(BinaryBVH::Node *finalNodes,
-                    TempNode  *tempNodes,
+    void writeNodes(typename BinaryBVH<box_t>::Node *finalNodes,
+                    TempNode<box_t>  *tempNodes,
                     int        numNodes)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -241,8 +248,10 @@ namespace cuBQL {
       finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
     }
 
-    void build(BinaryBVH &bvh,
-               const box3f *boxes,
+    
+    template<typename box_t>
+    void build(BinaryBVH<box_t> &bvh,
+               const box_t *boxes,
                int numPrims,
                BuildConfig  buildConfig,
                cudaStream_t s)
@@ -250,7 +259,7 @@ namespace cuBQL {
       // ==================================================================
       // do build on temp nodes
       // ==================================================================
-      TempNode   *tempNodes = 0;
+      TempNode<box_t>   *tempNodes = 0;
       NodeState  *nodeStates = 0;
       PrimState  *primStates = 0;
       BuildState *buildState = 0;
@@ -330,8 +339,9 @@ namespace cuBQL {
       _FREE(buildState,s);
     }
 
+    template<typename box_t>
     __global__ void
-    refit_init(const BinaryBVH::Node *nodes,
+    refit_init(const typename BinaryBVH<box_t>::Node *nodes,
                uint32_t              *refitData,
                int numNodes)
     {
@@ -345,23 +355,24 @@ namespace cuBQL {
       refitData[node.offset+1] = nodeID << 1;
     }
     
+    template<typename box_t>
     __global__
-    void refit_run(BinaryBVH bvh,
+    void refit_run(BinaryBVH<box_t> bvh,
                    uint32_t *refitData,
-                   const box3f *boxes)
+                   const box_t *boxes)
     {
       int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= bvh.numNodes) return;
       if (nodeID == 1) return;
       
-      BinaryBVH::Node *node = &bvh.nodes[nodeID];
+      typename BinaryBVH<box_t>::Node *node = &bvh.nodes[nodeID];
       if (node->count == 0)
         // this is a inner node - exit
         return;
 
-      box3f bounds; bounds.set_empty();
+      box_t bounds; bounds.set_empty();
       for (int i=0;i<node->count;i++) {
-        const box3f primBox = boxes[bvh.primIDs[node->offset+i]];
+        const box_t primBox = boxes[bvh.primIDs[node->offset+i]];
         bounds.lower = min(bounds.lower,primBox.lower);
         bounds.upper = max(bounds.upper,primBox.upper);
       }
@@ -382,21 +393,22 @@ namespace cuBQL {
         node     = &bvh.nodes[parentID];
         parentID = (refitBits >> 1);
         
-        BinaryBVH::Node l = bvh.nodes[node->offset+0];
-        BinaryBVH::Node r = bvh.nodes[node->offset+1];
+        typename BinaryBVH<box_t>::Node l = bvh.nodes[node->offset+0];
+        typename BinaryBVH<box_t>::Node r = bvh.nodes[node->offset+1];
         bounds.lower = min(l.bounds.lower,r.bounds.lower);
         bounds.upper = max(l.bounds.upper,r.bounds.upper);
       }
     }
 
-    void refit(BinaryBVH &bvh,
-               const box3f *boxes,
+    template<typename box_t>
+    void refit(BinaryBVH<box_t> &bvh,
+               const box_t *boxes,
                cudaStream_t s=0)
     {
       uint32_t *refitData;
       CUBQL_CUDA_CALL(MallocAsync((void**)&refitData,bvh.numNodes*sizeof(int),s));
       int numNodes = bvh.numNodes;
-      refit_init<<<divRoundUp(numNodes,1024),1024,0,s>>>
+      refit_init<box_t><<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,refitData,bvh.numNodes);
       refit_run<<<divRoundUp(numNodes,32),32,0,s>>>
         (bvh,refitData,boxes);
@@ -404,8 +416,9 @@ namespace cuBQL {
       CUBQL_CUDA_CALL(FreeAsync((void*)refitData,s));
     }
 
+    template<typename box_t>
     __global__
-    void computeNodeCosts(BinaryBVH bvh, float *nodeCosts)
+    void computeNodeCosts(BinaryBVH<box_t> bvh, float *nodeCosts)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= bvh.numNodes) return;
@@ -420,7 +433,8 @@ namespace cuBQL {
         nodeCosts[nodeID] = area * node.count;
     }
     
-    float computeSAH(const BinaryBVH &bvh)
+    template<typename box_t>
+    float computeSAH(const BinaryBVH<box_t> &bvh)
     {
       float *nodeCosts;
       float *reducedCosts;

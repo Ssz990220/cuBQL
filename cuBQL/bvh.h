@@ -60,9 +60,10 @@ namespace cuBQL {
       points to a pair of child nodes). Node 0 is the root node; node
       1 is always unused (so all other node pairs start on n even
       index) */
+  template<typename scalar_t, int numDims>
   struct BinaryBVH {
     struct CUBQL_ALIGN(16) Node {
-      box3f    bounds;
+      box_t    bounds;
       /*! For inner nodes, this points into the nodes[] array, with
           left child at nodes.offset+0, and right chlid at
           nodes.offset+1. For leaf nodes, this points into the
@@ -82,7 +83,7 @@ namespace cuBQL {
 
   /*! a 'wide' BVH in which each node has a fixed number of
     `BVH_WIDTH` children (some of those children can be un-used) */
-  template<int BVH_WIDTH>
+  template<typename box_t, int BVH_WIDTH>
   struct WideBVH {
 
     /*! a n-wide node of this BVH; note that unlike BinaryBVH::Node
@@ -90,7 +91,7 @@ namespace cuBQL {
       together */
     struct CUBQL_ALIGN(16) Node {
       struct Child {
-        box3f    bounds;
+        box_t    bounds;
         struct {
           uint64_t valid  :  1;
           uint64_t offset : 45;
@@ -118,11 +119,12 @@ namespace cuBQL {
     primitmives will be ignored, and will thus neither be visited
     during traversal nor mess up the tree in any way, shape, or form
   */
-  void gpuBuilder(BinaryBVH   &bvh,
-                  const box3f *boxes,
-                  uint32_t     numBoxes,
-                  BuildConfig  buildConfig,
-                  cudaStream_t s=0);
+  template<typename box_t>
+  void gpuBuilder(BinaryBVH<box_t> &bvh,
+                  const box_t      *boxes,
+                  uint32_t          numBoxes,
+                  BuildConfig       buildConfig,
+                  cudaStream_t      s=0);
   
   /*! builds a BinaryBVH over the given set of boxes (using the given
       stream), using a simple adaptive spatial median builder (ie,
@@ -131,36 +133,38 @@ namespace cuBQL {
       a split plane that splits this cntroid bounds in the center,
       along the widest dimension. Leaves will be created once the size
       of a subtree get to or below buildConfig.makeLeafThreshold */
-  template<int N>
-  void gpuBuilder(WideBVH<N>  &bvh,
-                  const box3f *boxes,
-                  uint32_t     numBoxes,
-                  BuildConfig  buildConfig,
-                  cudaStream_t s=0);
+  template<typename box_t, int N>
+  void gpuBuilder(WideBVH<box_t,N> &bvh,
+                  const box_t      *boxes,
+                  uint32_t          numBoxes,
+                  BuildConfig       buildConfig,
+                  cudaStream_t      s=0);
 
   // ------------------------------------------------------------------
   
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-      building the BVH. this assumes */
-  void free(BinaryBVH   &bvh,
-            cudaStream_t s=0);
+    building the BVH. this assumes */
+  template<typename box_t>
+  void free(BinaryBVH<box_t> &bvh,
+            cudaStream_t      s=0);
 
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-      building the BVH. this assumes */
-  template<int N>
-  void free(WideBVH<N>  &bvh,
-            cudaStream_t s=0);
+    building the BVH. this assumes */
+  template<typename box_t, int N>
+  void free(WideBVH<box_t,N> &bvh,
+            cudaStream_t      s=0);
 
   // ------------------------------------------------------------------
   
   /*! computes the SAH cost of a already built BinaryBVH. This is
       often a useful metric for how "good" a BVH is */
-  float computeSAH(const BinaryBVH &bvh);
+  template<typename box_t>
+  float computeSAH(const BinaryBVH<box_t> &bvh);
   
   /*! computes the SAH cost of a already built WideBVH. This is often a
       useful metric for how "good" a BVH is */
-  template<int N>
-  float computeSAH(const WideBVH<N> &bvh);
+  template<typename box_t, int N>
+  float computeSAH(const WideBVH<box_t, N> &bvh);
 } // ::cuBQL
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION

@@ -1,0 +1,166 @@
+// ======================================================================== //
+// Copyright 2023-2023 Ingo Wald                                            //
+//                                                                          //
+// Licensed under the Apache License, Version 2.0 (the "License");          //
+// you may not use this file except in compliance with the License.         //
+// You may obtain a copy of the License at                                  //
+//                                                                          //
+//     http://www.apache.org/licenses/LICENSE-2.0                           //
+//                                                                          //
+// Unless required by applicable law or agreed to in writing, software      //
+// distributed under the License is distributed on an "AS IS" BASIS,        //
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. //
+// See the License for the specific language governing permissions and      //
+// limitations under the License.                                           //
+// ======================================================================== //
+
+#pragma once
+
+#include "cuBQL/common/common.h"
+
+namespace cuBQL {
+
+  template<typename T, int N>
+  struct vec_t_data {
+    inline __both__ T  operator[](int i) const { return v[i]; }
+    inline __both__ T &operator[](int i)       { return v[i]; }
+    T v[N];
+  };
+
+  /*! definesthe "cuda equivalent type" for a given vector type; i.e.,
+      a vec3f=vec_t<float,3> has a equivalent cuda built-in type of
+      float3 */ 
+  template<typename T, int N> struct cuda_eq_t;
+  template<> struct cuda_eq_t<float,2> { using type = float2; };
+  template<> struct cuda_eq_t<float,3> { using type = float3; };
+
+  template<typename T>
+  struct vec_t_data<T,2> {
+    using cuda_t = typename cuda_eq_t<T,2>::type;
+    inline __both__ T  operator[](int i) const { return (&x)[i]; }
+    inline __both__ T &operator[](int i)       { return (&x)[i]; }
+    /*! auto-cast to equivalent cuda type */
+    inline __both__ operator cuda_t() { cuda_t t; t.x = x; t.y = y; return t; }
+    T x, y;
+  };
+  template<typename T>
+  struct vec_t_data<T,3> {
+    using cuda_t = typename cuda_eq_t<T,3>::type;
+    inline __both__ T  operator[](int i) const { return (&x)[i]; }
+    inline __both__ T &operator[](int i)       { return (&x)[i]; }
+    /*! auto-cast to equivalent cuda type */
+    inline __both__ operator cuda_t() { cuda_t t; t.x = x; t.y = y; return t; }
+    T x, y, z;
+  };
+  
+  template<typename T, int N>
+  struct vec_t : public vec_t_data<T,N> {
+    enum { numDims = N };
+    using scalar_t = T;
+
+    using cuda_t = typename cuda_eq_t<T,N>::type;
+    inline __both__ vec_t &operator=(cuda_t v)
+    {
+#pragma unroll
+      for (int i=0;i<numDims;i++) (*this)[i] = (&v.x)[i]; 
+      return *this;
+    }
+  };
+
+  /*! traits for a vec_t */
+  template<typename vec_t>
+  struct our_vec_t_traits {
+    enum { numDims = vec_t::numDims };
+    using scalar_t = typename vec_t::scalar_t;
+  };
+
+
+  /*! vec_traits<T> describe the scalar type and number of dimensions
+    of whatever wants to get used as a vector/point type in
+    cuBQL. By default cuBQL will use its own vec_t<T,N> for that,
+    but this should allow to also describe the traits of external
+    types such as CUDA's float3 */
+  template<typename T> struct vec_traits : public our_vec_t_traits<T> {};
+  
+  template<> struct vec_traits<float3> { enum { numDims = 3 }; using scalar_t = float; };
+
+
+
+  template<typename vec_t>
+  inline __device__ vec_t make(typename vec_t::scalar_t v)
+  {
+    vec_t r;
+#pragma unroll
+    for (int i=0;i<vec_t::numDims;i++)
+      r[i] = v;
+    return r;
+  }
+
+  template<typename vec_t>
+  inline __device__ vec_t make(typename cuda_eq_t<typename vec_t::scalar_t,vec_t::numDims>::type v)
+  {
+    vec_t r;
+#pragma unroll
+    for (int i=0;i<vec_t::numDims;i++)
+      r[i] = (&v.x)[i];
+    return r;
+  }
+  
+#define CUBQL_OPERATOR(long_op, op)                     \
+  /* vec-vec */                                         \
+  template<typename T, int N>                           \
+  inline __both__                                       \
+  vec_t<T,N> long_op(vec_t<T,N> a, vec_t<T,N> b)        \
+  {                                                     \
+    vec_t<T,N> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<N;i++) r[i] = a[i] op b[i];        \
+    return r;                                           \
+  }                                                     \
+  /* vec-scalar */                                      \
+  template<typename T, int N>                           \
+  inline __both__                                       \
+  vec_t<T,N> long_op(vec_t<T,N> a, T b)                 \
+  {                                                     \
+    vec_t<T,N> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<N;i++) r[i] = a[i] op b;           \
+    return r;                                           \
+  }                                                     \
+  /* scalar-vec */                                      \
+  template<typename T, int N>                           \
+  inline __both__                                       \
+  vec_t<T,N> long_op(T a, vec_t<T,N> b)                 \
+  {                                                     \
+    vec_t<T,N> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<N;i++) r[i] = a op b[i];           \
+    return r;                                           \
+  }                                                     \
+
+  CUBQL_OPERATOR(operator+,+)
+  CUBQL_OPERATOR(operator-,-)
+  CUBQL_OPERATOR(operator*,*)
+  CUBQL_OPERATOR(operator/,/)
+#undef CUBQL_OPERATOR
+  
+#define CUBQL_BINARY(op)                                \
+  template<typename T, int N>                           \
+  inline __both__                                       \
+  vec_t<T,N> op(vec_t<T,N> a, vec_t<T,N> b)             \
+  {                                                     \
+    vec_t<T,N> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<N;i++) r[i] = op(a[i],b[i]);       \
+    return r;                                           \
+  }
+
+  using ::min;
+  CUBQL_BINARY(min)
+  using ::max;
+  CUBQL_BINARY(max)
+#undef CUBQL_FUNCTOR
+
+  using vec3f = vec_t<float,3>;
+}
+

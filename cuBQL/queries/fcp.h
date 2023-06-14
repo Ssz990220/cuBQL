@@ -29,7 +29,7 @@ namespace cuBQL {
   { return sqrDistance(project(box,point),point); }
 
   inline __device__
-  float sqrDistance(BinaryBVH::Node node, float3 point)
+  float sqrDistance(BinaryBVH<box3f>::Node node, float3 point)
   { return sqrDistance(node.bounds,point); }
 
   /*! 'fcp' = "find closest point", on a binary BVH. Given an input
@@ -44,7 +44,7 @@ namespace cuBQL {
     expensive sqrt operations
   */
   inline __device__
-  int fcp(const BinaryBVH bvh,
+  int fcp(const BinaryBVH<box3f> bvh,
           const float3   *dataPoints,
           const float3    query,
           /* in: SQUARE of max search distance; out: sqrDist of closest point */
@@ -64,8 +64,8 @@ namespace cuBQL {
         if (count>0)
           // leaf
           break;
-        BinaryBVH::Node child0 = bvh.nodes[offset+0];
-        BinaryBVH::Node child1 = bvh.nodes[offset+1];
+        BinaryBVH<box3f>::Node child0 = bvh.nodes[offset+0];
+        BinaryBVH<box3f>::Node child1 = bvh.nodes[offset+1];
         float dist0 = sqrDistance(child0,query);
         float dist1 = sqrDistance(child1,query);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
@@ -132,7 +132,7 @@ namespace cuBQL {
   template<int N>
   inline __device__
   int fcp(/*! the bvh that is built over hte points */
-          const WideBVH<N> bvh,
+          const WideBVH<box3f,N> bvh,
           
           /*! the data points that the BVH is actually built over */
           const float3    *dataPoints,
@@ -165,7 +165,7 @@ namespace cuBQL {
         if (nodeID & (1<<31))
           break;
         
-        const typename WideBVH<N>::Node &node = bvh.nodes[nodeID];
+        const typename WideBVH<box3f,N>::Node &node = bvh.nodes[nodeID];
 #pragma unroll(N)
         for (int c=0;c<N;c++) {
           const auto child = node.children[c];

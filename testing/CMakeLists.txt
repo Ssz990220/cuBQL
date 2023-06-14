@@ -14,6 +14,8 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
+set(CUBQL_TEST_N 4 CACHE INT "num dims for testing") 
+
 if (NOT CUBQL_IS_SUBMODULE)
   add_library(cuBQL_testing
     helper/CUDAArray.h
@@ -21,6 +23,7 @@ if (NOT CUBQL_IS_SUBMODULE)
     helper/triangles.cu
     )
   target_link_libraries(cuBQL_testing PUBLIC cuBQL_impl)
+  target_compile_definitions(cuBQL_testing PUBLIC -DCUBQL_TEST_N=${CUBQL_TEST_N})
 
 
   # ==================================================================
