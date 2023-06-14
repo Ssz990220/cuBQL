@@ -87,7 +87,7 @@ namespace cuBQL {
 
 
   template<typename vec_t>
-  inline __device__ vec_t make(typename vec_t::scalar_t v)
+  inline __both__ vec_t make(typename vec_t::scalar_t v)
   {
     vec_t r;
 #pragma unroll
@@ -97,7 +97,7 @@ namespace cuBQL {
   }
 
   template<typename vec_t>
-  inline __device__ vec_t make(typename cuda_eq_t<typename vec_t::scalar_t,vec_t::numDims>::type v)
+  inline __both__ vec_t make(typename cuda_eq_t<typename vec_t::scalar_t,vec_t::numDims>::type v)
   {
     vec_t r;
 #pragma unroll
@@ -107,34 +107,54 @@ namespace cuBQL {
   }
   
 #define CUBQL_OPERATOR(long_op, op)                     \
-  /* vec-vec */                                         \
-  template<typename T, int N>                           \
+  /* vec:vec */                                         \
+  template<typename T, int D>                           \
   inline __both__                                       \
-  vec_t<T,N> long_op(vec_t<T,N> a, vec_t<T,N> b)        \
+  vec_t<T,D> long_op(vec_t<T,D> a, vec_t<T,D> b)        \
   {                                                     \
-    vec_t<T,N> r;                                       \
+    vec_t<T,D> r;                                       \
     _Pragma("unroll")                                   \
-      for (int i=0;i<N;i++) r[i] = a[i] op b[i];        \
-    return r;                                           \
-  }                                                     \
-  /* vec-scalar */                                      \
-  template<typename T, int N>                           \
-  inline __both__                                       \
-  vec_t<T,N> long_op(vec_t<T,N> a, T b)                 \
-  {                                                     \
-    vec_t<T,N> r;                                       \
-    _Pragma("unroll")                                   \
-      for (int i=0;i<N;i++) r[i] = a[i] op b;           \
+      for (int i=0;i<D;i++) r[i] = a[i] op b[i];        \
     return r;                                           \
   }                                                     \
   /* scalar-vec */                                      \
-  template<typename T, int N>                           \
+  template<typename T, int D>                           \
   inline __both__                                       \
-  vec_t<T,N> long_op(T a, vec_t<T,N> b)                 \
+  vec_t<T,D> long_op(T a, vec_t<T,D> b)                 \
   {                                                     \
-    vec_t<T,N> r;                                       \
+    vec_t<T,D> r;                                       \
     _Pragma("unroll")                                   \
-      for (int i=0;i<N;i++) r[i] = a op b[i];           \
+      for (int i=0;i<D;i++) r[i] = a op b[i];           \
+    return r;                                           \
+  }                                                     \
+  /* vec:scalar */                                      \
+  template<typename T, int D>                           \
+  inline __both__                                       \
+  vec_t<T,D> long_op(vec_t<T,D> a, T b)                 \
+  {                                                     \
+    vec_t<T,D> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<D;i++) r[i] = a[i] op b;           \
+    return r;                                           \
+  }                                                     \
+  /* cudaVec:vec */                                      \
+  template<typename T, int D>                           \
+  inline __both__                                       \
+  vec_t<T,D> long_op(typename cuda_eq_t<T,D>::type a, vec_t<T,D> b)  \
+  {                                                     \
+    vec_t<T,D> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<D;i++) r[i] = (&a.x)[i] op b[i];      \
+    return r;                                           \
+  }                                                     \
+  /* vec:cudaVec */                                      \
+  template<typename T, int D>                           \
+  inline __both__                                       \
+  vec_t<T,D> long_op(vec_t<T,D> a,  typename cuda_eq_t<T,D>::type b)                 \
+  {                                                     \
+    vec_t<T,D> r;                                       \
+    _Pragma("unroll")                                   \
+      for (int i=0;i<D;i++) r[i] = a[i] op (&b.x)[i];      \
     return r;                                           \
   }                                                     \
 

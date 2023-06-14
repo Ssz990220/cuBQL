@@ -29,10 +29,12 @@ namespace cuBQL {
   template<> inline __both__ float empty_box_upper_value<float>() { return -INFINITY; }
   
   
-  template<typename vec_t>
+  template<typename _scalar_t, int _numDims>
   struct box_t {
-    enum { numDims = vec_traits<vec_t>::numDims };
-    using scalar_t = typename vec_traits<vec_t>::scalar_t;
+    enum { numDims = _numDims };
+    using scalar_t = _scalar_t;
+    using vec_t = cuBQL::vec_t<scalar_t,numDims>;
+
     using cuda_vec_t = typename cuda_eq_t<scalar_t,numDims>::type;
     
     inline __both__ box_t &grow(vec_t v)
@@ -57,6 +59,6 @@ namespace cuBQL {
     vec_t lower, upper;
   };
 
-  using box3f = box_t<vec3f>;
+  using box3f = box_t<float,3>;
 }
 

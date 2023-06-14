@@ -366,7 +366,7 @@ namespace cuBQL {
     /* writes main phase's temp nodes into final bvh.nodes[]
        layout. actual bounds of that will NOT yet bewritten */
     __global__
-    void writeNodes(BinaryBVH<box3f>::Node *finalNodes,
+    void writeNodes(BinaryBVH<float,3>::Node *finalNodes,
                     TempNode  *tempNodes,
                     int        numNodes)
     {
@@ -377,7 +377,7 @@ namespace cuBQL {
       finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
     }
 
-    void sahBuilder(BinaryBVH<box3f>  &bvh,
+    void sahBuilder(BinaryBVH<float,3>  &bvh,
                     const box3f *boxes,
                     int          numPrims,
                     BuildConfig  buildConfig,

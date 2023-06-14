@@ -67,7 +67,7 @@ int main(int ac, char **av)
     std::cout << "no box size specified; computing one automatically ..." << std::endl;
     box3f bbox;
     bbox.set_empty();
-    for (auto p : points) grow(bbox,p);
+    for (auto p : points) bbox.grow(p);
     boxSize = length(bbox.upper-bbox.lower);
     boxSize /= sqrtf(points.size());
   }

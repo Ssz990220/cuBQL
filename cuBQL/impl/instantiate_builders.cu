@@ -19,35 +19,43 @@
 #include "cuBQL/bvh.h"
 
 namespace cuBQL {
-  // template void gpuBuilder(WideBVH<2>   &bvh,
-  //                          const box3f *boxes,
-  //                          uint32_t     numBoxes,
-  //                          BuildConfig  buildConfig,
-  //                          cudaStream_t s);
-  template void gpuBuilder(WideBVH<box3f,4>   &bvh,
-                           const box3f *boxes,
+
+  template void gpuBuilder(BinaryBVH<float,3>   &bvh,
+                           const box_t<float,3> *boxes,
                            uint32_t     numBoxes,
                            BuildConfig  buildConfig,
                            cudaStream_t s);
-  template void gpuBuilder(WideBVH<box3f,8>   &bvh,
-                           const box3f *boxes,
+  template float computeSAH(const BinaryBVH<float,3>  &bvh);
+
+  // template void gpuBuilder(WideBVH<2>   &bvh,
+  //                          const float,3 *boxes,
+  //                          uint32_t     numBoxes,
+  //                          BuildConfig  buildConfig,
+  //                          cudaStream_t s);
+  template void gpuBuilder(WideBVH<float,3,4>   &bvh,
+                           const box_t<float,3> *boxes,
+                           uint32_t     numBoxes,
+                           BuildConfig  buildConfig,
+                           cudaStream_t s);
+  template void gpuBuilder(WideBVH<float,3,8>   &bvh,
+                           const box_t<float,3> *boxes,
                            uint32_t     numBoxes,
                            BuildConfig  buildConfig,
                            cudaStream_t s);
   // template void gpuBuilder(WideBVH<16>   &bvh,
-  //                          const box3f *boxes,
+  //                          const float,3 *boxes,
   //                          uint32_t     numBoxes,
   //                          BuildConfig  buildConfig,
   //                          cudaStream_t s);
 
   // template void free(WideBVH<2>  &bvh, cudaStream_t s);
-  template void free(WideBVH<box3f,4>  &bvh, cudaStream_t s);
-  template void free(WideBVH<box3f,8>  &bvh, cudaStream_t s);
+  template void free(WideBVH<float,3,4>  &bvh, cudaStream_t s);
+  template void free(WideBVH<float,3,8>  &bvh, cudaStream_t s);
   // template void free(WideBVH<16> &bvh, cudaStream_t s);
   
   // template float computeSAH(const WideBVH<2>  &bvh);
-  template float computeSAH(const WideBVH<box3f,4>  &bvh);
-  template float computeSAH(const WideBVH<box3f,8>  &bvh);
+  template float computeSAH(const WideBVH<float,3,4>  &bvh);
+  template float computeSAH(const WideBVH<float,3,8>  &bvh);
   // template float computeSAH(const WideBVH<16> &bvh);
   
 }

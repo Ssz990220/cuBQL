@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cuBQL/common/common.h"
+#include "cuBQL/common/vec.h"
 #include "cuBQL/common/box.h"
 
 namespace cuBQL {
@@ -95,8 +96,12 @@ namespace cuBQL {
   //   float3 lower, upper;
   // };
 
+  /*! deprecated...*/
   inline __both__
   box3f make_box3f(vec3f lower, vec3f upper) { return {lower,upper}; }
+  /*! deprecated...*/
+  inline __both__
+  box3f make_box3f(float3 lower, float3 upper) { return {make<vec3f>(lower),make<vec3f>(upper)}; }
                    
   inline __both__
   void grow(box3f &box, const vec3f &other) { box.grow(other); }

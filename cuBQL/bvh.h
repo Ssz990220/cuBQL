@@ -60,8 +60,13 @@ namespace cuBQL {
       points to a pair of child nodes). Node 0 is the root node; node
       1 is always unused (so all other node pairs start on n even
       index) */
-  template<typename scalar_t, int numDims>
+  template<typename _scalar_t, int _numDims>
   struct BinaryBVH {
+    using scalar_t = _scalar_t;
+    enum { numDims = _numDims };
+    using vec_t = cuBQL::vec_t<scalar_t,numDims>;
+    using box_t = cuBQL::box_t<scalar_t,numDims>;
+    
     struct CUBQL_ALIGN(16) Node {
       box_t    bounds;
       /*! For inner nodes, this points into the nodes[] array, with
@@ -83,8 +88,12 @@ namespace cuBQL {
 
   /*! a 'wide' BVH in which each node has a fixed number of
     `BVH_WIDTH` children (some of those children can be un-used) */
-  template<typename box_t, int BVH_WIDTH>
+  template<typename _scalar_t, int _numDims, int BVH_WIDTH>
   struct WideBVH {
+    using scalar_t = _scalar_t;
+    enum { numDims = _numDims };
+    using vec_t = cuBQL::vec_t<scalar_t,numDims>;
+    using box_t = cuBQL::box_t<scalar_t,numDims>;
 
     /*! a n-wide node of this BVH; note that unlike BinaryBVH::Node
       this is not a "single" node, but actually N nodes merged
@@ -119,9 +128,9 @@ namespace cuBQL {
     primitmives will be ignored, and will thus neither be visited
     during traversal nor mess up the tree in any way, shape, or form
   */
-  template<typename box_t>
-  void gpuBuilder(BinaryBVH<box_t> &bvh,
-                  const box_t      *boxes,
+  template<typename T, int D>
+  void gpuBuilder(BinaryBVH<T,D> &bvh,
+                  const box_t<T,D>      *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
                   cudaStream_t      s=0);
@@ -133,9 +142,9 @@ namespace cuBQL {
       a split plane that splits this cntroid bounds in the center,
       along the widest dimension. Leaves will be created once the size
       of a subtree get to or below buildConfig.makeLeafThreshold */
-  template<typename box_t, int N>
-  void gpuBuilder(WideBVH<box_t,N> &bvh,
-                  const box_t      *boxes,
+  template<typename /*scalar type*/T, int /*dims*/D, int /*branching factor*/N>
+  void gpuBuilder(WideBVH<T,D,N> &bvh,
+                  const box_t<T,D>      *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
                   cudaStream_t      s=0);
@@ -144,27 +153,27 @@ namespace cuBQL {
   
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
-  template<typename box_t>
-  void free(BinaryBVH<box_t> &bvh,
+  template<typename T, int D>
+  void free(BinaryBVH<T,D> &bvh,
             cudaStream_t      s=0);
 
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
-  template<typename box_t, int N>
-  void free(WideBVH<box_t,N> &bvh,
+  template<typename T, int D, int N>
+  void free(WideBVH<T,D,N> &bvh,
             cudaStream_t      s=0);
 
   // ------------------------------------------------------------------
   
   /*! computes the SAH cost of a already built BinaryBVH. This is
       often a useful metric for how "good" a BVH is */
-  template<typename box_t>
-  float computeSAH(const BinaryBVH<box_t> &bvh);
+  template<typename T, int D>
+  float computeSAH(const BinaryBVH<T,D> &bvh);
   
   /*! computes the SAH cost of a already built WideBVH. This is often a
       useful metric for how "good" a BVH is */
-  template<typename box_t, int N>
-  float computeSAH(const WideBVH<box_t, N> &bvh);
+  template<typename T, int D, int N>
+  float computeSAH(const WideBVH<T,D,N> &bvh);
 } // ::cuBQL
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION

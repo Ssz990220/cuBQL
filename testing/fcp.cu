@@ -214,13 +214,13 @@ int main(int ac, char **av)
     reference = loadData<float>(referenceFileName);
 
   if (bvhType == "binary")
-    testing::testFCP<BinaryBVH<box3f>>(dataPoints,queryPoints,buildConfig,testConfig);
+    testing::testFCP<BinaryBVH<float,3>>(dataPoints,queryPoints,buildConfig,testConfig);
   // else if (bvhType == "bvh2")
-  //   testing::testFCP<WideBVH<box3f,2>>(dataPoints,queryPoints,buildConfig,testConfig);
+  //   testing::testFCP<WideBVH<float,3,2>>(dataPoints,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh4")
-    testing::testFCP<WideBVH<box3f,4>>(dataPoints,queryPoints,buildConfig,testConfig);
+    testing::testFCP<WideBVH<float,3,4>>(dataPoints,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh8")
-    testing::testFCP<WideBVH<box3f,8>>(dataPoints,queryPoints,buildConfig,testConfig);
+    testing::testFCP<WideBVH<float,3,8>>(dataPoints,queryPoints,buildConfig,testConfig);
   else
     throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
 

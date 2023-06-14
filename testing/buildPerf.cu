@@ -110,26 +110,26 @@ int main(int ac, char **av)
     boxes = loadData<box3f>(fileNames[0]);
 #endif
 #if EXPECT_POINTS
-    std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
+    std::vector<vec3f> dataPoints  = loadData<vec3f>(fileNames[0]);
     for (auto point : dataPoints) 
       boxes.push_back({point,point});
 #endif
 
     if (bvhType == "binary")
-      testing::buildPerf<cuBQL::BinaryBVH>
+      testing::buildPerf<cuBQL::BinaryBVH<float,3>>
         (boxes,buildConfig,numSecsAvg);
-    else if (bvhType == "bvh2")
-      testing::buildPerf<cuBQL::WideBVH<2>>
-        (boxes,buildConfig,numSecsAvg);
+    // else if (bvhType == "bvh2")
+      // testing::buildPerf<cuBQL::WideBVH<float,3,2>>
+      //   (boxes,buildConfig,numSecsAvg);
     else if (bvhType == "bvh4")
-      testing::buildPerf<cuBQL::WideBVH<4>>
+      testing::buildPerf<cuBQL::WideBVH<float,3,4>>
         (boxes,buildConfig,numSecsAvg);
     else if (bvhType == "bvh8")
-      testing::buildPerf<cuBQL::WideBVH<8>>
+      testing::buildPerf<cuBQL::WideBVH<float,3,8>>
         (boxes,buildConfig,numSecsAvg);
-    else if (bvhType == "bvh16")
-      testing::buildPerf<cuBQL::WideBVH<16>>
-        (boxes,buildConfig,numSecsAvg);
+    // else if (bvhType == "bvh16")
+    //   testing::buildPerf<cuBQL::WideBVH<float,3,16>>
+    //     (boxes,buildConfig,numSecsAvg);
     else
       throw std::runtime_error("unsupported bvh type '"+bvhType+"'");
     return 0;

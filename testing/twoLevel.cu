@@ -42,8 +42,8 @@ namespace cuBQL {
       that BLAS. If no point could be found within the given search
       radius, this returns result.x==-1 */
   inline __device__
-  int2 twoLevel_fcp(BinaryBVH bvh,
-                   const BLAS<BinaryBVH> *blases,
+  int2 twoLevel_fcp(BinaryBVH<float,3> bvh,
+                   const BLAS<BinaryBVH<float,3>> *blases,
                    float3 query,
                    float &maxQueryDistSquare)
   {
@@ -60,8 +60,8 @@ namespace cuBQL {
         if (count>0)
           // leaf
           break;
-        BinaryBVH::Node child0 = bvh.nodes[offset+0];
-        BinaryBVH::Node child1 = bvh.nodes[offset+1];
+        BinaryBVH<float,3>::Node child0 = bvh.nodes[offset+0];
+        BinaryBVH<float,3>::Node child1 = bvh.nodes[offset+1];
         float dist0 = sqrDistance(child0,query);
         float dist1 = sqrDistance(child1,query);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
@@ -107,8 +107,8 @@ namespace cuBQL {
     radius, this returns result.x==-1 */
   template<int N>
   inline __device__
-  int2 twoLevel_fcp(WideBVH<N> bvh,
-                    const BLAS<WideBVH<N>> *blases,
+  int2 twoLevel_fcp(WideBVH<float,3,N> bvh,
+                    const BLAS<WideBVH<float,3,N>> *blases,
                     float3 query,
                     float &maxQueryDistSquare)
   {
@@ -132,7 +132,7 @@ namespace cuBQL {
         if (nodeID & (1<<31))
           break;
         
-        const typename WideBVH<N>::Node &node = bvh.nodes[nodeID];
+        const typename WideBVH<float,3,N>::Node &node = bvh.nodes[nodeID];
 #pragma unroll(N)
         for (int c=0;c<N;c++) {
           const auto child = node.children[c];
@@ -410,13 +410,13 @@ int main(int ac, char **av)
     reference = loadData<float>(referenceFileName);
 
   if (bvhType == "binary")
-    testing::testFCP<BinaryBVH>(dataBlocks,queryPoints,buildConfig,testConfig);
-  else if (bvhType == "bvh2")
-    testing::testFCP<WideBVH<2>>(dataBlocks,queryPoints,buildConfig,testConfig);
+    testing::testFCP<BinaryBVH<float,3>>(dataBlocks,queryPoints,buildConfig,testConfig);
+  // else if (bvhType == "bvh2")
+  //   testing::testFCP<WideBVH<2>>(dataBlocks,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh4")
-    testing::testFCP<WideBVH<4>>(dataBlocks,queryPoints,buildConfig,testConfig);
+    testing::testFCP<WideBVH<float,3,4>>(dataBlocks,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh8")
-    testing::testFCP<WideBVH<8>>(dataBlocks,queryPoints,buildConfig,testConfig);
+    testing::testFCP<WideBVH<float,3,8>>(dataBlocks,queryPoints,buildConfig,testConfig);
   else
     throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
 

@@ -23,13 +23,9 @@
 
 namespace cuBQL {
 
-  template<typename box_t>
-  struct can_do_sah { enum { value = false }; };
-  template<> struct can_do_sah<box3f> { enum { value = true }; };
-
-  template<typename box_t>
-  void gpuBuilder(BinaryBVH<box_t> &bvh,
-                  const box_t *boxes,
+  template<typename T, int D>
+  void gpuBuilder(BinaryBVH<T,D> &bvh,
+                  const box_t<T,D> *boxes,
                   uint32_t     numBoxes,
                   BuildConfig  buildConfig,
                   cudaStream_t s)
@@ -39,7 +35,7 @@ namespace cuBQL {
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 1;
-      if (can_do_sah<box_t>::value) 
+      if (D == 3) 
         sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,buildConfig,s);
       else
         throw std::runtime_error("SAH builder not supported for this type of BVH");
@@ -54,17 +50,18 @@ namespace cuBQL {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
 
-  template<typename box_t>
-  float computeSAH(const BinaryBVH<box_t> &bvh)
+  template<typename T, int D>
+  float computeSAH(const BinaryBVH<T,D> &bvh)
   {
-    if (can_do_sah<box_t>::value)
+    if (D == 3)
+      // SAH only defined for 3-dimensional data...
       return gpuBuilder_impl::computeSAH(bvh);
     else
       throw std::runtime_error("cannot compute SAH for this type of BVH");
   }
   
-  template<typename box_t>
-  void free(BinaryBVH<box_t>   &bvh,
+  template<typename T, int D>
+  void free(BinaryBVH<T,D>   &bvh,
             cudaStream_t s)
   {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
