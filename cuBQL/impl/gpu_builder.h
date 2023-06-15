@@ -35,8 +35,11 @@ namespace cuBQL {
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 1;
-      if (D == 3) 
-        sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,buildConfig,s);
+      if (D == 3)
+        /* for D == 3 these typecasts won't do anything; for D != 3
+           they'd be invalid, but won't ever happen */
+        sahBuilder_impl::sahBuilder((BinaryBVH<T,3>&)bvh,(const box_t<T,3> *)boxes,
+                                    numBoxes,buildConfig,s);
       else
         throw std::runtime_error("SAH builder not supported for this type of BVH");
     } else {

@@ -49,7 +49,25 @@ namespace cuBQL {
     }
 
     inline __both__ box_t &grow(cuda_vec_t other)
-    { lower = min(lower,make<vec_t>(other)); upper = max(upper,make<vec_t>(other)); return *this; }
+    {
+      lower = min(lower,make<vec_t>(other));
+      upper = max(upper,make<vec_t>(other)); return *this;
+    }
+
+    /*! returns the center of the box, up to rounding errors. (i.e. on
+        its, the center of a box with lower=2 and upper=3 is 2, not
+        2.5! */
+    inline __both__ vec_t center() const
+    { return (lower+upper)/scalar_t(2); }
+    
+    /*! returns TWICE the center (which happens to be the SUM of lower
+        an dupper). Note this 'conceptually' the same as 'center()',
+        but without the nasty division that may lead to rounding
+        errors for int types; it's obviously not the center but twice
+        the center - but as long as all routines that expect centers
+        use that same 'times 2' this will still work out */
+    inline __both__ vec_t twice_center() const
+    { return (lower+upper); }
 
     /*! for convenience's sake, get_lower(i) := lower[i] */
     inline __both__ scalar_t get_lower(int i) const { return lower[i]; }

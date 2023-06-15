@@ -27,10 +27,13 @@ namespace cuBQL {
     T v[N];
   };
 
+  struct invalid_t {};
   /*! definesthe "cuda equivalent type" for a given vector type; i.e.,
       a vec3f=vec_t<float,3> has a equivalent cuda built-in type of
-      float3 */ 
-  template<typename T, int N> struct cuda_eq_t;
+      float3. to also allow vec_t's that do not have a cuda
+      equivalent, let's also create a 'invalid_t' to be used by
+      default */ 
+  template<typename T, int N> struct cuda_eq_t { using type = invalid_t; };
   template<> struct cuda_eq_t<float,2> { using type = float2; };
   template<> struct cuda_eq_t<float,3> { using type = float3; };
 

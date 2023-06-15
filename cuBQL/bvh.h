@@ -174,6 +174,9 @@ namespace cuBQL {
       useful metric for how "good" a BVH is */
   template<typename T, int D, int N>
   float computeSAH(const WideBVH<T,D,N> &bvh);
+
+  template<typename T, int D>
+  using bvh_t = BinaryBVH<T,D>;
 } // ::cuBQL
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION

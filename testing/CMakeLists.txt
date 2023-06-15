@@ -14,9 +14,13 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-set(CUBQL_TEST_N 4 CACHE INT "num dims for testing") 
+# value to use (during testing) for an arbitrarily 'large' N for which
+# there are no obvious equivlanet cuda types
+set(CUBQL_TEST_N "8" CACHE STRING "num dims for testing") 
 
 if (NOT CUBQL_IS_SUBMODULE)
+  add_subdirectory(unit-tests)
+    
   add_library(cuBQL_testing
     helper/CUDAArray.h
     helper/triangles.h
@@ -24,7 +28,6 @@ if (NOT CUBQL_IS_SUBMODULE)
     )
   target_link_libraries(cuBQL_testing PUBLIC cuBQL_impl)
   target_compile_definitions(cuBQL_testing PUBLIC -DCUBQL_TEST_N=${CUBQL_TEST_N})
-
 
   # ==================================================================
   # different helpers for generating *test data* for various kernels
