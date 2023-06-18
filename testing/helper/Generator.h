@@ -17,15 +17,74 @@
 #pragma once
 
 #include "testing/helper.h"
+#include "testing/helper/CUDAArray.h"
+#include <memory>
 
 namespace testing {
 
-  template<typename vec_t>
+  template<typename T, int D>
   struct PointGenerator {
-    virtual void generate(CUDAArray<vec_t> &data, size_t count, int seed);
+    typedef std::shared_ptr<PointGenerator> SP;
+    
+    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
+  };
+  
+  template<typename T, int D>
+  struct UniformPointGenerator : public PointGenerator<T, D>
+  {
+    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
   };
 
-  template<typename box_t>
+  template<typename T, int D>
+  struct ClusteredPointGenerator : public PointGenerator<T, D>
+  {
+    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
+  };
+
+  template<typename T, int D>
+  struct PointTranslator : public PointGenerator<T, D>
+  {
+    typename PointGenerator<T,D>::SP source;
+    PointTranslator(typename PointGenerator<T,D>::SP source)
+      : source(source)
+    {}
+    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
+  };
   
+  
+  template<typename T, int D>
+  struct BoxGenerator {
+    typedef std::shared_ptr<BoxGenerator<T,D>> SP;
+    
+    virtual CUDAArray<box_t<T,D>> generate(int count, int seed);
+  };
+
+
+  template<typename T, int D>
+  struct PointsToBoxes : public BoxGenerator<T,D> {
+    using vec_t = typename cuBQL::vec_t<T,D>;
+    
+    typename PointGenerator<T, D>::SP pointGenerator;
+
+    PointsToBoxes(typename PointGenerator<T,D>::SP pointGenerator)
+      : pointGenerator(pointGenerator)
+    {}
+
+    vec_t boxSize;
+    
+    virtual CUDAArray<box_t<T,D>> generate(int count, int seed);
+  };
+
+  template<typename T, int D>
+  struct BoxMixture : public BoxGenerator<T,D> {
+    virtual CUDAArray<box_t<T,D>> generate(int count, int seed);
+    
+    typename BoxGenerator<T,D>::SP gen_a;
+    typename BoxGenerator<T,D>::SP gen_b;
+    float prob_a;
+  };
+
+
 }
+
 

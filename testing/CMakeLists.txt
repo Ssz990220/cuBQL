@@ -22,6 +22,8 @@ if (NOT CUBQL_IS_SUBMODULE)
   add_subdirectory(unit-tests)
     
   add_library(cuBQL_testing
+    helper/Generator.h
+    helper/Generator.cu
     helper/CUDAArray.h
     helper/triangles.h
     helper/triangles.cu
@@ -29,6 +31,9 @@ if (NOT CUBQL_IS_SUBMODULE)
   target_link_libraries(cuBQL_testing PUBLIC cuBQL_impl)
   target_compile_definitions(cuBQL_testing PUBLIC -DCUBQL_TEST_N=${CUBQL_TEST_N})
 
+  add_executable(cuBQL_testGenerators helper/testGenerators.cu)
+  target_link_libraries(cuBQL_testGenerators cuBQL_testing)
+  
   # ==================================================================
   # different helpers for generating *test data* for various kernels
   # ==================================================================
