@@ -416,54 +416,6 @@ namespace cuBQL {
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       CUBQL_CUDA_CALL(FreeAsync((void*)refitData,s));
     }
-
-    template<typename T, int D>
-    __global__
-    void computeNodeCosts(BinaryBVH<T,D> bvh, float *nodeCosts)
-    {
-      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= bvh.numNodes) return;
-
-      if (nodeID == 1) { nodeCosts[nodeID] = 0.f; return; }
-
-      auto node = bvh.nodes[nodeID];
-      float area = surfaceArea(node.bounds) / surfaceArea(bvh.nodes[0].bounds);
-      if (node.count == 0)
-        nodeCosts[nodeID] = area;
-      else 
-        nodeCosts[nodeID] = area * node.count;
-    }
-    
-    template<typename T, int D>
-    float computeSAH(const BinaryBVH<T,D> &bvh)
-    {
-      float *nodeCosts;
-      float *reducedCosts;
-      CUBQL_CUDA_CALL(MallocManaged((void**)&nodeCosts,bvh.numNodes*sizeof(float)));
-      CUBQL_CUDA_CALL(MallocManaged((void**)&reducedCosts,sizeof(float)));
-      computeNodeCosts<<<divRoundUp(int(bvh.numNodes),1024),1024>>>(bvh,nodeCosts);
-
-      CUBQL_CUDA_SYNC_CHECK();
-      
-      // Determine temporary device storage requirements
-      void     *d_temp_storage = NULL;
-      size_t   temp_storage_bytes = 0;
-      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes,
-                             nodeCosts, reducedCosts, bvh.numNodes);
-      // Allocate temporary storage
-      CUBQL_CUDA_CALL(Malloc(&d_temp_storage, temp_storage_bytes));
-      // Run sum-reduction
-      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, 
-                             nodeCosts, reducedCosts, bvh.numNodes);
-      
-      CUBQL_CUDA_SYNC_CHECK();
-      float result = reducedCosts[0];
-
-      CUBQL_CUDA_CALL(Free(d_temp_storage));
-      CUBQL_CUDA_CALL(Free(nodeCosts));
-      CUBQL_CUDA_CALL(Free(reducedCosts));
-      return result;
-    }
     
   } // ::cuBQL::gpuBuilder_impl
 } // ::cuBQL

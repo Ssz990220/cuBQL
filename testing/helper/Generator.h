@@ -25,20 +25,26 @@ namespace testing {
   template<typename T, int D>
   struct PointGenerator {
     typedef std::shared_ptr<PointGenerator> SP;
+
+    static SP parse(const std::string &description);
+    virtual void parse(const char *&currentParsePos);
     
-    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
+    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed) = 0;
   };
   
   template<typename T, int D>
   struct UniformPointGenerator : public PointGenerator<T, D>
   {
-    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
+    CUDAArray<vec_t<T,D>> generate(int count, int seed) override;
   };
 
   template<typename T, int D>
   struct ClusteredPointGenerator : public PointGenerator<T, D>
   {
-    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
+    CUDAArray<vec_t<T,D>> generate(int count, int seed) override;
+    
+    /*! num clusters to generate - if 0, we'll use D-th root of count */
+    int numClusters = 0;
   };
 
   template<typename T, int D>

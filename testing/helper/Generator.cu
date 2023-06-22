@@ -19,6 +19,29 @@
 
 namespace testing {
 
+  // ==================================================================
+  // point generator base
+  // ==================================================================
+  template<typename T, int D>
+  typename PointGenerator<T,D>::SP
+  PointGenerator<T,D>::parse(const std::string &description)
+  {
+    return {};
+  }
+
+  template<typename T, int D>
+  void PointGenerator<T,D>::parse(const char *&currentParsePos)
+  {}
+
+  template struct PointGenerator<float,2>;
+  template struct PointGenerator<float,3>;
+  template struct PointGenerator<float,4>;
+#if CUBQL_TEST_N
+  template struct PointGenerator<float,CUBQL_TEST_N>;
+#endif
+  // ==================================================================
+
+  
   /*! literal re-implementation of the stdlib 'drand48()' LCG
     generator. note this is usually significantly worse than the
     owl::common::LCG class above */
@@ -176,7 +199,10 @@ namespace testing {
     rng.seed(seed);
     std::uniform_real_distribution<double> uniform(0.f,1.f);
   
-    int numClusters = int(1+sqrtf(count));
+    int numClusters
+      = this->numClusters
+      ? this->numClusters
+      : int(1+sqrtf(count));
     std::vector<vec_t<float,D>> clusterCenters;
     for (int cc=0;cc<numClusters;cc++) {
       vec_t<float,D> c;

@@ -163,18 +163,6 @@ namespace cuBQL {
   void free(WideBVH<T,D,N> &bvh,
             cudaStream_t      s=0);
 
-  // ------------------------------------------------------------------
-  
-  /*! computes the SAH cost of a already built BinaryBVH. This is
-      often a useful metric for how "good" a BVH is */
-  template<typename T, int D>
-  float computeSAH(const BinaryBVH<T,D> &bvh);
-  
-  /*! computes the SAH cost of a already built WideBVH. This is often a
-      useful metric for how "good" a BVH is */
-  template<typename T, int D, int N>
-  float computeSAH(const WideBVH<T,D,N> &bvh);
-
   template<typename T, int D>
   using bvh_t = BinaryBVH<T,D>;
 } // ::cuBQL

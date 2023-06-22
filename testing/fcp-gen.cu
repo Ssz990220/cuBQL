@@ -21,16 +21,23 @@
 
 #include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
+#include "testing/helper/Generator.h"
 
 namespace testing {
-
-  using box_t = cuBQL::box3f;
 
   std::vector<float> reference;
   
   struct TestConfig {
     float maxTimeThreshold = 10.f;
     float maxQueryRadius = INFINITY;
+
+    std::string dataDist = "uniform";
+    int dataCount = 100000;
+    std::string queryDist = "uniform";
+    int queryCount = 100000;
+
+    bool make_reference = false;
+    std::string referenceFileName;
   };
   
   void usage(const std::string &error = "")
@@ -42,12 +49,15 @@ namespace testing {
     exit(error.empty()?0:1);
   }
 
+  template<int D>
   __global__
-  void makeBoxes(box_t *boxes, float3 *points, int numPoints)
+  void makeBoxes(cuBQL::box_t<float,D> *boxes,
+                 cuBQL::vec_t<float,D> *points,
+                 int numPoints)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numPoints) return;
-    float3 point = points[tid];
+    vec_t<float,D> point = points[tid];
     boxes[tid].lower = point;
     boxes[tid].upper = point;
   }
@@ -59,40 +69,106 @@ namespace testing {
     if (tid >= numQueries) return;
     results[tid] = INFINITY;//-1;
   }
+
+
+  template<int D>
+  inline __device__
+  int fcp(const BinaryBVH<float,D> bvh,
+          const vec_t<float,D>    *dataPoints,
+          const vec_t<float,D>     query,
+          /* in: SQUARE of max search distance; out: sqrDist of closest point */
+          float          &maxQueryDistSquare)
+  {
+    int result = -1;
+    
+    int2 stackBase[32], *stackPtr = stackBase;
+    int nodeID = 0;
+    int offset = 0;
+    int count  = 0;
+    while (true) {
+      while (true) {
+        offset = bvh.nodes[nodeID].offset;
+        count  = bvh.nodes[nodeID].count;
+        if (count>0)
+          // leaf
+          break;
+        typename BinaryBVH<float,D>::Node child0 = bvh.nodes[offset+0];
+        typename BinaryBVH<float,D>::Node child1 = bvh.nodes[offset+1];
+        float dist0 = fSqrDistance(child0.bounds,query);
+        float dist1 = fSqrDistance(child1.bounds,query);
+        int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
+        if (dist1 <= maxQueryDistSquare) {
+          float dist = max(dist0,dist1);
+          int distBits = __float_as_int(dist);
+          *stackPtr++ = make_int2(closeChild^1,distBits);
+        }
+        if (min(dist0,dist1) > maxQueryDistSquare) {
+          count = 0;
+          break;
+        }
+        nodeID = closeChild;
+      }
+      for (int i=0;i<count;i++) {
+        int primID = bvh.primIDs[offset+i];
+        float dist2 = sqrDistance(dataPoints[primID],query);
+        if (dist2 >= maxQueryDistSquare) continue;
+        maxQueryDistSquare = dist2;
+        result             = primID;
+      }
+      while (true) {
+        if (stackPtr == stackBase)
+          return result;
+        --stackPtr;
+        if (__int_as_float(stackPtr->y) > maxQueryDistSquare) continue;
+        nodeID = stackPtr->x;
+        break;
+      }
+    }
+  }
+
   
-  template<typename bvh_t>
+  template<int D, typename bvh_t>
   __global__
   void runFCP(float        *results,
               bvh_t         bvh,
-              const float3 *dataPoints,
-              const float3 *queries,
+              const vec_t<float,D> *dataPoints,
+              const vec_t<float,D> *queries,
               float         maxRadius,
               int           numQueries)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numQueries) return;
 
-    const float3 query = queries[tid];
+    const vec_t<float,D> query = queries[tid];
     float sqrMaxQueryDist = maxRadius*maxRadius;
-    int res = cuBQL::fcp(bvh,dataPoints,query,
-                         /* fcp kernel expects SQUARE of radius */
-                         sqrMaxQueryDist);
+    int res = fcp(bvh,dataPoints,query,
+                  /* fcp kernel expects SQUARE of radius */
+                  sqrMaxQueryDist);
     if (res == -1)
       results[tid] = INFINITY;
     else
       // results[tid] = sqrDistance(dataPoints[res],query);
       results[tid] = sqrMaxQueryDist;
   }
-
-  template<typename bvh_t>
-  void testFCP(const std::vector<float3> &h_dataPoints,
-               const std::vector<float3> &h_queryPoints,
-               BuildConfig buildConfig,
-               TestConfig testConfig
-               )
+  
+  template<int D, typename bvh_t=cuBQL::BinaryBVH<float,D>>
+  void testFCP(TestConfig testConfig,
+              BuildConfig buildConfig)
   {
-    CUDAArray<float3> dataPoints;
-    dataPoints.upload(h_dataPoints);
+    using point_t = cuBQL::vec_t<float,D>;
+    using box_t = cuBQL::box_t<float,D>;
+    typename PointGenerator<float,D>::SP dataGenerator
+      = PointGenerator<float,D>::parse(testConfig.dataDist);
+    typename PointGenerator<float,D>::SP queryGenerator
+      = PointGenerator<float,D>::parse(testConfig.queryDist);
+    // std::vector<point_t> h_dataPoints;
+    // std::vector<point_t> h_queryPoints;
+    
+    CUDAArray<point_t> dataPoints;
+    dataGenerator->generate(dataPoints,testConfig.dataCount);
+    CUDAArray<point_t> queryPoints;
+    queryGenerator->generate(queryPoints,testConfig.queryCount);
+    // dataPoints.upload(h_dataPoints);
 
     CUDAArray<box_t> boxes(dataPoints.size());
     {
@@ -104,13 +180,13 @@ namespace testing {
     // cuBQL::BinaryBVH
     bvh_t bvh;
     cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
-    if (bvh_t::numDims == 3) 
+    if (D == 3) 
       std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
     else
       std::cout << "done build..." << std::endl;
 
-    CUDAArray<float3> queryPoints;
-    queryPoints.upload(h_queryPoints);
+    // CUDAArray<float3> queryPoints;
+    // queryPoints.upload(h_queryPoints);
     
     int numQueries = queryPoints.size();
     CUDAArray<float> closest(numQueries);
@@ -182,55 +258,72 @@ using namespace testing;
 int main(int ac, char **av)
 {
   BuildConfig buildConfig;
-  std::vector<std::string> fileNames;
   std::string bvhType = "binary";
-  bool make_reference = false;
-  std::string referenceFileName;
   TestConfig testConfig;
+  int numDims = 3;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
-    if (av[i][0] != '-')
-      fileNames.push_back(arg);
-    else if (arg == "-bt" || arg == "--bvh-type")
+    if (arg == "-d" || arg == "--data") {
+      testConfig.dataDist = av[++i];
+      testConfig.dataCount = std::stoi(av[++i]);
+    } else if (arg == "-q" || arg == "--query") {
+      testConfig.queryDist = av[++i];
+      testConfig.queryCount = std::stoi(av[++i]);
+    } else if (arg == "-nd" || arg == "--num-dims") {
+      if (av[i+1] == "n")
+        numDims = CUBQL_TEST_N;
+      else
+        numDims = std::stoi(av[++i]);
+    } else if (arg == "-bt" || arg == "--bvh-type")
       bvhType = av[++i];
     else if (arg == "-sah" || arg == "--sah")
       buildConfig.enableSAH();
     else if (arg == "-mr" || arg == "-mqr" || arg == "--max-query-radius")
       testConfig.maxQueryRadius = std::stof(av[++i]);
     else if (arg == "--check-reference") {
-      referenceFileName = av[++i];
-      make_reference = false;
+      testConfig.referenceFileName = av[++i];
+      testConfig.make_reference = false;
     } else if (arg == "--make-reference") {
-      referenceFileName = av[++i];
-      make_reference = true;
+      testConfig.referenceFileName = av[++i];
+      testConfig.make_reference = true;
       testConfig.maxTimeThreshold = 0.f;
     } else if (arg == "-mlt" || arg == "-lt")
       buildConfig.makeLeafThreshold = std::stoi(av[++i]);
     else
       usage("unknown cmd-line argument '"+arg+"'");
   }
-  if (fileNames.size() < 2)
-    usage("unexpected number of data file names");
-  std::vector<float3> dataPoints  = loadData<float3>(fileNames[0]);
-  std::vector<float3> queryPoints = loadData<float3>(fileNames[1]);
+  // std::vector<float3> dataPoints  = loadData<float3>(generators[0]);
+  // std::vector<float3> queryPoints = loadData<float3>(generators[1]);
 
-  if (!referenceFileName.empty() && !make_reference)
-    reference = loadData<float>(referenceFileName);
-
-  if (bvhType == "binary")
-    testing::testFCP<BinaryBVH<float,3>>(dataPoints,queryPoints,buildConfig,testConfig);
-  // else if (bvhType == "bvh2")
-  //   testing::testFCP<WideBVH<float,3,2>>(dataPoints,queryPoints,buildConfig,testConfig);
-  else if (bvhType == "bvh4")
-    testing::testFCP<WideBVH<float,3,4>>(dataPoints,queryPoints,buildConfig,testConfig);
-  else if (bvhType == "bvh8")
-    testing::testFCP<WideBVH<float,3,8>>(dataPoints,queryPoints,buildConfig,testConfig);
+  // reference = loadData<float>(referenceFileName);
+  if (numDims == 2)
+    testFCP<2>(testConfig,buildConfig);
+  else if (numDims == 3)
+    testFCP<3>(testConfig,buildConfig);
+  else if (numDims == 4)
+    testFCP<4>(testConfig,buildConfig);
+#if CUBQL_TEST_N
+  else if (numDims == CUBQL_TEST_N)
+    testFCP<CUBQL_TEST_N>(testConfig,buildConfig);
+#endif
   else
-    throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
+    throw std::runtime_error("unsupported number of dimensions "+std::to_string(numDims));
+  // if (!referenceFileName.empty() && !make_reference)
+  //   reference = loadData<float>(referenceFileName);
 
-  if (make_reference) {
-    std::cout << "saving reference data to " << referenceFileName << std::endl;
-    saveData(reference,referenceFileName);
-  }
+  // if (bvhType == "binary")
+  //   testing::testFCP<BinaryBVH<float,3>>(dataPoints,queryPoints,buildConfig,testConfig);
+  // // else if (bvhType == "bvh2")
+  // //   testing::testFCP<WideBVH<float,3,2>>(dataPoints,queryPoints,buildConfig,testConfig);
+  // else if (bvhType == "bvh4")
+  //   testing::testFCP<WideBVH<float,3,4>>(dataPoints,queryPoints,buildConfig,testConfig);
+  // else if (bvhType == "bvh8")
+  //   testing::testFCP<WideBVH<float,3,8>>(dataPoints,queryPoints,buildConfig,testConfig);
+  // else
+  //   throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
+
+  // if (make_reference) {
+  //   std::cout << "saving reference data to " << referenceFileName << std::endl;
+  //   saveData(reference,referenceFileName);
   return 0;
 }

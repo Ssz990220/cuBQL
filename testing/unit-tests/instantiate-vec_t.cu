@@ -16,12 +16,16 @@
 
 #include "cuBQL/common/vec.h"
 
+using namespace cuBQL;
+
 template<typename T, int D>
 void foo()
 {
   using vec_t = cuBQL::vec_t<T,D>;
 
-  vec_t a __attribute__((unused));
+  vec_t a, b;
+  // __attribute__((unused))
+  typename dot_result_t<T>::type d = dot(a,b);
 }
 
 int main(int, char **)

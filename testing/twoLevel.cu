@@ -16,6 +16,7 @@
 
 #include "cuBQL/bvh.h"
 #include "cuBQL/queries/fcp.h"
+#include "cuBQL/computeSAH.h"
 
 #include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
@@ -281,7 +282,10 @@ namespace testing {
       blases[blasID].data = thisBlasData.data();
       std::cout << "building blas over " << prettyNumber(h_dataPoints.size()) << " points..." << std::endl;
       cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
-      std::cout << "blas bvh is built, SAH cost is " << cuBQL::computeSAH(bvh) << std::endl;
+      if (bvh_t::numDims == 3) 
+        std::cout << "blas bvh built, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
+      else
+        std::cout << "blas bvh built..." << std::endl;
     }
 
     CUDAArray<box3f> d_blasBoxes;
@@ -292,7 +296,10 @@ namespace testing {
     bvh_t tlas;
     buildConfig.maxAllowedLeafSize = 1;
     cuBQL::gpuBuilder(tlas,d_blasBoxes.data(),d_blasBoxes.size(),buildConfig);
-    std::cout << "tlas bvh is built, SAH cost is " << cuBQL::computeSAH(tlas) << std::endl;
+    if (bvh_t::numDims == 3) 
+      std::cout << "tlas bvh built, sah cost is " << cuBQL::computeSAH(tlas) << std::endl;
+    else
+      std::cout << "tlas bvh built..." << std::endl;
 
     
     CUDAArray<float3> queryPoints;

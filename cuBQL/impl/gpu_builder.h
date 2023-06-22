@@ -54,16 +54,6 @@ namespace cuBQL {
   }
 
   template<typename T, int D>
-  float computeSAH(const BinaryBVH<T,D> &bvh)
-  {
-    if (D == 3)
-      // SAH only defined for 3-dimensional data...
-      return gpuBuilder_impl::computeSAH(bvh);
-    else
-      throw std::runtime_error("cannot compute SAH for this type of BVH");
-  }
-  
-  template<typename T, int D>
   void free(BinaryBVH<T,D>   &bvh,
             cudaStream_t s)
   {
@@ -74,5 +64,27 @@ namespace cuBQL {
     bvh.primIDs = 0;
   }
 }
+
+
+#define CUBQL_INSTANTIATE_BINARY_BVH(T,D)                       \
+  namespace cuBQL {                                             \
+    template void gpuBuilder(BinaryBVH<T,D>   &bvh,             \
+                             const box_t<T,D> *boxes,           \
+                             uint32_t     numBoxes,             \
+                             BuildConfig  buildConfig,          \
+                             cudaStream_t s);                   \
+    template void free(BinaryBVH<T,D>  &bvh, cudaStream_t s);   \
+  }                                                             \
+  
+#define CUBQL_INSTANTIATE_WIDE_BVH(T,D,N)                       \
+  namespace cuBQL {                                             \
+    template void gpuBuilder(WideBVH<T,D,N>   &bvh,             \
+                             const box_t<T,D> *boxes,           \
+                             uint32_t     numBoxes,             \
+                             BuildConfig  buildConfig,          \
+                             cudaStream_t s);                   \
+    template void free(WideBVH<T,D,N>  &bvh, cudaStream_t s);   \
+  }
+
 #endif
 

@@ -77,6 +77,20 @@ namespace cuBQL {
     vec_t lower, upper;
   };
 
+  template<typename T, int D> inline __both__
+  typename dot_result_t<T>::type sqrDistance(box_t<T,D> box, vec_t<T,D> point)
+  {
+    vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
+    return sqrDistance(closestPoint,point);
+  }
+
+  template<typename T, int D> inline __both__
+  float fSqrDistance(box_t<T,D> box, vec_t<T,D> point)
+  {
+    vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
+    return sqrDistance(closestPoint,point);
+  }
+  
   using box3f = box_t<float,3>;
 }
 

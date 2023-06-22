@@ -18,6 +18,33 @@
 #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
 
+CUBQL_INSTANTIATE_BINARY_BVH(float,2)
+CUBQL_INSTANTIATE_BINARY_BVH(float,4)
+
 CUBQL_INSTANTIATE_BINARY_BVH(float,3)
 CUBQL_INSTANTIATE_WIDE_BVH(float,3,4)
 CUBQL_INSTANTIATE_WIDE_BVH(float,3,8)
+
+CUBQL_INSTANTIATE_BINARY_BVH(float,CUBQL_TEST_N)
+
+namespace cuBQL {
+
+  // template void gpuBuilder(BinaryBVH<float,CUBQL_TEST_N>   &bvh,
+  //                          const box_t<float,CUBQL_TEST_N> *boxes,
+  //                          uint32_t     numBoxes,
+  //                          BuildConfig  buildConfig,
+  //                          cudaStream_t s);
+  
+  // template void gpuBuilder(WideBVH<float,CUBQL_TEST_N,4>   &bvh,
+  //                          const box_t<float,CUBQL_TEST_N> *boxes,
+  //                          uint32_t     numBoxes,
+  //                          BuildConfig  buildConfig,
+  //                          cudaStream_t s);
+  // template void gpuBuilder(WideBVH<float,CUBQL_TEST_N,8>   &bvh,
+  //                          const box_t<float,CUBQL_TEST_N> *boxes,
+  //                          uint32_t     numBoxes,
+  //                          BuildConfig  buildConfig,
+  //                          cudaStream_t s);
+  // template void free(WideBVH<float,CUBQL_TEST_N,4>  &bvh, cudaStream_t s);
+  // template void free(WideBVH<float,CUBQL_TEST_N,8>  &bvh, cudaStream_t s);
+}

@@ -184,6 +184,62 @@ namespace cuBQL {
   CUBQL_BINARY(max)
 #undef CUBQL_FUNCTOR
 
+  template<typename T> struct dot_result_t;
+  template<> struct dot_result_t<float> { using type = float; };
+  template<> struct dot_result_t<int32_t> { using type = int64_t; };
+
+  template<typename T, int D> inline __both__
+  typename dot_result_t<T>::type dot(vec_t<T,D> a, vec_t<T,D> b)
+  {
+    typename dot_result_t<T>::type result = 0;
+#pragma unroll
+    for (int i=0;i<D;i++)
+      result += a[i]*b[i];
+    return result;
+  }
+
+
+    
+  /*! accurate square-distance between two points; due to the 'square'
+      involved in computing the distance this may need to change the
+      type from int to long, etc - so a bit less rounding issues, but
+      a bit more complicated to use with the right typenames */
+  template<typename T, int D> inline __both__
+  typename dot_result_t<T>::type sqrDistance(vec_t<T,D> a, vec_t<T,D> b)
+  {
+    vec_t<T,D> diff = a - b;
+    return dot(diff,diff);
+  }
+
+  /*! approximate-conservative square distance between two
+      points. whatever type the points are, the result will be
+      returned in floats, including whatever rounding error that might
+      incur. we will, however, always round downwars, so if this is
+      used for culling it will, if anything, under-estiamte the
+      distance to a subtree (and thus, still traverse it) rather than
+      wrongly skipping it*/
+  template<typename T> inline __device__ float fSqrLength(T v);
+  template<> inline __device__ float fSqrLength<float>(float v)
+  { return v*v; }
+  template<> inline __device__ float fSqrLength<int>(int _v)
+  { float v = __int2float_rz(_v); return v*v; }
+
+  /*! approximate-conservative square distance between two
+      points. whatever type the points are, the result will be
+      returned in floats, including whatever rounding error that might
+      incur. we will, however, always round downwars, so if this is
+      used for culling it will, if anything, under-estiamte the
+      distance to a subtree (and thus, still traverse it) rather than
+      wrongly skipping it*/
+  template<typename T, int D> inline __both__
+  float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
+  {
+    float sum = 0.f;
+    for (int i=0;i<D;i++)
+      sum += fSqrLength(a[i]-b[i]);
+    return sum;
+  }
+  
   using vec3f = vec_t<float,3>;
 }
 

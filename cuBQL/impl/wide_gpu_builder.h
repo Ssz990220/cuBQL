@@ -204,58 +204,6 @@ namespace cuBQL {
       free(binaryBVH,s);
     }
 
-    template<typename T, int D, int N>
-    __global__
-    void computeNodeCosts(WideBVH<T,D,N> bvh, float *nodeCosts)
-    {
-      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= bvh.numNodes) return;
-
-      auto &node = bvh.nodes[nodeID];
-      float area = 0.f;
-      for (int i=0;i<N;i++) {
-        box_t<T,D> box = node.children[i].bounds;
-        if (box.lower.x > box.upper.x) continue;
-        area += surfaceArea(box);
-      }
-      box_t<T,D> rootBox; rootBox.set_empty();
-      for (int i=0;i<N;i++)
-        rootBox.grow(bvh.nodes[0].children[i].bounds);
-      area /= surfaceArea(rootBox);
-      nodeCosts[nodeID] = area;
-    }
-
-    template<typename T, int D, int N>
-    float computeSAH(const WideBVH<T,D,N> &bvh)
-    {
-      float *nodeCosts;
-      float *reducedCosts;
-      CUBQL_CUDA_CALL(MallocManaged((void**)&nodeCosts,bvh.numNodes*sizeof(float)));
-      CUBQL_CUDA_CALL(MallocManaged((void**)&reducedCosts,sizeof(float)));
-      computeNodeCosts<<<divRoundUp(int(bvh.numNodes),1024),1024>>>(bvh,nodeCosts);
-
-      CUBQL_CUDA_SYNC_CHECK();
-      
-      // Determine temporary device storage requirements
-      void     *d_temp_storage = NULL;
-      size_t   temp_storage_bytes = 0;
-      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes,
-                             nodeCosts, reducedCosts, bvh.numNodes);
-      // Allocate temporary storage
-      CUBQL_CUDA_CALL(Malloc(&d_temp_storage, temp_storage_bytes));
-      // Run sum-reduction
-      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, 
-                             nodeCosts, reducedCosts, bvh.numNodes);
-      
-      CUBQL_CUDA_SYNC_CHECK();
-      float result = reducedCosts[0];
-
-      CUBQL_CUDA_CALL(Free(d_temp_storage));
-      CUBQL_CUDA_CALL(Free(nodeCosts));
-      CUBQL_CUDA_CALL(Free(reducedCosts));
-      return result;
-    }
-    
   } // ::cuBQL::gpuBuilder_impl
 
   template<typename T, int D, int N>
@@ -279,11 +227,11 @@ namespace cuBQL {
     bvh.primIDs = 0;
   }
 
-  template<typename T, int D, int N>
-  float computeSAH(const WideBVH<T,D,N> &bvh)
-  {
-    return gpuBuilder_impl::computeSAH(bvh);
-  }
+  // template<typename T, int D, int N>
+  // float computeSAH(const WideBVH<T,D,N> &bvh)
+  // {
+  //   return gpuBuilder_impl::computeSAH(bvh);
+  // }
   
 } // :: cuBQL
 

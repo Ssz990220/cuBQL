@@ -16,6 +16,7 @@
 
 // #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
+#include "cuBQL/computeSAH.h"
 
 #include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
@@ -48,7 +49,11 @@ namespace testing {
     std::cout << "... initial warm-up build" << std::endl;
     bvh_t bvh;
     cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
-    std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
+    if (bvh_t::numDims == 3) 
+      std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
+    else
+      std::cout << "done build..." << std::endl;
+      
     double t0 = getCurrentTime();
     int thisRunSize = 1;
     while (true) {

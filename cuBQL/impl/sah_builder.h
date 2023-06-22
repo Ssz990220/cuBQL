@@ -513,7 +513,7 @@ namespace cuBQL {
       _FREE(buildState,s);
       _FREE(sahBins,s);
     }
-
   } // ::cuBQL::sahBuilder_impl
+
 } // :: cuBQL
 

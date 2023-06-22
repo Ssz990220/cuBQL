@@ -27,8 +27,9 @@ if (NOT CUBQL_IS_SUBMODULE)
     helper/CUDAArray.h
     helper/triangles.h
     helper/triangles.cu
+    helper/instantiate_builders.cu
     )
-  target_link_libraries(cuBQL_testing PUBLIC cuBQL_impl)
+  target_link_libraries(cuBQL_testing PUBLIC cuBQL_interface)
   target_compile_definitions(cuBQL_testing PUBLIC -DCUBQL_TEST_N=${CUBQL_TEST_N})
 
   add_executable(cuBQL_testGenerators helper/testGenerators.cu)
@@ -84,6 +85,9 @@ if (NOT CUBQL_IS_SUBMODULE)
   
   add_executable(cuBQL_fcp fcp.cu)
   target_link_libraries(cuBQL_fcp PUBLIC cuBQL_testing)
+
+  add_executable(cuBQL_fcpGen fcp-gen.cu)
+  target_link_libraries(cuBQL_fcpGen PUBLIC cuBQL_testing)
 
   add_executable(cuBQL_twoLevel twoLevel.cu)
   target_link_libraries(cuBQL_twoLevel PUBLIC cuBQL_testing)
