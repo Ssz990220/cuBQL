@@ -16,19 +16,104 @@
 
 #include "testing/helper/Generator.h"
 #include <random>
+#include <exception>
 
 namespace testing {
+
+  namespace tokenizer {
+    std::string findFirst(const char *curr, const char *&endOfFound)
+    {
+      if (curr == 0)
+        return "";
+      
+      while (*curr && strchr(" \t\r\n",*curr)) {
+        ++curr;
+      }
+      if (*curr == 0) {
+        endOfFound = curr;
+        return "";
+      }
+      
+      std::stringstream ss;
+      if (strchr("{}():,",*curr)) {
+        ss << *curr++;
+      } else if (isalnum(*curr)) {
+        while (isalnum(*curr)) {
+          ss << *curr;
+          curr++;
+        }
+      }
+      else
+        throw std::runtime_error("unable to parse ... '"+std::string(curr)+"'");
+      
+      endOfFound = curr;
+      return ss.str();
+    }
+  };
+  
+  template<typename T> inline T to_scalar(const std::string &s);
+  template<> inline float to_scalar<float>(const std::string &s)
+  { return std::stof(s); }
+  template<> inline int to_scalar<int>(const std::string &s)
+  { return std::stoi(s); }
 
   // ==================================================================
   // point generator base
   // ==================================================================
   template<typename T, int D>
   typename PointGenerator<T,D>::SP
-  PointGenerator<T,D>::parse(const std::string &description)
+  PointGenerator<T,D>::createAndParse(const char *&curr)
   {
-    return {};
+    const char *next = 0;
+    PING; PRINT(curr);
+    std::string type = tokenizer::findFirst(curr,next);
+    PRINT(type);
+    PRINT(next);
+    if (type == "") throw std::runtime_error("could not parse generator type");
+
+    typename PointGenerator<T,D>::SP gen;
+    if (type == "uniform")
+      gen = std::make_shared<UniformPointGenerator<T,D>>();
+    else if (type == "clustered")
+      gen = std::make_shared<ClusteredPointGenerator<T,D>>();
+    else if (type == "nrooks")
+      gen = std::make_shared<NRooksPointGenerator<T,D>>();
+    else if (type == "clustered")
+      gen = std::make_shared<RemapPointGenerator<T,D>>();
+    else if (type == "remap")
+      gen = std::make_shared<RemapPointGenerator<T,D>>();
+    else
+      throw std::runtime_error("un-recognized point generator type '"+type+"'");
+    curr = next;
+    PING;
+    PRINT(curr);
+    PRINT(next);
+    gen->parse(curr);
+    PING;
+    PRINT(curr);
+    PRINT(next);
+    return gen;
   }
 
+
+  template<typename T, int D>
+  typename PointGenerator<T,D>::SP
+  PointGenerator<T,D>::createFromString(const std::string &wholeString)
+  {
+    PING; PRINT(wholeString);
+    const char *curr = wholeString.c_str(), *next = 0;
+    SP generator = createAndParse(curr);
+    PING; PRINT(curr); PRINT((int*)next);
+    PRINT("'"+std::string(curr)+"'");
+    std::string trailing = tokenizer::findFirst(curr,next);
+    PRINT(trailing);
+    if (!trailing.empty())
+      throw std::runtime_error("un-recognized trailing stuff '"
+                               +std::string(curr)
+                               +"' at end of point generator string");
+    return generator;
+  }
+  
   template<typename T, int D>
   void PointGenerator<T,D>::parse(const char *&currentParsePos)
   {}
@@ -127,6 +212,9 @@ namespace testing {
   template<typename T, int D>
   CUDAArray<vec_t<T,D>> UniformPointGenerator<T,D>::generate(int count, int seed)
   {
+    if (count <= 0)
+      throw std::runtime_error("UniformPointGenerator<T,D>::generate(): invalid count...");
+    // PING; PRINT(count);
     CUDAArray<vec_t<T,D>> res;
     res.resize(count);
     int bs = 1024;
@@ -143,54 +231,76 @@ namespace testing {
 #endif
 
 
+  // ==================================================================
+  // re-mapping
+  // ==================================================================
+  
+  template<typename T, int D>
+  __global__
+  void remapPointsKernel(vec_t<T,D> *points,
+                         int count,
+                         vec_t<T,D> lower,
+                         vec_t<T,D> upper)
+  {
+    int tid = threadIdx.x+blockIdx.x*blockDim.x;
+    if (tid >= count) return;
 
+    auto &point = points[tid];
+    for (int d=0;d<D;d++)
+      point[d]
+        = lower[d]
+        + T(point[d]
+            * (typename dot_result_t<T>::type)(upper[d]-lower[d])
+            / (uniform_default_upper<T>() - uniform_default_lower<T>()));
+  }
+  
+  template<typename T, int D>
+  RemapPointGenerator<T,D>::RemapPointGenerator()
+  {
+    for (int d=0;d<D;d++) {
+      lower[d] = uniform_default_lower<T>();
+      upper[d] = uniform_default_upper<T>();
+    }
+  }
+
+  template<typename T, int D>
+  CUDAArray<vec_t<T,D>> RemapPointGenerator<T,D>::generate(int count, int seed)
+  {
+    if (!source)
+      throw std::runtime_error("RemapPointGenerator: no source defined");
+    CUDAArray<vec_t<T,D>> pts = source->generate(count,seed);
+
+    int bs = 128;
+    int nb = divRoundUp(count,bs);
+    remapPointsKernel<<<nb,bs>>>(pts.get(),count,lower,upper);
+    
+    return pts;
+  }
+
+  template<typename T, int D>
+  void RemapPointGenerator<T,D>::parse(const char *&currentParsePos)
+  {
+    const char *next = 0;
+    for (int d=0;d<D;d++) {
+      std::string tok = tokenizer::findFirst(currentParsePos,next);
+      assert(tok != "");
+      lower[d] = to_scalar<T>(tok);
+      currentParsePos = next;
+    }
+    for (int d=0;d<D;d++) {
+      std::string tok = tokenizer::findFirst(currentParsePos,next);
+      assert(tok != "");
+      upper[d] = to_scalar<T>(tok);
+      currentParsePos = next;
+    }
+    source = PointGenerator<T,D>::createAndParse(currentParsePos);
+ }
+
+  
   
   // ==================================================================
   // clustered points
   // ==================================================================
-
-
-  // template<typename T, int D>
-  // __global__
-  // void clusteredPointGenerator(vec_t<T,D> *d_points, int count, int seed)
-  // {
-  //   int tid = threadIdx.x+blockIdx.x*blockDim.x;
-  //   if (tid >= count) return;
-  //   vec_t<T,D> &mine = d_points[tid];
-
-  //   IRand48 irand;
-  //   irand.init(seed+tid);
-
-  //   int numClusters = int(1+sqrtf(numPoints));
-                                 
-  //   int clusterID = irand() % numClusters;
-  //   DRand48 frand;
-  //   frand.init(seed+0x123+clusterID);
-
-  //   vec_t<float,D> clusterCenter;
-  //   for (int i=0;i<D;i++)
-  //     clusterCenter[i] = frand();
-
-  //   float clusterWidth = 1.f/numClusters;
-
-  //   frand.init(tid+seed);
-  //   float u,v,w;
-  //   while (1) {
-  //     u = 2.f*frand()-1.f;
-  //     v = 2.f*frand()-1.f;
-  //     w = u*u+v*v;
-  //     if (w <= 1.f) break;
-  //   }
-  //   float z = sqrtf(-2.f*logf(w)/w);
-
-    
-
-  //   T lo = clustered_default_lower<T>();
-  //   T hi = clustered_default_upper<T>();
-    
-  //   for (int i=0;i<D;i++)
-  //     mine[i] = T(lo + rng() * (hi-lo));
-  // }
 
   template<typename T, int D>
   CUDAArray<vec_t<T,D>> ClusteredPointGenerator<T,D>::generate(int count, int seed)
@@ -200,9 +310,11 @@ namespace testing {
     std::uniform_real_distribution<double> uniform(0.f,1.f);
   
     int numClusters
-      = this->numClusters
-      ? this->numClusters
-      : int(1+sqrtf(count));
+      = int(1+count/50.f);
+      // = int(1+sqrtf(count));
+      // = this->numClusters
+      // ? this->numClusters
+      // : int(1+sqrtf(count));
     std::vector<vec_t<float,D>> clusterCenters;
     for (int cc=0;cc<numClusters;cc++) {
       vec_t<float,D> c;
@@ -222,6 +334,46 @@ namespace testing {
     }
     
     CUDAArray<vec_t<T,D>> res;
+    res.upload(points);
+    return res;
+  }
+  
+  template<typename T, int D>
+  CUDAArray<vec_t<T,D>> NRooksPointGenerator<T,D>::generate(int count, int seed)
+  {
+    int numClusters = (int)(1+count/(float)50);
+    // T lo = uniform_default_lower<T>();
+    // T hi = uniform_default_upper<T>();
+    
+    // for (int i=0;i<D;i++)
+    //   mine[i] = T(lo + rng() * (hi-lo));
+    IRand48 irand;
+    irand.init(0x1234321+seed+1);
+    DRand48 frand;
+    irand.init(0x1234321+seed+2);
+    std::vector<vec_t<float,D>> clusterLower(numClusters);
+    for (int d=0;d<D;d++) {
+      for (int i=0;i<numClusters;i++) {
+        clusterLower[i][d] = i/(float)numClusters;
+      }
+      for (int i=numClusters-1;i>0;--i) {
+        int o = irand() % i;
+        std::swap(clusterLower[i][d],clusterLower[o][d]);
+      }
+    }
+    
+    std::vector<vec_t<float,D>> points(count);
+    for (int i=0;i<count;i++) {
+      int clusterID = irand() % numClusters;
+      for (int d=0;d<D;d++)
+        points[i][d] = clusterLower[clusterID][d] + (1.f/numClusters)*frand();
+    }
+    
+    CUDAArray<vec_t<T,D>> res(count);
+    // int bs = 128;
+    // int nb = divRoundUp(count,bs);
+    // nRooksKernel<<<nb,bs>>>(res.data(),count,seed,numClusters);
+    // CUDA_SYNC_CHECK();
     res.upload(points);
     return res;
   }

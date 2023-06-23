@@ -23,7 +23,8 @@ void foo()
 {
   using vec_t = cuBQL::vec_t<T,D>;
 
-  vec_t a, b;
+  vec_t a = make<vec_t>((T)1);
+  vec_t b = make<vec_t>((T)2);
   // __attribute__((unused))
   typename dot_result_t<T>::type d = dot(a,b);
 }

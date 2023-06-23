@@ -90,6 +90,14 @@ namespace cuBQL {
     vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
     return sqrDistance(closestPoint,point);
   }
+
+  template<typename T, int D> inline __both__
+  box_t<T,D> &grow(box_t<T,D> &b, vec_t<T,D> v)
+  { b.grow(v); return b; }
+  
+  template<typename T, int D> inline __both__
+  box_t<T,D> &grow(box_t<T,D> &b, box_t<T,D> ob)
+  { b.grow(ob); return b; }
   
   using box3f = box_t<float,3>;
 }

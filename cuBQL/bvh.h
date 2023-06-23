@@ -25,6 +25,7 @@ namespace cuBQL {
       leaf */
   struct BuildConfig {
     inline BuildConfig &enableSAH() { buildMethod = SAH; return *this; }
+    inline BuildConfig &enableELH() { buildMethod = ELH; return *this; }
     typedef enum
       {
        /*! simple 'adaptive spatial median' strategy. When splitting a
@@ -39,7 +40,9 @@ namespace cuBQL {
          (theoretic motivation is a bit wobbly for other sorts of
          queries), but it seems to help even for other queries. Much
          more expensive to build, though */
-       SAH
+       SAH,
+       /*! edge-length heuristic - expeirmental */
+       ELH
     } BuildMethod;
     
     /*! what leaf size the builder is _allowed_ to make; no matter
@@ -172,6 +175,9 @@ namespace cuBQL {
 #endif
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/sah_builder.h"  
+#endif
+#if CUBQL_GPU_BUILDER_IMPLEMENTATION
+# include "cuBQL/impl/elh_builder.h"  
 #endif
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/wide_gpu_builder.h"  

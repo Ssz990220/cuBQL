@@ -25,15 +25,28 @@
 
 namespace testing {
 
+#define DO_STATS 1
+
+#if DO_STATS
+# define STATS(a) a
+
+  struct Stats {
+    int numNodes;
+    int numPrims;
+  };
+#else
+# define STATS(a) 
+#endif
+  
   std::vector<float> reference;
   
   struct TestConfig {
     float maxTimeThreshold = 10.f;
     float maxQueryRadius = INFINITY;
 
-    std::string dataDist = "uniform";
+    std::string dataGen = "uniform";
     int dataCount = 100000;
-    std::string queryDist = "uniform";
+    std::string queryGen = "uniform";
     int queryCount = 100000;
 
     bool make_reference = false;
@@ -77,7 +90,11 @@ namespace testing {
           const vec_t<float,D>    *dataPoints,
           const vec_t<float,D>     query,
           /* in: SQUARE of max search distance; out: sqrDist of closest point */
-          float          &maxQueryDistSquare)
+          float          &maxQueryDistSquare
+#if DO_STATS
+          , Stats *d_stats
+#endif
+          )
   {
     int result = -1;
     
@@ -85,10 +102,16 @@ namespace testing {
     int nodeID = 0;
     int offset = 0;
     int count  = 0;
+#if DO_STATS
+    int numNodes = 0, numPrims = 0;
+#endif
     while (true) {
       while (true) {
         offset = bvh.nodes[nodeID].offset;
         count  = bvh.nodes[nodeID].count;
+#if DO_STATS
+        numNodes++;
+#endif
         if (count>0)
           // leaf
           break;
@@ -110,14 +133,22 @@ namespace testing {
       }
       for (int i=0;i<count;i++) {
         int primID = bvh.primIDs[offset+i];
+#if DO_STATS
+        numPrims++;
+#endif
         float dist2 = sqrDistance(dataPoints[primID],query);
         if (dist2 >= maxQueryDistSquare) continue;
         maxQueryDistSquare = dist2;
         result             = primID;
       }
       while (true) {
-        if (stackPtr == stackBase)
+        if (stackPtr == stackBase) {
+#if DO_STATS
+          atomicAdd(&d_stats->numNodes,numNodes);
+          atomicAdd(&d_stats->numPrims,numPrims);
+#endif
           return result;
+        }
         --stackPtr;
         if (__int_as_float(stackPtr->y) > maxQueryDistSquare) continue;
         nodeID = stackPtr->x;
@@ -134,7 +165,11 @@ namespace testing {
               const vec_t<float,D> *dataPoints,
               const vec_t<float,D> *queries,
               float         maxRadius,
-              int           numQueries)
+              int           numQueries
+#if DO_STATS
+              ,Stats *d_stats
+#endif
+              )
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numQueries) return;
@@ -143,7 +178,11 @@ namespace testing {
     float sqrMaxQueryDist = maxRadius*maxRadius;
     int res = fcp(bvh,dataPoints,query,
                   /* fcp kernel expects SQUARE of radius */
-                  sqrMaxQueryDist);
+                  sqrMaxQueryDist
+#if DO_STATS
+                  ,d_stats
+#endif
+                  );
     if (res == -1)
       results[tid] = INFINITY;
     else
@@ -158,16 +197,17 @@ namespace testing {
     using point_t = cuBQL::vec_t<float,D>;
     using box_t = cuBQL::box_t<float,D>;
     typename PointGenerator<float,D>::SP dataGenerator
-      = PointGenerator<float,D>::parse(testConfig.dataDist);
+      = PointGenerator<float,D>::createFromString(testConfig.dataGen);
     typename PointGenerator<float,D>::SP queryGenerator
-      = PointGenerator<float,D>::parse(testConfig.queryDist);
+      = PointGenerator<float,D>::createFromString(testConfig.queryGen);
     // std::vector<point_t> h_dataPoints;
     // std::vector<point_t> h_queryPoints;
+
+    CUDAArray<point_t> dataPoints
+      = dataGenerator->generate(testConfig.dataCount,0x1345);
     
-    CUDAArray<point_t> dataPoints;
-    dataGenerator->generate(dataPoints,testConfig.dataCount);
-    CUDAArray<point_t> queryPoints;
-    queryGenerator->generate(queryPoints,testConfig.queryCount);
+    CUDAArray<point_t> queryPoints
+      = queryGenerator->generate(testConfig.queryCount,0x23423498);
     // dataPoints.upload(h_dataPoints);
 
     CUDAArray<box_t> boxes(dataPoints.size());
@@ -190,6 +230,10 @@ namespace testing {
     
     int numQueries = queryPoints.size();
     CUDAArray<float> closest(numQueries);
+#if DO_STATS
+    CUDAArray<Stats,ManagedMem> stats(1);
+    stats.bzero();
+#endif
 
     // ------------------------------------------------------------------
     std::cout << "first query for warm-up and checking reference data (if provided)"
@@ -202,8 +246,19 @@ namespace testing {
        dataPoints.data(),
        queryPoints.data(),
        testConfig.maxQueryRadius,
-       numQueries);
+       numQueries
+#if DO_STATS
+       ,stats.get()
+#endif
+       );
     CUBQL_CUDA_SYNC_CHECK();
+#if DO_STATS
+    PRINT(stats.get()->numNodes);
+    PRINT(stats.get()->numPrims);
+    PRINT(prettyNumber(stats.get()->numNodes));
+    PRINT(prettyNumber(stats.get()->numPrims));
+    exit(0);
+#endif
     if (reference.empty()) {
       reference = closest.download();
     } else {
@@ -229,7 +284,7 @@ namespace testing {
     int numPerRun = 1;
     while (true) {
       CUBQL_CUDA_SYNC_CHECK();
-      std::cout << "timing run with " << numPerRun << " repetition.." << std::endl;
+      std::cout << "timing run with " << numPerRun << " repetition(s).." << std::endl;
       double t0 = getCurrentTime();
       for (int i=0;i<numPerRun;i++) {
         resetResults<<<divRoundUp(numQueries,128),128>>>(closest.data(),numQueries);
@@ -239,7 +294,11 @@ namespace testing {
            dataPoints.data(),
            queryPoints.data(),
            testConfig.maxQueryRadius,
-           numQueries);
+           numQueries
+#if DO_STATS
+           ,stats.get()
+#endif
+           );
         CUBQL_CUDA_SYNC_CHECK();
       }
       double t1 = getCurrentTime();
@@ -263,11 +322,13 @@ int main(int ac, char **av)
   int numDims = 3;
   for (int i=1;i<ac;i++) {
     const std::string arg = av[i];
-    if (arg == "-d" || arg == "--data") {
-      testConfig.dataDist = av[++i];
+    if (arg == "-dd" || arg == "--data-dist" || arg == "--data-distribution") {
+      testConfig.dataGen = av[++i];
+    } else if (arg == "-dc" || arg == "--data-count") {
       testConfig.dataCount = std::stoi(av[++i]);
-    } else if (arg == "-q" || arg == "--query") {
-      testConfig.queryDist = av[++i];
+    } else if (arg == "-qd" || arg == "--query-dist" || arg == "--query-distribution") {
+      testConfig.queryGen = av[++i];
+    } else if (arg == "-qc" || arg == "--query-count") {
       testConfig.queryCount = std::stoi(av[++i]);
     } else if (arg == "-nd" || arg == "--num-dims") {
       if (av[i+1] == "n")
@@ -278,6 +339,8 @@ int main(int ac, char **av)
       bvhType = av[++i];
     else if (arg == "-sah" || arg == "--sah")
       buildConfig.enableSAH();
+    else if (arg == "-elh" || arg == "--elh")
+      buildConfig.enableELH();
     else if (arg == "-mr" || arg == "-mqr" || arg == "--max-query-radius")
       testConfig.maxQueryRadius = std::stof(av[++i]);
     else if (arg == "--check-reference") {

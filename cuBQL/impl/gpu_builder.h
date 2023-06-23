@@ -20,6 +20,7 @@
 #include "cuBQL/impl/builder_common.h"
 #include "cuBQL/impl/sm_builder.h"
 #include "cuBQL/impl/sah_builder.h"
+#include "cuBQL/impl/elh_builder.h"
 
 namespace cuBQL {
 
@@ -42,6 +43,8 @@ namespace cuBQL {
                                     numBoxes,buildConfig,s);
       else
         throw std::runtime_error("SAH builder not supported for this type of BVH");
+    } if (buildConfig.buildMethod == BuildConfig::ELH) {
+      elhBuilder_impl::elhBuilder(bvh,boxes,numBoxes,buildConfig,s);
     } else {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
