@@ -135,10 +135,8 @@ namespace cuBQL {
     };
 
     // ==================================================================
-    /*! "nrooks": generate N clusters of ~50 points each, then arrange
-      these N clusters in a NxNx...xN grid with a N-rooks pattern. Each
-      of these clusters has ~50 uniformly distributed points inside of
-      that clusters "field" */
+    /*! "nrooks": generate ~sqrt(N) N clusters of around sqrt(N)
+        points each, and arrange thsoe in a n-rooks patterns */
     template<typename T, int D>
     struct NRooksPointGenerator : public PointGenerator<T, D>
     {

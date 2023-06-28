@@ -34,6 +34,13 @@ if (NOT CUBQL_IS_SUBMODULE)
 
   add_executable(cuBQL_testGenerators helper/testGenerators.cu)
   target_link_libraries(cuBQL_testGenerators cuBQL_testing)
+
+  # helper tool to plot 2D point generators
+  add_executable(cuBQL_plotPoints helper/plotPoints.cu)
+  target_link_libraries(cuBQL_plotPoints cuBQL_testing)
+  # helper tool to plot 2D box generators
+  add_executable(cuBQL_plotBoxes helper/plotBoxes.cu)
+  target_link_libraries(cuBQL_plotBoxes cuBQL_testing)
   
   # ==================================================================
   # different helpers for generating *test data* for various kernels

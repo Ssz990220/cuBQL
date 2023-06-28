@@ -397,9 +397,9 @@ namespace cuBQL {
       std::default_random_engine rng;
       rng.seed(seed);
       std::uniform_real_distribution<double> uniform(0.f,1.f);
-  
-      int numClusters
-        = int(1+count/50.f);
+
+      int numClusters = int(1+powf(count,(D-1.f)/D));
+        // = int(1+powf(count/50.f);
       // = int(1+sqrtf(count));
       // = this->numClusters
       // ? this->numClusters
@@ -435,8 +435,9 @@ namespace cuBQL {
       rng.seed(seed);
       std::uniform_real_distribution<double> uniform(0.f,1.f);
   
-      int numClusters
-        = int(1+count/50.f);
+      int numClusters = int(1+powf(count,(D-1.f)/D));
+      // int numClusters
+      //   = int(1+count/50.f);
       std::vector<vec_t<float,D>> clusterCenters;
       for (int cc=0;cc<numClusters;cc++) {
         vec_t<float,D> c;
@@ -458,11 +459,21 @@ namespace cuBQL {
         std::cout << "choosing size using uniform min/max distribution..." << std::endl;
         sizeMean = -1.f;
       } else {
+        // std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
+        // int avgBoxesPerCluster = count / numClusters;
+        // // float avgClusterWidth = 4.f*sigma;
+        // sizeMean = 1.f/powf(avgBoxesPerCluster,1.f/D);
+        // PRINT(sizeMean);
+        // sizeSigma = sizeMean/5.f;
         std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
-        int avgBoxesPerCluster = count / numClusters;
-        float avgClusterWidth = 4.f*sigma;
-        sizeMean = .5f*avgClusterWidth/powf(avgBoxesPerCluster,1.f/D);
+        float avgClusterWidth = 4*sigma;
+        // int avgBoxesPerCluster = count / numClusters;
+        sizeMean = .5f*avgClusterWidth;//powf(avgBoxesPerCluster,1.f/D);
         sizeSigma = sizeMean/3.f;
+        std::cout << "choosing size using auto-config'ed gaussian"
+                  << " mean=" << sizeMean
+                  << " sigma=" << sizeSigma
+                  << std::endl;
       }
     
       std::normal_distribution<double> sizeGaussian(sizeMean,sizeSigma);
@@ -476,6 +487,7 @@ namespace cuBQL {
         if (sizeMean > 0) {
           for (int d=0;d<D;d++)
             halfSize[d] = fabsf(0.5f*sizeGaussian(rng));
+          // PRINT(halfSize);
         } else {
           for (int d=0;d<D;d++)
             halfSize[d]
@@ -504,7 +516,7 @@ namespace cuBQL {
     template<typename T, int D>
     CUDAArray<vec_t<T,D>> NRooksPointGenerator<T,D>::generate(int count, int seed)
     {
-      int numClusters = (int)(1+count/(float)50);
+      int numClusters = (int)(1+powf(count,0.5f*(D-1.f)/D));//count/(float)50);
       LCG<8> rng(seed,290374);
       std::vector<vec_t<float,D>> clusterLower(numClusters);
       for (int d=0;d<D;d++) {
@@ -558,7 +570,7 @@ namespace cuBQL {
     template<typename T, int D>
     CUDAArray<box_t<T,D>> NRooksBoxGenerator<T,D>::generate(int count, int seed)
     {
-      int numClusters = (int)(1+count/(float)50);
+      int numClusters = (int)(1+powf(count,0.5f*(D-1.f)/D));//count/(float)50);
       LCG<8> lcg(seed,290374);
       std::vector<vec_t<float,D>> clusterLower(numClusters);
       for (int d=0;d<D;d++) {
@@ -585,14 +597,24 @@ namespace cuBQL {
         sizeMean = -1.f;
       } else {
         std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
-        int avgBoxesPerCluster = count / numClusters;
         float avgClusterWidth = 1.f/numClusters;
-        sizeMean = .5f*avgClusterWidth/powf(avgBoxesPerCluster,1.f/D);
+        // float avgClusterWidth = 4*sigma;
+        // int avgBoxesPerCluster = count / numClusters;
+        sizeMean = .5f*avgClusterWidth;//powf(avgBoxesPerCluster,1.f/D);
         sizeSigma = sizeMean/3.f;
         std::cout << "choosing size using auto-config'ed gaussian"
                   << " mean=" << sizeMean
                   << " sigma=" << sizeSigma
                   << std::endl;
+        // std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
+        // // int avgBoxesPerCluster = count / numClusters;
+        // float avgClusterWidth = 1.f/numClusters;
+        // sizeMean = .1f*avgClusterWidth;//powf(avgBoxesPerCluster,1.f/D);
+        // sizeSigma = sizeMean/3.f;
+        // std::cout << "choosing size using auto-config'ed gaussian"
+        //           << " mean=" << sizeMean
+        //           << " sigma=" << sizeSigma
+        //           << std::endl;
       }
     
       std::normal_distribution<double> sizeGaussian(sizeMean,sizeSigma);

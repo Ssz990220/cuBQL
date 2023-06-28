@@ -119,7 +119,7 @@ int main(int ac, char **av)
 #if EXPECT_POINTS
   std::vector<vec3f> dataPoints  = loadData<vec3f>(fileNames[0]);
   for (auto point : dataPoints) 
-    boxes.push_back({point,point});
+    boxes.push_back(box3f{point,point});
 #endif
 
   if (bvhType == "binary")

@@ -31,40 +31,86 @@ namespace cuBQL {
   template<> inline __both__ float empty_box_upper_value<float>() { return -INFINITY; }
   /*! @} */
   
+  /*! data-only part of a axis-aligned bounding box, made up of a
+      'lower' and 'upper' vector bounding it. any box with any
+      lower[k] > upper[k] is to be treated as a "empty box" (e.g., for
+      a bvh that might indicate a primitive that we want to ignore
+      from the build) */
+  template<typename _scalar_t, int _numDims>
+  struct box_t_pod {
+    enum { numDims = _numDims };
+    using scalar_t = _scalar_t;
+    using vec_t = cuBQL::vec_t<scalar_t,numDims>;
+    
+    vec_t lower, upper;
+  };
+
+
   /*! a axis-aligned bounding box, made up of a 'lower' and 'upper'
       vector bounding it. any box with any lower[k] > upper[k] is to
       be treated as a "empty box" (e.g., for a bvh that might indicate
       a primitive that we want to ignore from the build) */
-  template<typename _scalar_t, int _numDims>
-  struct box_t {
-    enum { numDims = _numDims };
-    using scalar_t = _scalar_t;
-    using vec_t = cuBQL::vec_t<scalar_t,numDims>;
+  template<typename T, int D>
+  struct box_t : public box_t_pod<T,D> {
+    enum { numDims = D };
+    using scalar_t = T;
+    using vec_t = cuBQL::vec_t<T,D>;
 
     using cuda_vec_t = typename cuda_eq_t<scalar_t,numDims>::type;
+
+    using box_t_pod<T,D>::lower;
+    using box_t_pod<T,D>::upper;
+
+    /*! default constructor - creates an "empty" box (ie, not an
+        un-initialized one like a POD version, but one that is
+        explicitly marked as inverted b yhavin lower > upper) */
+    inline __both__ box_t()
+    {
+      lower = vec_t(empty_box_lower_value<T>());
+      upper = vec_t(empty_box_upper_value<T>());
+    };
     
+    /*! copy-constructor - create a box from another box (or
+        POD-version of such) of same type */
+    inline __both__ box_t(const box_t_pod<T,D> &ob);
+
+    /*! create a box containing a single point */
+    inline __both__ explicit box_t(const vec_t_data<T,D> &v) { lower = upper = v; }
+
+    /*! create a box from two points. note this will NOT make sure
+        that a<b; if this is an empty box it will just create an empty
+        box! */
+    inline __both__ explicit box_t(const vec_t_data<T,D> &a, const vec_t_data<T,D> &b)
+    {
+      lower = vec_t(a);
+      upper = vec_t(b);
+    }
+      
     inline __both__ box_t &grow(const vec_t &v)
     { lower = min(lower,v); upper = max(upper,v); return *this; }
     inline __both__ box_t &grow(const box_t &other)
     { lower = min(lower,other.lower); upper = max(upper,other.upper); return *this; }
     inline __both__ box_t &set_empty()
     {
-      lower = make<vec_t>(empty_box_lower_value<scalar_t>());
-      upper = make<vec_t>(empty_box_upper_value<scalar_t>());
+      this->lower = make<vec_t>(empty_box_lower_value<scalar_t>());
+      this->upper = make<vec_t>(empty_box_upper_value<scalar_t>());
       return *this;
     }
 
     inline __both__ box_t &grow(cuda_vec_t other)
     {
-      lower = min(lower,make<vec_t>(other));
-      upper = max(upper,make<vec_t>(other)); return *this;
+      this->lower = min(this->lower,make<vec_t>(other));
+      this->upper = max(this->upper,make<vec_t>(other)); return *this;
     }
 
     /*! returns the center of the box, up to rounding errors. (i.e. on
         its, the center of a box with lower=2 and upper=3 is 2, not
         2.5! */
     inline __both__ vec_t center() const
-    { return (lower+upper)/scalar_t(2); }
+    { return (this->lower+this->upper)/scalar_t(2); }
+
+    inline __both__ vec_t size() const
+    { return this->upper - this->lower; }
     
     /*! returns TWICE the center (which happens to be the SUM of lower
         an dupper). Note this 'conceptually' the same as 'center()',
@@ -73,17 +119,17 @@ namespace cuBQL {
         the center - but as long as all routines that expect centers
         use that same 'times 2' this will still work out */
     inline __both__ vec_t twice_center() const
-    { return (lower+upper); }
+    { return (this->lower+this->upper); }
 
     /*! for convenience's sake, get_lower(i) := lower[i] */
-    inline __both__ scalar_t get_lower(int i) const { return lower[i]; }
+    inline __both__ scalar_t get_lower(int i) const { return this->lower[i]; }
     /*! for convenience's sake, get_upper(i) := upper[i] */
-    inline __both__ scalar_t get_upper(int i) const { return upper[i]; }
-      
-    vec_t lower, upper;
+    inline __both__ scalar_t get_upper(int i) const { return this->upper[i]; }
   };
 
+  using box2f = box_t<float,2>;
   using box3f = box_t<float,3>;
+  using box4f = box_t<float,4>;
 
   inline __both__
   float surfaceArea(box3f box)
@@ -121,7 +167,7 @@ namespace cuBQL {
 
 
   template<typename T, int D> inline __both__
-  box_t<T,D> make_box(vec_t<T,D> v) { return {v,v}; }
+  box_t<T,D> make_box(vec_t<T,D> v) { return box_t<T,D>(v); }
   
   
   // inline __both__

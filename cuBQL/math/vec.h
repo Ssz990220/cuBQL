@@ -67,6 +67,11 @@ namespace cuBQL {
     using cuda_t = typename cuda_eq_t<T,D>::type;
 
     inline __both__ vec_t() {}
+    inline __both__ vec_t(const T &t)
+    {
+#pragma unroll
+      for (int i=0;i<D;i++) (*this)[i] = t;
+    }
     inline __both__ vec_t(const vec_t_data<T,D> &o)
     {
 #pragma unroll
@@ -299,5 +304,17 @@ namespace cuBQL {
   { return sqrtf(dot(v,v)); }
     
   
+  template<typename T, int D>
+  inline std::ostream &operator<<(std::ostream &o,
+                                  const vec_t_data<T,D> &v)
+  {
+    o << "(";
+    for (int i=0;i<D;i++) {
+      if (i) o << ",";
+      o << v[i];
+    }
+    o << ")";
+    return o;
+  }
 }
 
