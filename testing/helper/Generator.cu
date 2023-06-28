@@ -135,6 +135,8 @@ namespace cuBQL {
         gen = std::make_shared<NRooksBoxGenerator<T,D>>();
       else if (type == "remap")
         gen = std::make_shared<RemapBoxGenerator<T,D>>();
+      else if (type == "mixture")
+        gen = std::make_shared<MixtureBoxGenerator<T,D>>();
       else
         throw std::runtime_error("un-recognized box generator type '"+type+"'");
       curr = next;
@@ -429,6 +431,41 @@ namespace cuBQL {
     }
   
     template<typename T, int D>
+    void ClusteredBoxGenerator<T,D>::parse(const char *&currentParsePos)
+    {
+      const char *next = 0;
+      while (true) {
+        const std::string tag = tokenizer::findFirst(currentParsePos,next);
+        PING; PRINT(tag); PRINT(currentParsePos); PRINT(next);
+        if (tag == "")
+          break;
+
+        if (tag == "gaussian") {
+          currentParsePos = next;
+          
+          std::string sMean = tokenizer::findFirst(currentParsePos,next);
+          currentParsePos = next;
+        
+          std::string sSigma = tokenizer::findFirst(currentParsePos,next);
+          currentParsePos = next;
+        
+          gaussianSize.mean = std::stof(sMean);
+          gaussianSize.sigma = std::stof(sSigma);
+        } else if (tag == "gaussian.scale") {
+          currentParsePos = next;
+          
+          std::string scale = tokenizer::findFirst(currentParsePos,next);
+          PING; PRINT(scale); PRINT(next);
+          assert(scale != "");
+          currentParsePos = next;
+          gaussianSize.scale = std::stof(scale); 
+        } else {
+          break;
+        }
+      }
+    }
+    
+    template<typename T, int D>
     CUDAArray<box_t<T,D>> ClusteredBoxGenerator<T,D>::generate(int count, int seed)
     {
       std::default_random_engine rng;
@@ -453,7 +490,7 @@ namespace cuBQL {
       float sizeMean = -1.f, sizeSigma = 0.f;
       if (gaussianSize.mean > 0) {
         std::cout << "choosing size using gaussian distribution..." << std::endl;
-        sizeMean = gaussianSize.mean;
+        sizeMean = gaussianSize.mean*gaussianSize.scale;
         sizeSigma = gaussianSize.sigma;
       } else if (uniformSize.min > 0) {
         std::cout << "choosing size using uniform min/max distribution..." << std::endl;
@@ -468,7 +505,7 @@ namespace cuBQL {
         std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
         float avgClusterWidth = 4*sigma;
         // int avgBoxesPerCluster = count / numClusters;
-        sizeMean = .5f*avgClusterWidth;//powf(avgBoxesPerCluster,1.f/D);
+        sizeMean = .5f*avgClusterWidth*gaussianSize.scale;//powf(avgBoxesPerCluster,1.f/D);
         sizeSigma = sizeMean/3.f;
         std::cout << "choosing size using auto-config'ed gaussian"
                   << " mean=" << sizeMean
@@ -553,6 +590,7 @@ namespace cuBQL {
 
         if (tag == "gaussian") {
           currentParsePos = next;
+          
           std::string sMean = tokenizer::findFirst(currentParsePos,next);
           currentParsePos = next;
         
@@ -561,6 +599,13 @@ namespace cuBQL {
         
           gaussianSize.mean = std::stof(sMean);
           gaussianSize.sigma = std::stof(sSigma);
+        } else if (tag == "gaussian.scale") {
+          currentParsePos = next;
+          
+          std::string scale = tokenizer::findFirst(currentParsePos,next);
+          assert(scale != "");
+          currentParsePos = next;
+          gaussianSize.scale = std::stof(scale); 
         } else {
           break;
         }
@@ -600,7 +645,7 @@ namespace cuBQL {
         float avgClusterWidth = 1.f/numClusters;
         // float avgClusterWidth = 4*sigma;
         // int avgBoxesPerCluster = count / numClusters;
-        sizeMean = .5f*avgClusterWidth;//powf(avgBoxesPerCluster,1.f/D);
+        sizeMean = .5f*avgClusterWidth*gaussianSize.scale;//powf(avgBoxesPerCluster,1.f/D);
         sizeSigma = sizeMean/3.f;
         std::cout << "choosing size using auto-config'ed gaussian"
                   << " mean=" << sizeMean
@@ -747,6 +792,75 @@ namespace cuBQL {
       currentParsePos = next;
     }
 
+    template<typename T, int D>
+    __global__ void mixKernel(box_t<T,D> *out, int outCount,
+                              float prob_a,
+                              int seed,
+                              const box_t<T,D> *a, int aCount,
+                              const box_t<T,D> *b, int bCount)
+    {
+      int tid = threadIdx.x+blockIdx.x*blockDim.x;
+      if (tid >= outCount) return;
+      
+      box_t<T,D> &mine = out[tid];
+      LCG<8> rng(seed,tid);
+      
+      bool use_a
+        = (prob_a < 1.f)
+        ? (rng() < prob_a)
+        : (tid < (int)prob_a);
+      const box_t<T,D> *in = (use_a ? a : b);
+      int inCount = (use_a ? aCount : bCount);
+      
+      int which
+                           = (inCount == outCount)
+                           ? tid
+                           : (rng.ui32() & inCount);
+      mine = in[which];
+    }
+    
+    // ==================================================================
+    /*! "mixture" generator - generates a new distributoin based by
+      randomly picking between two input distributions */
+    template<typename T, int D>
+    CUDAArray<box_t<T,D>> MixtureBoxGenerator<T,D>::generate(int numRequested, int seed)
+    {
+      assert(gen_a);
+      assert(gen_b);
+      CUDAArray<box_t<T,D>>  boxes_a
+        = gen_a->generate(numRequested,3*seed+0);
+      CUDAArray<box_t<T,D>>  boxes_b
+        = gen_b->generate(numRequested,3*seed+1);
+
+      CUDAArray<box_t<T,D>>  boxes(numRequested);
+      
+      int bs = 128;
+      int nb = divRoundUp(numRequested,bs);
+      mixKernel<<<nb,bs>>>(boxes.data(),boxes.size(),
+                           prob_a,
+                           3*seed+2,
+                           boxes_a.data(),boxes_a.size(),
+                           boxes_b.data(),boxes_b.size());
+      return boxes;
+    }
+    
+    template<typename T, int D>
+    void MixtureBoxGenerator<T,D>::parse(const char *&currentParsePos)
+    {
+      const char *next = 0;
+
+      std::string prob = tokenizer::findFirst(currentParsePos,next);
+      currentParsePos = next;
+      
+      PRINT(prob);
+      if (prob == "") throw std::runtime_error("no mixture probabilty specified");
+
+      prob_a = std::stof(prob);
+      PING; PRINT(currentParsePos);
+      gen_a = BoxGenerator<T,D>::createAndParse(currentParsePos);
+      PING; PRINT(currentParsePos);
+      gen_b = BoxGenerator<T,D>::createAndParse(currentParsePos);
+    }
     
   } // ::cuBQL::test_rig
 } // ::cuBQL

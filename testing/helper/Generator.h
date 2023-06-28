@@ -125,9 +125,11 @@ namespace cuBQL {
     template<typename T, int D>
     struct ClusteredBoxGenerator : public BoxGenerator<T, D>
     {
+      void parse(const char *&currentParsePos) override;
       CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      
       struct {
-        float mean = -1.f, sigma = 0.f;
+        float mean = -1.f, sigma = 0.f, scale = 1.f;
       } gaussianSize;
       struct {
         float min = -1.f, max = -1.f;
@@ -153,7 +155,7 @@ namespace cuBQL {
       CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
       void parse(const char *&currentParsePos) override;
       struct {
-        float mean = -1.f, sigma = 0.f;
+        float mean = -1.f, sigma = 0.f, scale = 1.f;
       } gaussianSize;
       struct {
         float min = -1.f, max = -1.f;
@@ -205,9 +207,14 @@ namespace cuBQL {
     };
 
     // ==================================================================
+    
+    /*! "mixture" generator - generates a new distributoin based by
+      randomly picking between two input distributions */
     template<typename T, int D>
-    struct BoxMixture : public BoxGenerator<T,D> {
+    struct MixtureBoxGenerator : public BoxGenerator<T,D> {
       virtual CUDAArray<box_t<T,D>> generate(int numRequested, int seed);
+    
+      void parse(const char *&currentParsePos) override;
     
       typename BoxGenerator<T,D>::SP gen_a;
       typename BoxGenerator<T,D>::SP gen_b;
