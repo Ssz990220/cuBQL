@@ -20,11 +20,11 @@
 
 namespace cuBQL {
 
-  template<typename T, int N>
+  template<typename /* scalar type */T, int /*! dimensoins */D>
   struct vec_t_data {
     inline __both__ T  operator[](int i) const { return v[i]; }
     inline __both__ T &operator[](int i)       { return v[i]; }
-    T v[N];
+    T v[D];
   };
 
   /*! defines a "invalid" type to allow for using as a paramter where
@@ -37,7 +37,7 @@ namespace cuBQL {
       float3. to also allow vec_t's that do not have a cuda
       equivalent, let's also create a 'invalid_t' to be used by
       default */ 
-  template<typename T, int N> struct cuda_eq_t { using type = invalid_t; };
+  template<typename T, int D> struct cuda_eq_t { using type = invalid_t; };
   template<> struct cuda_eq_t<float,2> { using type = float2; };
   template<> struct cuda_eq_t<float,3> { using type = float3; };
 
@@ -60,12 +60,31 @@ namespace cuBQL {
     T x, y, z;
   };
   
-  template<typename T, int N>
-  struct vec_t : public vec_t_data<T,N> {
-    enum { numDims = N };
+  template<typename T, int D>
+  struct vec_t : public vec_t_data<T,D> {
+    enum { numDims = D };
     using scalar_t = T;
+    using cuda_t = typename cuda_eq_t<T,D>::type;
 
-    using cuda_t = typename cuda_eq_t<T,N>::type;
+    inline __both__ vec_t() {}
+    inline __both__ vec_t(const vec_t_data<T,D> &o)
+    {
+#pragma unroll
+      for (int i=0;i<D;i++) (*this)[i] = o[i];
+    }
+    inline __both__ vec_t(const cuda_t &o)
+    {
+#pragma unroll
+      for (int i=0;i<D;i++) (*this)[i] = (&o.x)[i];
+    }
+    
+    template<typename OT>
+    explicit vec_t(const vec_t_data<OT,D> &o)
+    {
+#pragma unroll
+      for (int i=0;i<D;i++) (*this)[i] = (T)o[i];
+    }
+    
     inline __both__ vec_t &operator=(cuda_t v)
     {
 #pragma unroll
@@ -73,6 +92,20 @@ namespace cuBQL {
       return *this;
     }
   };
+
+  using vec2f = vec_t<float,2>;
+  using vec3f = vec_t<float,3>;
+  using vec4f = vec_t<float,4>;
+
+  template<typename T>
+  inline __both__ vec_t<T,3> cross(vec_t<T,3> a, vec_t<T,3> b)
+  {
+    vec_t<T,3> v;
+    v.x = a.y*b.z;
+    v.y = a.z*b.x;
+    v.z = a.x*b.y;
+    return v;
+  }
 
   /*! traits for a vec_t */
   template<typename vec_t>
@@ -84,7 +117,7 @@ namespace cuBQL {
 
   /*! vec_traits<T> describe the scalar type and number of dimensions
     of whatever wants to get used as a vector/point type in
-    cuBQL. By default cuBQL will use its own vec_t<T,N> for that,
+    cuBQL. By default cuBQL will use its own vec_t<T,D> for that,
     but this should allow to also describe the traits of external
     types such as CUDA's float3 */
   template<typename T> struct vec_traits : public our_vec_t_traits<T> {};
@@ -172,13 +205,13 @@ namespace cuBQL {
 #undef CUBQL_OPERATOR
   
 #define CUBQL_BINARY(op)                                \
-  template<typename T, int N>                           \
+  template<typename T, int D>                           \
   inline __both__                                       \
-  vec_t<T,N> op(vec_t<T,N> a, vec_t<T,N> b)             \
+  vec_t<T,D> op(vec_t<T,D> a, vec_t<T,D> b)             \
   {                                                     \
-    vec_t<T,N> r;                                       \
+    vec_t<T,D> r;                                       \
     _Pragma("unroll")                                   \
-      for (int i=0;i<N;i++) r[i] = op(a[i],b[i]);       \
+      for (int i=0;i<D;i++) r[i] = op(a[i],b[i]);       \
     return r;                                           \
   }
 
@@ -202,19 +235,6 @@ namespace cuBQL {
     return result;
   }
 
-
-    
-  /*! accurate square-distance between two points; due to the 'square'
-      involved in computing the distance this may need to change the
-      type from int to long, etc - so a bit less rounding issues, but
-      a bit more complicated to use with the right typenames */
-  template<typename T, int D> inline __both__
-  typename dot_result_t<T>::type sqrDistance(vec_t<T,D> a, vec_t<T,D> b)
-  {
-    vec_t<T,D> diff = a - b;
-    return dot(diff,diff);
-  }
-
   /*! approximate-conservative square distance between two
       points. whatever type the points are, the result will be
       returned in floats, including whatever rounding error that might
@@ -227,6 +247,32 @@ namespace cuBQL {
   { return v*v; }
   template<> inline __device__ float fSqrLength<int>(int _v)
   { float v = __int2float_rz(_v); return v*v; }
+
+  /*! accurate square-length of a vector; due to the 'square' involved
+      in computing the distance this may need to change the type from
+      int to long, etc - so a bit less rounding issues, but a bit more
+      complicated to use with the right typenames */
+  template<typename T, int D> inline __both__
+  typename dot_result_t<T>::type sqrLength(vec_t<T,D> v)
+  {
+    return dot(v,v);
+  }
+
+
+  // ------------------------------------------------------------------
+  // *square* distance between two points (can always be computed w/o
+  // a square root, so makes sense even for non-float types)
+  // ------------------------------------------------------------------
+
+  /*! accurate square-distance between two points; due to the 'square'
+      involved in computing the distance this may need to change the
+      type from int to long, etc - so a bit less rounding issues, but
+      a bit more complicated to use with the right typenames */
+  template<typename T, int D> inline __both__
+  typename dot_result_t<T>::type sqrDistance(vec_t<T,D> a, vec_t<T,D> b)
+  {
+    return sqrLength(a-b);
+  }
 
   /*! approximate-conservative square distance between two
       points. whatever type the points are, the result will be
@@ -244,8 +290,14 @@ namespace cuBQL {
     return sum;
   }
 
-  using vec2f = vec_t<float,2>;
-  using vec3f = vec_t<float,3>;
-  using vec4f = vec_t<float,4>;
+  
+  // ------------------------------------------------------------------
+  // 'length' of a vector - may only make sense for certain types
+  // ------------------------------------------------------------------
+  template<int D>
+  inline __both__ float length(const vec_t<float,D> &v)
+  { return sqrtf(dot(v,v)); }
+    
+  
 }
 

@@ -186,6 +186,27 @@ namespace cuBQL {
     };
 
     // ==================================================================
+    /*! takes a file of triangles, then generates points by sampling
+        these proportional to their surface area
+
+      *must* be created with a a generator string that specifies a
+      file (and format) to read those triangles from; this is
+      specified through two strings: one for the format ('obj' for
+      .obj files), and a second with a file name. E.g., to read
+      triangles from bunny.obj, just the generator string "triangles
+      obj bunny.obj"
+    */
+    template<typename T, int D>
+    struct TrianglesPointGenerator : public PointGenerator<T, D>
+    {
+      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+    
+      void parse(const char *&currentParsePos) override;
+    
+      std::vector<test_rig::Triangle> triangles;
+    };
+
+    // ==================================================================
     template<typename T, int D>
     struct BoxMixture : public BoxGenerator<T,D> {
       virtual CUDAArray<box_t<T,D>> generate(int numRequested, int seed);

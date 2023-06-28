@@ -671,6 +671,60 @@ namespace cuBQL {
                 << " triangles..." << std::endl;
       currentParsePos = next;
     }
-  
+
+
+
+    // ==================================================================
+    template<typename T, int D>
+    CUDAArray<vec_t<T,D>>
+    TrianglesPointGenerator<T,D>::generate(int numRequested, int seed)
+    {
+      throw std::runtime_error("can generate sample points from triangles only "
+                               "for T=float and D=3");
+    }
+
+    template<>
+    CUDAArray<vec_t<float,3>>
+    TrianglesPointGenerator<float,3>::generate(int numRequested, int seed)
+    {
+      float sumAreas = 0.f;
+      std::vector<float> areas;
+      std::vector<box3f> boxes;
+      for (auto tri : triangles) {
+        boxes.push_back(make_box<float,3>(tri.a).grow(tri.b).grow(tri.c));
+        float a = area(tri);
+        areas.push_back(a);
+        sumAreas += a;
+      }
+
+      std::vector<vec3f> points = sample(triangles,numRequested,seed);
+      assert(points.size() == numRequested);
+      
+      CUDAArray<vec3f> d_points;
+      d_points.upload(points);
+      return d_points;
+    }
+    
+    template<typename T, int D>
+    void TrianglesPointGenerator<T,D>::parse(const char *&currentParsePos)
+    {
+      const char *next = 0;
+
+      std::string format = tokenizer::findFirst(currentParsePos,next);
+      if (format == "") throw std::runtime_error("no triangles file format specified");
+      currentParsePos = next;
+
+      std::string fileName = tokenizer::findFirst(currentParsePos,next);
+      if (fileName == "") throw std::runtime_error("no file name specified");
+
+      std::cout << "going to start reading triangles from '"
+                << fileName << "'" << std::endl;
+      triangles = loadData<Triangle>(fileName);
+      std::cout << "done loading " << prettyNumber(triangles.size())
+                << " triangles..." << std::endl;
+      currentParsePos = next;
+    }
+
+    
   } // ::cuBQL::test_rig
 } // ::cuBQL
