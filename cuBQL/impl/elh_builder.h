@@ -65,12 +65,29 @@ namespace cuBQL {
 
     template<typename T, int D>
     inline __device__
-    T edgeLengths(box_t<T,D> box)
+    float edgeLengths(box_t<T,D> box)
     {
-      T sum = T(0);
-      for (int i=0;i<D;i++)
-        sum += (box.upper[i] - box.lower[i]);
+// #if 0
+//       T sum = T(0);
+//       for (int i=0;i<D;i++) {
+//         sum += (box.upper[i] - box.lower[i]);
+//       }
+//       return sum;
+// #elif 1
+      float sum = 0.f;
+      for (int i=0;i<D;i++) {
+        sum += float(box.upper[i] - box.lower[i])*float(box.upper[i] - box.lower[i]);
+      }
       return sum;
+// #else
+//       // T sum = T(0);
+//       T maxLength = T(0);
+//       for (int i=0;i<D;i++) {
+//         // sum += (box.upper[i] - box.lower[i]);
+//         maxLength = max(maxLength,box.upper[i] - box.lower[i]);
+//       }
+//       return maxLength;// * sum;
+// #endif
     }
     
     template<typename T, int D>
@@ -80,7 +97,7 @@ namespace cuBQL {
                      const ELHBins<T,D> &elh)
     {
       float bestCost = INFINITY;
-      
+
       float rLengths[elh.numBins];
       for (int d=0;d<D;d++) {
         box_t<T,D> box; box.set_empty();

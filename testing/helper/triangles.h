@@ -16,18 +16,21 @@
 
 #pragma once
 
+#include "cuBQL/math/vec.h"
 #include "testing/helper.h"
 
-namespace testing {
+namespace cuBQL {
+  namespace test_rig {
 
-  struct Triangle {
-    float3 a, b, c;
-  };
+    struct Triangle {
+      vec3f a, b, c;
+    };
 
-  std::vector<Triangle> loadOBJ(const std::string &fileName);
-  std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
+    std::vector<Triangle> loadOBJ(const std::string &fileName);
+    std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
 
-  std::vector<float3> sample(const std::vector<Triangle> &triangles, size_t numSamples);
-  void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
-}
+    std::vector<float3> sample(const std::vector<Triangle> &triangles, size_t numSamples);
+    void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
 
+  } // ::cuBQL::test_rig
+} // ::cuBQL

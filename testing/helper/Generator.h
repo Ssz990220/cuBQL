@@ -19,34 +19,60 @@
 #include "testing/helper.h"
 #include "testing/helper/CUDAArray.h"
 #include <memory>
+#include "testing/helper/triangles.h"
 
-namespace testing {
+namespace cuBQL {
+  namespace test_rig {
 
-  /*! a 'point generator' is a class that implements a procedure to
+    /*! a 'point generator' is a class that implements a procedure to
       create a randomized set of points (of given type and
       dimensoins). In particular, this library allows for describing
       various point generators through a string, such as "uniform"
       (uniformly distributed points), "nrooks" (a n-rooks style
       distribution, see below), "clustered", etc. */
-  template<typename T, int D>
-  struct PointGenerator {
-    typedef std::shared_ptr<PointGenerator> SP;
+    template<typename T, int D>
+    struct PointGenerator {
+      typedef std::shared_ptr<PointGenerator> SP;
 
-    static SP createFromString(const std::string &wholeString);
+      static SP createFromString(const std::string &wholeString);
     
-    static SP createAndParse(const char *&curr);
-    virtual void parse(const char *&currentParsePos);
+      static SP createAndParse(const char *&curr);
+      virtual void parse(const char *&currentParsePos);
     
-    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed) = 0;
-  };
+      virtual CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) = 0;
+    };
   
-  template<typename T, int D>
-  struct UniformPointGenerator : public PointGenerator<T, D>
-  {
-    CUDAArray<vec_t<T,D>> generate(int count, int seed) override;
-  };
+    template<typename T, int D>
+    struct BoxGenerator {
+      typedef std::shared_ptr<BoxGenerator<T,D>> SP;
+    
 
-  /*! re-maps points from the 'default domain' to the domain specified
+      static SP createFromString(const std::string &wholeString);
+    
+      static SP createAndParse(const char *&curr);
+      virtual void parse(const char *&currentParsePos);
+    
+      virtual CUDAArray<box_t<T,D>> generate(int numRequested, int seed) = 0;
+    };
+
+
+
+
+
+    // ==================================================================
+    template<typename T, int D>
+    struct UniformPointGenerator : public PointGenerator<T, D>
+    {
+      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+    };
+
+    template<typename T, int D>
+    struct UniformBoxGenerator : public BoxGenerator<T, D>
+    {
+      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+    };
+  
+    /*! re-maps points from the 'default domain' to the domain specified
       by [lower,upper]. Ie, for float the defulat domain is [0,1]^N,
       so a poitn with coordinate x=1 would be re-mapped to
       x=lower. Note this does not require the input points to *be*
@@ -61,82 +87,115 @@ namespace testing {
       points. E.g., assuimng we'd be dealing with <int,2> data, the string
       "remap 2 2 4 4 nrooks" would first generate points with the "nrooks"
       generator, then re-map those to [(2,2),(4,4)].
-  */
-  template<typename T, int D>
-  struct RemapPointGenerator : public PointGenerator<T, D>
-  {
-    RemapPointGenerator();
+    */
+    template<typename T, int D>
+    struct RemapPointGenerator : public PointGenerator<T, D>
+    {
+      RemapPointGenerator();
     
-    CUDAArray<vec_t<T,D>> generate(int count, int seed) override;
+      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
     
-    virtual void parse(const char *&currentParsePos);
+      virtual void parse(const char *&currentParsePos);
 
-    vec_t<T,D> lower, upper;
-    typename PointGenerator<T,D>::SP source;
-  };
-
-  template<typename T, int D>
-  struct ClusteredPointGenerator : public PointGenerator<T, D>
-  {
-    CUDAArray<vec_t<T,D>> generate(int count, int seed) override;
+      vec_t<T,D> lower, upper;
+      typename PointGenerator<T,D>::SP source;
+    };
+    template<typename T, int D>
+    struct RemapBoxGenerator : public BoxGenerator<T, D>
+    {
+      RemapBoxGenerator();
     
-    /*! num clusters to generate - if 0, we'll use D-th root of count */
-    // int numClusters = 0;
-  };
-
-  template<typename T, int D>
-  struct NRooksPointGenerator : public PointGenerator<T, D>
-  {
-    CUDAArray<vec_t<T,D>> generate(int count, int seed) override;
+      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
     
-    /*! num clusters to generate - if 0, we'll use D-th root of count */
-    // int numClusters = 0;
-  };
+      virtual void parse(const char *&currentParsePos);
 
-  template<typename T, int D>
-  struct PointTranslator : public PointGenerator<T, D>
-  {
-    typename PointGenerator<T,D>::SP source;
-    PointTranslator(typename PointGenerator<T,D>::SP source)
-      : source(source)
-    {}
-    virtual CUDAArray<vec_t<T,D>> generate(int count, int seed);
-  };
+      vec_t<T,D> lower, upper;
+      typename BoxGenerator<T,D>::SP source;
+    };
+
+
+
+    // ==================================================================
+    template<typename T, int D>
+    struct ClusteredPointGenerator : public PointGenerator<T, D>
+    {
+      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+    };
   
-  
-  template<typename T, int D>
-  struct BoxGenerator {
-    typedef std::shared_ptr<BoxGenerator<T,D>> SP;
+    template<typename T, int D>
+    struct ClusteredBoxGenerator : public BoxGenerator<T, D>
+    {
+      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      struct {
+        float mean = -1.f, sigma = 0.f;
+      } gaussianSize;
+      struct {
+        float min = -1.f, max = -1.f;
+      } uniformSize;
+    };
+
+    // ==================================================================
+    /*! "nrooks": generate N clusters of ~50 points each, then arrange
+      these N clusters in a NxNx...xN grid with a N-rooks pattern. Each
+      of these clusters has ~50 uniformly distributed points inside of
+      that clusters "field" */
+    template<typename T, int D>
+    struct NRooksPointGenerator : public PointGenerator<T, D>
+    {
+      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+    };
+
+    // ==================================================================
+    /*! "nrooks": same as n-rooks point generator (for the box centers),
+      then surrounds each of these points with a box whose size can be
+      controlled through various distributions */
+    template<typename T, int D>
+    struct NRooksBoxGenerator : public BoxGenerator<T, D>
+    {
+      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      void parse(const char *&currentParsePos) override;
+      struct {
+        float mean = -1.f, sigma = 0.f;
+      } gaussianSize;
+      struct {
+        float min = -1.f, max = -1.f;
+      } uniformSize;
+    };
+
+    // ==================================================================
+    /*! takes a file of triangles, and creates one box per
+      triangle. will ignore the number of requested samples, and just
+      return the boxes. Will only work for float3 data, and error-exit
+      for all other cases T,D configurations. 
+
+      *must* be created with a a generator string that specifies a
+      file (and format) to read those triangles from; this is
+      specified through two strings: one for the format ('obj' for
+      .obj files), and a second with a file name. E.g., to read
+      triangles from bunny.obj, just the generator string "triangles
+      obj bunny.obj"
+    */
+    template<typename T, int D>
+    struct TrianglesBoxGenerator : public BoxGenerator<T, D>
+    {
+      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
     
-    virtual CUDAArray<box_t<T,D>> generate(int count, int seed);
-  };
-
-
-  template<typename T, int D>
-  struct PointsToBoxes : public BoxGenerator<T,D> {
-    using vec_t = typename cuBQL::vec_t<T,D>;
+      void parse(const char *&currentParsePos) override;
     
-    typename PointGenerator<T, D>::SP pointGenerator;
+      std::vector<test_rig::Triangle> triangles;
+    };
 
-    PointsToBoxes(typename PointGenerator<T,D>::SP pointGenerator)
-      : pointGenerator(pointGenerator)
-    {}
-
-    vec_t boxSize;
+    // ==================================================================
+    template<typename T, int D>
+    struct BoxMixture : public BoxGenerator<T,D> {
+      virtual CUDAArray<box_t<T,D>> generate(int numRequested, int seed);
     
-    virtual CUDAArray<box_t<T,D>> generate(int count, int seed);
-  };
+      typename BoxGenerator<T,D>::SP gen_a;
+      typename BoxGenerator<T,D>::SP gen_b;
+      float prob_a;
+    };
 
-  template<typename T, int D>
-  struct BoxMixture : public BoxGenerator<T,D> {
-    virtual CUDAArray<box_t<T,D>> generate(int count, int seed);
-    
-    typename BoxGenerator<T,D>::SP gen_a;
-    typename BoxGenerator<T,D>::SP gen_b;
-    float prob_a;
-  };
-
-
-}
+  } // ::cuBQL::test_rig
+} // ::cuBQL
 
 

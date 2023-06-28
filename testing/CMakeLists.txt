@@ -41,32 +41,32 @@ if (NOT CUBQL_IS_SUBMODULE)
 
   # generate uniformly distributed points in [lower,upper] range
   # (default is [0,1]^3)
-  add_executable(cuBQL_makePoints_uniform makePoints_uniform.cu)
-  target_link_libraries(cuBQL_makePoints_uniform PUBLIC cuBQL_testing)
+#  add_executable(cuBQL_makePoints_uniform makePoints_uniform.cu)
+#  target_link_libraries(cuBQL_makePoints_uniform PUBLIC cuBQL_testing)
 
   # generate a clustered distribution of N points, where we use
   # sqrt(N) clusters whose centers are uniformly distributed in
   # [lower,upper] ([0,1]^3 by default), and then a gaussian
   # distribution around each of those centers.
-  add_executable(cuBQL_makePoints_clustered makePoints_clustered.cu)
-  target_link_libraries(cuBQL_makePoints_clustered PUBLIC cuBQL_testing)
+#  add_executable(cuBQL_makePoints_clustered makePoints_clustered.cu)
+#  target_link_libraries(cuBQL_makePoints_clustered PUBLIC cuBQL_testing)
 
-  add_executable(cuBQL_convert_br convert_br.cu)
-  target_link_libraries(cuBQL_convert_br PUBLIC cuBQL_testing)
+# add_executable(cuBQL_convert_br convert_br.cu)
+# target_link_libraries(cuBQL_convert_br PUBLIC cuBQL_testing)
 
   # generate points on a triangle mesh, using uniform density
-  add_executable(cuBQL_makePoints_sampleOBJ makePoints_sampleOBJ.cu)
-  target_link_libraries(cuBQL_makePoints_sampleOBJ PUBLIC cuBQL_testing)
+#  add_executable(cuBQL_makePoints_sampleOBJ makePoints_sampleOBJ.cu)
+#  target_link_libraries(cuBQL_makePoints_sampleOBJ PUBLIC cuBQL_testing)
 
   # generate list of triangles by reading an obj file
-  add_executable(cuBQL_makeTris_fromOBJ makeTris_fromOBJ.cu)
-  target_link_libraries(cuBQL_makeTris_fromOBJ PUBLIC cuBQL_testing)
+#  add_executable(cuBQL_makeTris_fromOBJ makeTris_fromOBJ.cu)
+#  target_link_libraries(cuBQL_makeTris_fromOBJ PUBLIC cuBQL_testing)
+#
+#  add_executable(cuBQL_makeBoxes_fromPoints makeBoxes_fromPoints.cu)
+#  target_link_libraries(cuBQL_makeBoxes_fromPoints PUBLIC cuBQL_testing)
 
-  add_executable(cuBQL_makeBoxes_fromPoints makeBoxes_fromPoints.cu)
-  target_link_libraries(cuBQL_makeBoxes_fromPoints PUBLIC cuBQL_testing)
-
-  add_executable(cuBQL_makeBoxes_fromTris makeBoxes_fromTris.cu)
-  target_link_libraries(cuBQL_makeBoxes_fromTris PUBLIC cuBQL_testing)
+#  add_executable(cuBQL_makeBoxes_fromTris makeBoxes_fromTris.cu)
+#  target_link_libraries(cuBQL_makeBoxes_fromTris PUBLIC cuBQL_testing)
   
 
 
@@ -82,12 +82,16 @@ if (NOT CUBQL_IS_SUBMODULE)
   target_link_libraries(cuBQL_buildPerf_tris PUBLIC cuBQL_testing)
   target_compile_definitions(cuBQL_buildPerf_tris PUBLIC -DEXPECT_TRIS=1)
 
-  
-  add_executable(cuBQL_fcp fcp.cu)
-  target_link_libraries(cuBQL_fcp PUBLIC cuBQL_testing)
+#  
+# add_executable(cuBQL_fcp fcp.cu)
+# target_link_libraries(cuBQL_fcp PUBLIC cuBQL_testing)
 
-  add_executable(cuBQL_fcpGen fcp-gen.cu)
-  target_link_libraries(cuBQL_fcpGen PUBLIC cuBQL_testing)
+  add_executable(cuBQL_fcpAndKnnPoints fcpAndKnn.cu)
+  target_link_libraries(cuBQL_fcpAndKnnPoints PUBLIC cuBQL_testing)
+
+  add_executable(cuBQL_fcpAndKnnBoxes fcpAndKnn.cu)
+  target_link_libraries(cuBQL_fcpAndKnnBoxes PUBLIC cuBQL_testing)
+  target_compile_definitions(cuBQL_fcpAndKnnBoxes PUBLIC -D USE_BOXES=1)
 
   add_executable(cuBQL_twoLevel twoLevel.cu)
   target_link_libraries(cuBQL_twoLevel PUBLIC cuBQL_testing)

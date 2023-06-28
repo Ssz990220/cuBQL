@@ -16,39 +16,146 @@
 
 #pragma once
 
-#include "cuBQL/bvh.h"
+#include "cuBQL/queries/fcp.h"
 
-#define DO_STATS 1
-#if DO_STATS
-# define STATS(a) a
-
-  struct Stats {
-    int numNodes;
-    int numPrims;
-  };
-#else
-# define STATS(a) 
-#endif
-  
 namespace cuBQL {
 
-  template<int D>
+  /*! HEAP-based implementation of k-nearest neighbors. This
+      implementation guarantted the following:
+
+      - "count" is the number of found items within this struct's
+        items[] list. It does *NOT* guarantee that thees items will be
+        stored in items[0...count]; they may be stored in nay slots
+
+      - maxDist2 is the (current) range of the qhery ball: if K items
+        have been found, this iwll be the distnace to the furtherst of
+        these K items; otherwise it's the initial max query distance
+
+      - if count < K (ie, not all K could be found), then some of the
+        items[] slots may be unused; and those that *are* unsued will
+        have an item ID < 0.
+
+      it does explicitly NOT guarattee that items in the items[] array
+      would be sorted by distance
+
+      it does explicitly NOT guarantee that slots in the items[] array
+      would be used from the front; ie, if count<K items[0] will
+      typically be a INVALID item.
+  */
+  template<int K>
+  struct KNNResults {
+
+    inline __device__ void  clear(float initialMaxDist);
+    inline __device__ float insert(float dist, int ID);
+    inline __device__ float getDist(int i) const;
+    inline __device__ uint32_t getItem(int i) const;
+    float    maxDist2;
+  private:
+    inline __device__ static uint64_t makeItem(float dist, int itemID);
+
+    inline __device__ void printCurrent()
+    {
+      printf("kNearest, count = %i, maxDist2 = %f\n",count,maxDist2);
+      for (int i=0;i<K;i++) {
+        if (i < count)
+          printf("-%5i",i);
+        else
+          printf("-[%3i]",i);
+        printf("\tdist = %f\tID = %i\n",
+               getDist(i),getItem(i));
+      }
+    }
+    
+    int      count;
+    uint64_t items[K];
+  };
+
+  template<int K> __device__
+  void KNNResults<K>::clear(float initialMaxDist)
+  {
+    count = 0;
+#pragma runroll
+    for (int i=0;i<K;i++)
+      items[i] = makeItem(INFINITY,-2);//uint64_t(-1);
+    maxDist2 = initialMaxDist;
+  }
+  
+  template<int K> __device__
+  float KNNResults<K>::insert(float dist, int ID)
+  {
+    if (dist > maxDist2) 
+      return maxDist2;
+    
+    uint64_t item = makeItem(dist,ID);
+    int pos = 0;
+    while (1) {
+      // pos of first child in heap
+      int cc = 2*pos+1;
+      if (cc >= K)
+        // does not have any children
+        break;
+      uint64_t cItem = items[cc];
+
+      int c1 = cc+1;
+      if (c1 < K && items[c1] > cItem) {
+        cc = c1;
+        cItem = items[c1];
+      }
+      
+      if (cItem <= item)
+        break;
+      items[pos] = cItem;
+      pos = cc;
+    }
+    items[pos] = item;
+    count = min(K,count+1);
+    maxDist2 = min(maxDist2,getDist(0));
+    return maxDist2;
+  }
+  
+  template<int K> __device__
+  float KNNResults<K>::getDist(int i) const
+  {
+    return __int_as_float(items[i] >> 32);
+  }
+  
+  template<int K> __device__
+  uint32_t KNNResults<K>::getItem(int i) const
+  {
+    return uint32_t(items[i]);
+  }
+  
+  template<int K> __device__
+  uint64_t KNNResults<K>::makeItem(float dist, int itemID) 
+  {
+    // compiler will turn that into insertfield op
+    return uint32_t(itemID) | (uint64_t(__float_as_uint(dist)) << 32);
+  }
+  
+
+
+
+
+
+
+  template<typename ResultList, int D>
   inline __device__
-  int fcp(const BinaryBVH<float,D> bvh,
+  void knn(ResultList &results,
+           const BinaryBVH<float,D> bvh,
 #if USE_BOXES
-          const box_t<float,D>    *prims,
+           const box_t<float,D>    *prims,
 #else
-          const vec_t<float,D>    *prims,
+           const vec_t<float,D>    *prims,
 #endif
-          const vec_t<float,D>     query,
+           const vec_t<float,D>     query
+           // ,
           /* in: SQUARE of max search distance; out: sqrDist of closest point */
-          float          &maxQueryDistSquare
+          // float          &maxQueryDistSquare
 #if DO_STATS
-          , Stats *d_stats = 0
+          , Stats *d_stats
 #endif
           )
   {
-    int result = -1;
     
     int2 stackBase[32], *stackPtr = stackBase;
     int nodeID = 0;
@@ -72,12 +179,12 @@ namespace cuBQL {
         float dist0 = fSqrDistance(child0.bounds,query);
         float dist1 = fSqrDistance(child1.bounds,query);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
-        if (dist1 <= maxQueryDistSquare) {
+        if (dist1 <= results.maxDist2) {
           float dist = max(dist0,dist1);
           int distBits = __float_as_int(dist);
           *stackPtr++ = make_int2(closeChild^1,distBits);
         }
-        if (min(dist0,dist1) > maxQueryDistSquare) {
+        if (min(dist0,dist1) > results.maxDist2) {
           count = 0;
           break;
         }
@@ -89,55 +196,30 @@ namespace cuBQL {
         numPrims++;
 #endif
         float dist2 = sqrDistance(prims[primID],query);
-        if (dist2 >= maxQueryDistSquare) continue;
-        maxQueryDistSquare = dist2;
-        result             = primID;
+        if (dist2 >= results.maxDist2) continue;
+        results.insert(dist2,primID);
       }
       while (true) {
         if (stackPtr == stackBase) {
 #if DO_STATS
-          if (d_stats) {
-            atomicAdd(&d_stats->numNodes,numNodes);
-            atomicAdd(&d_stats->numPrims,numPrims);
-          }
+          atomicAdd(&d_stats->numNodes,numNodes);
+          atomicAdd(&d_stats->numPrims,numPrims);
 #endif
-          return result;
+          return;
         }
         --stackPtr;
-        if (__int_as_float(stackPtr->y) > maxQueryDistSquare) continue;
+        if (__int_as_float(stackPtr->y) > results.maxDist2) continue;
         nodeID = stackPtr->x;
         break;
       }
     }
   }
 
-
-
-//   // inline __device__
-//   // float3 project(box3f box, float3 point)
-//   // { return max(min(point,box.upper),box.lower); }
   
-//   // inline __device__
-//   // float sqrDistance(box3f box, float3 point)
-//   // { return sqrDistance(project(box,point),point); }
-
-//   // inline __device__
-//   // float sqrDistance(BinaryBVH<float,3>::Node node, float3 point)
-//   // { return sqrDistance(node.bounds,point); }
-
-//   /*! 'fcp' = "find closest point", on a binary BVH. Given an input
-//     query point, and a BVH over point data, find the (index of) the
-//     data point that is closest to the given query point. Function
-//     also takes a maximum query distance; all data points with
-//     distance > this minimum distance will get ignored. If no fcp can
-//     be found in given query radius, -1 will be returned 
-    
-//     Careful, the max query distance is specified as the SQUARE of the
-//     maximum search distance because that'll allow to avoid various
-//     expensive sqrt operations
-//   */
+//   template<
 //   inline __device__
-//   int fcp(const BinaryBVH<float,3> bvh,
+//   int knn(const BinaryBVH<float,3> bvh,
+          
 //           const float3   *dataPoints,
 //           const float3    query,
 //           /* in: SQUARE of max search distance; out: sqrDist of closest point */
@@ -192,39 +274,39 @@ namespace cuBQL {
 // #endif
 //   }
 
-  template<int N>
-  struct ChildOrder {
-    inline __device__ void clear(int i) { v[i] = (uint64_t)-1; }
-    inline __device__ void set(int i, float dist, uint32_t payload)
-    { v[i] = (uint64_t(__float_as_int(dist))<<32) | payload; }
+//   template<int N>
+//   struct ChildOrder {
+//     inline __device__ void clear(int i) { v[i] = (uint64_t)-1; }
+//     inline __device__ void set(int i, float dist, uint32_t payload)
+//     { v[i] = (uint64_t(__float_as_int(dist))<<32) | payload; }
     
-    uint64_t v[N];
-  };
+//     uint64_t v[N];
+//   };
   
-  template<int N>
-  inline __device__ void sort(ChildOrder<N> &children)
-  {
-#pragma unroll
-    for (int i=N-1;i>0;--i) {
-#pragma unroll
-      for (int j=0;j<i;j++) {
-        uint64_t c0 = children.v[j+0];
-        uint64_t c1 = children.v[j+1];
-        children.v[j+0] = min(c0,c1);
-        children.v[j+1] = max(c0,c1);
-      }
-    }
-  }
+//   template<int N>
+//   inline __device__ void sort(ChildOrder<N> &children)
+//   {
+// #pragma unroll
+//     for (int i=N-1;i>0;--i) {
+// #pragma unroll
+//       for (int j=0;j<i;j++) {
+//         uint64_t c0 = children.v[j+0];
+//         uint64_t c1 = children.v[j+1];
+//         children.v[j+0] = min(c0,c1);
+//         children.v[j+1] = max(c0,c1);
+//       }
+//     }
+//   }
   
-//   /*! 'fcp' = "find closest point", on a binary BVH. Given an input
+//   /*! 'knn' = "find closest point", on a binary BVH. Given an input
 //     query point, and a BVH over point data, find the (index of) the
 //     data point that is closest to the given query point. Function
 //     also takes a maximum query distance; all data points with
-//     distance > this minimum distance will get ignored. If no fcp can
+//     distance > this minimum distance will get ignored. If no knn can
 //     be found in given query radius, -1 will be returned */
 //   template<int N>
 //   inline __device__
-//   int fcp(/*! the bvh that is built over hte points */
+//   int knn(/*! the bvh that is built over hte points */
 //           const WideBVH<float,3,N> bvh,
           
 //           /*! the data points that the BVH is actually built over */
@@ -311,11 +393,11 @@ namespace cuBQL {
 //   }
 
 
-//   /*! for convenience, a fcp variant that doesn't have a max query
+//   /*! for convenience, a knn variant that doesn't have a max query
 //       dist, and returns only the int */
 //   template<typename bvh_t>
 //   inline __device__
-//   int fcp(/*! the bvh that is built over hte points */
+//   int knn(/*! the bvh that is built over hte points */
 //           bvh_t bvh,
           
 //           /*! the data points that the BVH is actually built over */
@@ -326,7 +408,7 @@ namespace cuBQL {
 //           const float3 query)
 //   {
 //     float sqrMaxQueryDist = INFINITY;
-//     return fcp(bvh,dataPoints,query);
+//     return knn(bvh,dataPoints,query);
 //   }
 } // ::cuBQL
 

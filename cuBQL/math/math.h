@@ -14,25 +14,24 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "cuBQL/math/box.h"
+#pragma once
 
-template<typename T, int D>
-void foo()
-{
-  using vec_t = cuBQL::vec_t<T,D>;
-  using box_t = cuBQL::box_t<T,D>;
+#include "cuBQL/math/common.h"
 
-  box_t b0 __attribute__((unused)) ;
-  b0.set_empty();
+namespace cuBQL {
 
-  b0.grow(b0.center());
+  using ::min;
+  using ::max;
+
+  using ::make_float3;
+  
+  template<int N> struct log_of;
+  template<> struct log_of< 2> { enum { value = 1 }; };
+  template<> struct log_of< 4> { enum { value = 2 }; };
+  template<> struct log_of< 8> { enum { value = 3 }; };
+  template<> struct log_of<16> { enum { value = 4 }; };
+
+  /*! square of a value */
+  inline __both__ float sqr(float f) { return f*f; }
 }
 
-int main(int, char **)
-{
-  foo<float,2>();
-  foo<float,3>();
-  foo<float,4>();
-  foo<float,CUBQL_TEST_N>();
-  return 0;
-}

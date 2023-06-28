@@ -16,7 +16,7 @@
 
 #include "testing/helper/Generator.h"
 
-using namespace testing;
+using namespace cuBQL::test_rig;
 
 int main(int ac, char **av)
 {

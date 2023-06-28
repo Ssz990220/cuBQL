@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "cuBQL/common/common.h"
+#include "cuBQL/math/math.h"
 
 namespace cuBQL {
 
@@ -27,8 +27,12 @@ namespace cuBQL {
     T v[N];
   };
 
+  /*! defines a "invalid" type to allow for using as a paramter where
+      no "actual" type for something exists. e.g., a vec<float,4> has
+      a cuda equivalent type of float4, but a vec<float,5> does not */
   struct invalid_t {};
-  /*! definesthe "cuda equivalent type" for a given vector type; i.e.,
+  
+  /*! defines the "cuda equivalent type" for a given vector type; i.e.,
       a vec3f=vec_t<float,3> has a equivalent cuda built-in type of
       float3. to also allow vec_t's that do not have a cuda
       equivalent, let's also create a 'invalid_t' to be used by
@@ -239,7 +243,9 @@ namespace cuBQL {
       sum += fSqrLength(a[i]-b[i]);
     return sum;
   }
-  
+
+  using vec2f = vec_t<float,2>;
   using vec3f = vec_t<float,3>;
+  using vec4f = vec_t<float,4>;
 }
 

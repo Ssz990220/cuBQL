@@ -82,12 +82,15 @@ endif()
 # in one of his/her source files
 add_library(cuBQL_interface INTERFACE)
 target_sources(cuBQL_interface INTERFACE
-  # "public" stuff
+  # main public "interface" to this library
   cuBQL/bvh.h
   cuBQL/queries/fcp.h
+  # general math struff to make public stuff work
+  cuBQL/math/common.h
+  cuBQL/math/math.h
+  cuBQL/math/vec.h
+  cuBQL/math/box.h
   # internal stuff
-  cuBQL/common/common.h
-  cuBQL/common/math.h
   cuBQL/impl/builder_common.h
   cuBQL/impl/sm_builder.h
   cuBQL/impl/sah_builder.h

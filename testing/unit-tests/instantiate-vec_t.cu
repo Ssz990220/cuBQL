@@ -14,7 +14,7 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "cuBQL/common/vec.h"
+#include "cuBQL/math/vec.h"
 
 using namespace cuBQL;
 

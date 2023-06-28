@@ -139,7 +139,7 @@ namespace cuBQL {
         float widestWidth = 0.f;
         int   widestDim   = -1;
 #pragma unroll
-        for (int d=0;d<3;d++) {
+        for (int d=0;d<D;d++) {
           float width = in.centBounds.get_upper(d) - in.centBounds.get_lower(d);
           if (width <= widestWidth)
             continue;
@@ -290,11 +290,15 @@ namespace cuBQL {
           (buildState,
            nodeStates,tempNodes,numNodes,
            buildConfig);
+
+        CUBQL_CUDA_CALL(StreamSynchronize(s));
         
         numDone = numNodes;
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
+
+        CUBQL_CUDA_CALL(StreamSynchronize(s));
       }
       // ==================================================================
       // sort {item,nodeID} list

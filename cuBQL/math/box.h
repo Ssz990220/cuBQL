@@ -16,10 +16,12 @@
 
 #pragma once
 
-#include "cuBQL/common/vec.h"
+#include "cuBQL/math/vec.h"
 
 namespace cuBQL {
 
+  /*! @{ defines what box.lower/box.upper coordinate values to use for
+      indicating an "empty box" of the given type */
   template<typename scalar_t>
   inline __both__ scalar_t empty_box_lower_value();
   template<typename scalar_t>
@@ -27,8 +29,12 @@ namespace cuBQL {
 
   template<> inline __both__ float empty_box_lower_value<float>() { return +INFINITY; }
   template<> inline __both__ float empty_box_upper_value<float>() { return -INFINITY; }
+  /*! @} */
   
-  
+  /*! a axis-aligned bounding box, made up of a 'lower' and 'upper'
+      vector bounding it. any box with any lower[k] > upper[k] is to
+      be treated as a "empty box" (e.g., for a bvh that might indicate
+      a primitive that we want to ignore from the build) */
   template<typename _scalar_t, int _numDims>
   struct box_t {
     enum { numDims = _numDims };
@@ -37,9 +43,9 @@ namespace cuBQL {
 
     using cuda_vec_t = typename cuda_eq_t<scalar_t,numDims>::type;
     
-    inline __both__ box_t &grow(vec_t v)
+    inline __both__ box_t &grow(const vec_t &v)
     { lower = min(lower,v); upper = max(upper,v); return *this; }
-    inline __both__ box_t &grow(box_t other)
+    inline __both__ box_t &grow(const box_t &other)
     { lower = min(lower,other.lower); upper = max(upper,other.upper); return *this; }
     inline __both__ box_t &set_empty()
     {
@@ -77,6 +83,18 @@ namespace cuBQL {
     vec_t lower, upper;
   };
 
+  using box3f = box_t<float,3>;
+
+  inline __both__
+  float surfaceArea(box3f box)
+  {
+    const float sx = box.upper[0]-box.lower[0];
+    const float sy = box.upper[1]-box.lower[1];
+    const float sz = box.upper[2]-box.lower[2];
+    return sx*sy + sx*sz + sy*sz;
+  }
+
+  
   template<typename T, int D> inline __both__
   typename dot_result_t<T>::type sqrDistance(box_t<T,D> box, vec_t<T,D> point)
   {
@@ -98,7 +116,31 @@ namespace cuBQL {
   template<typename T, int D> inline __both__
   box_t<T,D> &grow(box_t<T,D> &b, box_t<T,D> ob)
   { b.grow(ob); return b; }
+
+
+
+
+  template<typename T, int D> inline __both__
+  box_t<T,D> make_box(vec_t<T,D> v) { return {v,v}; }
   
-  using box3f = box_t<float,3>;
+  
+  // inline __both__
+  // box3f make_box3f(vec3f lower, vec3f upper) { return {lower,upper}; }
+  // /*! deprecated...*/
+  // inline __both__
+  // box3f make_box3f(float3 lower, float3 upper) { return {make<vec3f>(lower),make<vec3f>(upper)}; }
+                   
+  // inline __both__
+  // void grow(box3f &box, const vec3f &other) { box.grow(other); }
+  
+  // inline __both__
+  // void grow(box3f &box, const box3f &other) { box.grow(other); }
+    
+  // inline __both__
+  // float3 centerOf(box3f box)
+  // {
+  //   return 0.5f * (box.lower + box.upper);
+  // }
+
 }
 

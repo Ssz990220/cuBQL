@@ -18,29 +18,24 @@
 #include "cuBQL/bvh.h"
 #include "cuBQL/computeSAH.h"
 #include "cuBQL/queries/fcp.h"
+#include "cuBQL/queries/knn.h"
 
 #include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
 #include "testing/helper/Generator.h"
+#include <fstream>
+#include <sstream>
 
-namespace testing {
+#define PLOT_BOXES 1
 
-#define DO_STATS 1
+namespace cuBQL {
+  namespace test_rig {
 
-#if DO_STATS
-# define STATS(a) a
-
-  struct Stats {
-    int numNodes;
-    int numPrims;
-  };
-#else
-# define STATS(a) 
-#endif
-  
   std::vector<float> reference;
   
   struct TestConfig {
+    /* knn_k = 0 means fcp, every other number means knn-query with this k */
+    int knn_k = 0;
     float maxTimeThreshold = 10.f;
     float maxQueryRadius = INFINITY;
 
@@ -62,6 +57,8 @@ namespace testing {
     exit(error.empty()?0:1);
   }
 
+#if USE_BOXES
+#else
   template<int D>
   __global__
   void makeBoxes(cuBQL::box_t<float,D> *boxes,
@@ -74,6 +71,7 @@ namespace testing {
     boxes[tid].lower = point;
     boxes[tid].upper = point;
   }
+#endif
 
   __global__
   void resetResults(float *results, int numQueries)
@@ -84,85 +82,62 @@ namespace testing {
   }
 
 
-  template<int D>
-  inline __device__
-  int fcp(const BinaryBVH<float,D> bvh,
-          const vec_t<float,D>    *dataPoints,
-          const vec_t<float,D>     query,
-          /* in: SQUARE of max search distance; out: sqrDist of closest point */
-          float          &maxQueryDistSquare
-#if DO_STATS
-          , Stats *d_stats
-#endif
-          )
+  
+  
+  template<typename T, int D>
+  void plotBoxes(const CUDAArray<box_t<T,D>> &d_boxes)
   {
-    int result = -1;
-    
-    int2 stackBase[32], *stackPtr = stackBase;
-    int nodeID = 0;
-    int offset = 0;
-    int count  = 0;
-#if DO_STATS
-    int numNodes = 0, numPrims = 0;
-#endif
-    while (true) {
-      while (true) {
-        offset = bvh.nodes[nodeID].offset;
-        count  = bvh.nodes[nodeID].count;
-#if DO_STATS
-        numNodes++;
-#endif
-        if (count>0)
-          // leaf
-          break;
-        typename BinaryBVH<float,D>::Node child0 = bvh.nodes[offset+0];
-        typename BinaryBVH<float,D>::Node child1 = bvh.nodes[offset+1];
-        float dist0 = fSqrDistance(child0.bounds,query);
-        float dist1 = fSqrDistance(child1.bounds,query);
-        int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
-        if (dist1 <= maxQueryDistSquare) {
-          float dist = max(dist0,dist1);
-          int distBits = __float_as_int(dist);
-          *stackPtr++ = make_int2(closeChild^1,distBits);
+    if (getenv("CUBQL_PLOT_BOXES") == 0)
+      return;
+    std::cout << "plotting boxes..." << std::endl;
+    std::vector<box_t<T,D>> boxes = d_boxes.download();
+    for (int u=0;u<D;u++) {
+      for (int v=u+1;v<D;v++) {
+        std::stringstream fileName;
+        fileName << "boxes_" << char('x'+u) << "_" << char('x'+v) << ".xfig";
+        std::ofstream file(fileName.str());
+        file << "#FIG 3.2  Produced by xfig version 3.2.7b" << std::endl;
+        file << "Landscape" << std::endl;
+        file << "Center" << std::endl;
+        file << "Metric" << std::endl;
+        file << "A4" << std::endl;
+        file << "100.00" << std::endl;
+        file << "Single" << std::endl;
+        file << "-2" << std::endl;
+        file << "1200 2" << std::endl;
+
+        float scale = 10000.f;
+        for (auto box : boxes) {
+          int x0 = int(scale * box.lower[u]);
+          int y0 = int(scale * box.lower[v]);
+          int x1 = int(scale * box.upper[u]);
+          int y1 = int(scale * box.upper[v]);
+          int thick = 3;
+          if (x1-x0 < thick) x1 = x0+thick;
+          if (y1-y0 < thick) y1 = y0+thick;
+          file << "2 2 0 " << thick << " 0 7 50 -1 -1 0.000 0 0 -1 0 0 5" << std::endl;
+          file << "\t";
+          file << " " << x0 << " " << y0;
+          file << " " << x1 << " " << y0;
+          file << " " << x1 << " " << y1;
+          file << " " << x0 << " " << y1;
+          file << " " << x0 << " " << y0;
+          file << std::endl;
         }
-        if (min(dist0,dist1) > maxQueryDistSquare) {
-          count = 0;
-          break;
-        }
-        nodeID = closeChild;
-      }
-      for (int i=0;i<count;i++) {
-        int primID = bvh.primIDs[offset+i];
-#if DO_STATS
-        numPrims++;
-#endif
-        float dist2 = sqrDistance(dataPoints[primID],query);
-        if (dist2 >= maxQueryDistSquare) continue;
-        maxQueryDistSquare = dist2;
-        result             = primID;
-      }
-      while (true) {
-        if (stackPtr == stackBase) {
-#if DO_STATS
-          atomicAdd(&d_stats->numNodes,numNodes);
-          atomicAdd(&d_stats->numPrims,numPrims);
-#endif
-          return result;
-        }
-        --stackPtr;
-        if (__int_as_float(stackPtr->y) > maxQueryDistSquare) continue;
-        nodeID = stackPtr->x;
-        break;
       }
     }
   }
-
   
+  // ------------------------------------------------------------------
   template<int D, typename bvh_t>
   __global__
   void runFCP(float        *results,
               bvh_t         bvh,
-              const vec_t<float,D> *dataPoints,
+#if USE_BOXES
+              const box_t<float,D>    *prims,
+#else
+              const vec_t<float,D>    *prims,
+#endif
               const vec_t<float,D> *queries,
               float         maxRadius,
               int           numQueries
@@ -176,7 +151,7 @@ namespace testing {
 
     const vec_t<float,D> query = queries[tid];
     float sqrMaxQueryDist = maxRadius*maxRadius;
-    int res = fcp(bvh,dataPoints,query,
+    int res = fcp(bvh,prims,query,
                   /* fcp kernel expects SQUARE of radius */
                   sqrMaxQueryDist
 #if DO_STATS
@@ -189,34 +164,85 @@ namespace testing {
       // results[tid] = sqrDistance(dataPoints[res],query);
       results[tid] = sqrMaxQueryDist;
   }
+
+
+  // ------------------------------------------------------------------
+  template<int K, int D, typename bvh_t>
+  __global__
+  void runKNN(float        *results,
+              bvh_t         bvh,
+#if USE_BOXES
+              const box_t<float,D>    *prims,
+#else
+              const vec_t<float,D>    *prims,
+#endif
+              const vec_t<float,D> *queries,
+              float         maxRadius,
+              int           numQueries
+#if DO_STATS
+              ,Stats *d_stats
+#endif
+              )
+  {
+    int tid = threadIdx.x+blockIdx.x*blockDim.x;
+    if (tid >= numQueries) return;
+
+    KNNResults<K> kNearest;
+    kNearest.clear(maxRadius*maxRadius);
+    const vec_t<float,D> query = queries[tid];
+    knn(kNearest,bvh,prims,query
+        /* fcp kernel expects SQUARE of radius */
+#if DO_STATS
+        ,d_stats
+#endif
+        );
+    results[tid] = kNearest.maxDist2;
+  }
+  
+
+
+  // ------------------------------------------------------------------
   
   template<int D, typename bvh_t=cuBQL::BinaryBVH<float,D>>
   void testFCP(TestConfig testConfig,
-              BuildConfig buildConfig)
+               BuildConfig buildConfig)
   {
     using point_t = cuBQL::vec_t<float,D>;
     using box_t = cuBQL::box_t<float,D>;
-    typename PointGenerator<float,D>::SP dataGenerator
-      = PointGenerator<float,D>::createFromString(testConfig.dataGen);
     typename PointGenerator<float,D>::SP queryGenerator
       = PointGenerator<float,D>::createFromString(testConfig.queryGen);
     // std::vector<point_t> h_dataPoints;
     // std::vector<point_t> h_queryPoints;
 
-    CUDAArray<point_t> dataPoints
-      = dataGenerator->generate(testConfig.dataCount,0x1345);
-    
     CUDAArray<point_t> queryPoints
       = queryGenerator->generate(testConfig.queryCount,0x23423498);
     // dataPoints.upload(h_dataPoints);
 
-    CUDAArray<box_t> boxes(dataPoints.size());
+#if USE_BOXES
+    typename BoxGenerator<float,D>::SP dataGenerator
+      = BoxGenerator<float,D>::createFromString(testConfig.dataGen);
+    CUDAArray<box_t> data
+      = dataGenerator->generate(testConfig.dataCount,0x1345);
+    auto &boxes = data;
+#else
+    typename PointGenerator<float,D>::SP dataGenerator
+      = PointGenerator<float,D>::createFromString(testConfig.dataGen);
+    CUDAArray<point_t> data
+      = dataGenerator->generate(testConfig.dataCount,0x1345);
+    
+    CUDAArray<box_t> boxes(data.size());
     {
       int bs = 256;
-      int nb = divRoundUp((int)dataPoints.size(),bs);
-      makeBoxes<<<nb,bs>>>(boxes.data(),dataPoints.data(),(int)dataPoints.size());
+      int nb = divRoundUp((int)data.size(),bs);
+      makeBoxes<<<nb,bs>>>(boxes.data(),data.get(),(int)data.size());
     };
+#endif
 
+
+#if PLOT_BOXES
+    plotBoxes(boxes);
+#endif
+    
     // cuBQL::BinaryBVH
     bvh_t bvh;
     cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
@@ -240,17 +266,47 @@ namespace testing {
               << std::endl;
     // ------------------------------------------------------------------
     resetResults<<<divRoundUp(numQueries,128),128>>>(closest.data(),numQueries);
-    runFCP<<<divRoundUp(numQueries,128),128>>>
-      (closest.data(),
-       bvh,
-       dataPoints.data(),
-       queryPoints.data(),
-       testConfig.maxQueryRadius,
-       numQueries
+    switch(testConfig.knn_k) {
+    case 0:
+      // no knn, just fcp
+      runFCP<<<divRoundUp(numQueries,128),128>>>
+        (closest.data(),bvh,data.get(),queryPoints.get(),
+         testConfig.maxQueryRadius,numQueries
 #if DO_STATS
-       ,stats.get()
+         ,stats.get()
 #endif
-       );
+         );
+      break;
+    case 4:
+      runKNN<4><<<divRoundUp(numQueries,128),128>>>
+        (closest.data(),bvh,data.get(),queryPoints.get(),
+         testConfig.maxQueryRadius,numQueries
+#if DO_STATS
+         ,stats.get()
+#endif
+         );
+      break;
+    case 16:
+      runKNN<16><<<divRoundUp(numQueries,128),128>>>
+        (closest.data(),bvh,data.get(),queryPoints.get(),
+         testConfig.maxQueryRadius,numQueries
+#if DO_STATS
+         ,stats.get()
+#endif
+         );
+      break;
+    case 64:
+      runKNN<64><<<divRoundUp(numQueries,128),128>>>
+        (closest.data(),bvh,data.get(),queryPoints.get(),
+         testConfig.maxQueryRadius,numQueries
+#if DO_STATS
+         ,stats.get()
+#endif
+         );
+      break;
+    default:
+      throw std::runtime_error("un-supported k="+std::to_string(testConfig.knn_k)+" for knn queries...");
+    };
     CUBQL_CUDA_SYNC_CHECK();
 #if DO_STATS
     PRINT(stats.get()->numNodes);
@@ -291,8 +347,8 @@ namespace testing {
         runFCP<<<divRoundUp(numQueries,128),128>>>
           (closest.data(),
            bvh,
-           dataPoints.data(),
-           queryPoints.data(),
+           data.get(),
+           queryPoints.get(),
            testConfig.maxQueryRadius,
            numQueries
 #if DO_STATS
@@ -310,9 +366,11 @@ namespace testing {
       numPerRun*=2;
     };
   }
-}
+    
+  } // ::cuBQL::test_rig
+} // ::cuBQL
 
-using namespace testing;
+using namespace ::cuBQL::test_rig;
 
 int main(int ac, char **av)
 {
@@ -331,9 +389,10 @@ int main(int ac, char **av)
     } else if (arg == "-qc" || arg == "--query-count") {
       testConfig.queryCount = std::stoi(av[++i]);
     } else if (arg == "-nd" || arg == "--num-dims") {
-      if (av[i+1] == "n")
+      if (std::string(av[i+1]) == "n") {
         numDims = CUBQL_TEST_N;
-      else
+        ++i;
+      } else
         numDims = std::stoi(av[++i]);
     } else if (arg == "-bt" || arg == "--bvh-type")
       bvhType = av[++i];
@@ -343,6 +402,8 @@ int main(int ac, char **av)
       buildConfig.enableELH();
     else if (arg == "-mr" || arg == "-mqr" || arg == "--max-query-radius")
       testConfig.maxQueryRadius = std::stof(av[++i]);
+    else if (arg == "-k" || arg == "--knn-k")
+      testConfig.knn_k = std::stoi(av[++i]);
     else if (arg == "--check-reference") {
       testConfig.referenceFileName = av[++i];
       testConfig.make_reference = false;
@@ -371,22 +432,5 @@ int main(int ac, char **av)
 #endif
   else
     throw std::runtime_error("unsupported number of dimensions "+std::to_string(numDims));
-  // if (!referenceFileName.empty() && !make_reference)
-  //   reference = loadData<float>(referenceFileName);
-
-  // if (bvhType == "binary")
-  //   testing::testFCP<BinaryBVH<float,3>>(dataPoints,queryPoints,buildConfig,testConfig);
-  // // else if (bvhType == "bvh2")
-  // //   testing::testFCP<WideBVH<float,3,2>>(dataPoints,queryPoints,buildConfig,testConfig);
-  // else if (bvhType == "bvh4")
-  //   testing::testFCP<WideBVH<float,3,4>>(dataPoints,queryPoints,buildConfig,testConfig);
-  // else if (bvhType == "bvh8")
-  //   testing::testFCP<WideBVH<float,3,8>>(dataPoints,queryPoints,buildConfig,testConfig);
-  // else
-  //   throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
-
-  // if (make_reference) {
-  //   std::cout << "saving reference data to " << referenceFileName << std::endl;
-  //   saveData(reference,referenceFileName);
   return 0;
 }
