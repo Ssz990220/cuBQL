@@ -67,7 +67,7 @@ namespace cuBQL {
     inline __device__
     float edgeLengths(box_t<T,D> box)
     {
-#if 1
+#if 0
       T sum = T(0);
       for (int i=0;i<D;i++) {
         sum += (box.upper[i] - box.lower[i]);
