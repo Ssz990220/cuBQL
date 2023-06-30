@@ -21,7 +21,7 @@ using namespace cuBQL::test_rig;
 
 std::string outFileName = "a.svg";
 std::string generatorString = "uniform";
-int numPoints = 10000;
+int dataCount = 10000;
 
 int main(int ac, char **av)
 {
@@ -31,23 +31,27 @@ int main(int ac, char **av)
       generatorString = arg;
     else if (arg == "-o")
       outFileName = av[++i];
-    else if (arg == "-n" || arg == "-np" || arg == "--num-pints")
-      numPoints = std::stoi(av[++i]);
+    else if (arg == "-dc" || arg == "--data-count")
+      dataCount = std::stoi(av[++i]);
+    else if (arg == "-dg" || arg == "--data-generator")
+      generatorString = arg;
     else
       throw std::runtime_error("unknown cmd-line arg '"+arg+"'");
   }
   
   typename PointGenerator<float,2>::SP gen
     = PointGenerator<float,2>::createFromString(generatorString);
-  CUDAArray<vec2f> d_points = gen->generate(numPoints,0);
+  CUDAArray<vec2f> d_points = gen->generate(dataCount,0);
   
   std::vector<vec2f> points = d_points.download();
   box2f bounds;
   for (auto pt : points)
     bounds.grow(pt);
   float sz = max(bounds.size().x,bounds.size().y);
-  for (auto &pt : points)
+  for (auto &pt : points) {
     pt = (pt - bounds.lower) * (1.f / sz);
+    pt.y = 1.f - pt.y;
+  }
 #if 1
   
   std::ofstream file(outFileName);
@@ -87,23 +91,4 @@ int main(int ac, char **av)
     file << std::endl;
   }
 #endif
-  
-  // float scale = 10000.f;
-  // for (auto box : boxes) {
-  //   int x0 = int(scale * box.lower[u]);
-  //   int y0 = int(scale * box.lower[v]);
-  //   int x1 = int(scale * box.upper[u]);
-  //   int y1 = int(scale * box.upper[v]);
-  //   int thick = 3;
-  //   if (x1-x0 < thick) x1 = x0+thick;
-  //   if (y1-y0 < thick) y1 = y0+thick;
-  //   file << "2 2 0 " << thick << " 0 7 50 -1 -1 0.000 0 0 -1 0 0 5" << std::endl;
-  //   file << "\t";
-  //   file << " " << x0 << " " << y0;
-  //   file << " " << x1 << " " << y0;
-  //   file << " " << x1 << " " << y1;
-  //   file << " " << x0 << " " << y1;
-  //   file << " " << x0 << " " << y0;
-  //   file << std::endl;
-  // }
 }

@@ -49,7 +49,7 @@ namespace cuBQL {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
         // builder:
-        buildConfig.makeLeafThreshold = 8;
+        buildConfig.makeLeafThreshold = 1;
       gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s);
     }
     gpuBuilder_impl::refit(bvh,boxes,s);

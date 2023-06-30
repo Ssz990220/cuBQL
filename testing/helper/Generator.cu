@@ -36,7 +36,7 @@ namespace cuBQL {
         }
       
         std::stringstream ss;
-        if (strchr("{}():,",*curr)) {
+        if (strchr("[]{}():,",*curr)) {
           ss << *curr++;
         } else if (isalnum(*curr) || *curr && strchr("+-.",*curr)) {
           while (isalnum(*curr) || *curr && strchr("+-.",*curr)) {
@@ -51,13 +51,39 @@ namespace cuBQL {
         return ss.str();
       }
     };
-  
+
     template<typename T> inline T to_scalar(const std::string &s);
     template<> inline float to_scalar<float>(const std::string &s)
     { return std::stof(s); }
     template<> inline int to_scalar<int>(const std::string &s)
     { return std::stoi(s); }
 
+    template<typename T, int D>
+    vec_t<T,D> parseVector(const char *&curr)
+    {
+      const char *next = 0;
+      std::string tok = tokenizer::findFirst(curr,next);
+      assert(tok != "");
+      curr = next;
+      if (tok == "[") {
+        std::vector<T> values;
+        while(1) {
+          tok = tokenizer::findFirst(curr,next);
+          assert(tok != "");
+          curr = next;
+          if (tok == "]") break;
+          values.push_back(to_scalar<T>(tok));
+          std::string tok = tokenizer::findFirst(curr,next);
+        }
+        assert(!values.empty());
+        vec_t<float,D> ret;
+        for (int i=0;i<D;i++)
+          ret[i] = values[i % values.size()];
+        return ret;
+      } else
+        return vec_t<float,D>(std::stof(tok));
+    }
+    
     // ==================================================================
     // point generator base
     // ==================================================================
@@ -76,6 +102,8 @@ namespace cuBQL {
         gen = std::make_shared<ClusteredPointGenerator<T,D>>();
       else if (type == "nrooks")
         gen = std::make_shared<NRooksPointGenerator<T,D>>();
+      else if (type == "mixture")
+        gen = std::make_shared<MixturePointGenerator<T,D>>();
       else if (type == "remap")
         gen = std::make_shared<RemapPointGenerator<T,D>>();
       else
@@ -300,19 +328,21 @@ namespace cuBQL {
     template<typename T, int D>
     void RemapPointGenerator<T,D>::parse(const char *&currentParsePos)
     {
-      const char *next = 0;
-      for (int d=0;d<D;d++) {
-        std::string tok = tokenizer::findFirst(currentParsePos,next);
-        assert(tok != "");
-        lower[d] = to_scalar<T>(tok);
-        currentParsePos = next;
-      }
-      for (int d=0;d<D;d++) {
-        std::string tok = tokenizer::findFirst(currentParsePos,next);
-        assert(tok != "");
-        upper[d] = to_scalar<T>(tok);
-        currentParsePos = next;
-      }
+      // const char *next = 0;
+      // for (int d=0;d<D;d++) {
+      //   std::string tok = tokenizer::findFirst(currentParsePos,next);
+      //   assert(tok != "");
+      //   lower[d] = to_scalar<T>(tok);
+      //   currentParsePos = next;
+      // }
+      // for (int d=0;d<D;d++) {
+      //   std::string tok = tokenizer::findFirst(currentParsePos,next);
+      //   assert(tok != "");
+      //   upper[d] = to_scalar<T>(tok);
+      //   currentParsePos = next;
+      // }
+      lower = parseVector<T,D>(currentParsePos);
+      upper = parseVector<T,D>(currentParsePos);
       source = PointGenerator<T,D>::createAndParse(currentParsePos);
     }
 
@@ -371,19 +401,21 @@ namespace cuBQL {
     template<typename T, int D>
     void RemapBoxGenerator<T,D>::parse(const char *&currentParsePos)
     {
-      const char *next = 0;
-      for (int d=0;d<D;d++) {
-        std::string tok = tokenizer::findFirst(currentParsePos,next);
-        assert(tok != "");
-        lower[d] = to_scalar<T>(tok);
-        currentParsePos = next;
-      }
-      for (int d=0;d<D;d++) {
-        std::string tok = tokenizer::findFirst(currentParsePos,next);
-        assert(tok != "");
-        upper[d] = to_scalar<T>(tok);
-        currentParsePos = next;
-      }
+      // const char *next = 0;
+      lower = parseVector<T,D>(currentParsePos);
+      upper = parseVector<T,D>(currentParsePos);
+      // for (int d=0;d<D;d++) {
+      //   std::string tok = tokenizer::findFirst(currentParsePos,next);
+      //   assert(tok != "");
+      //   lower[d] = to_scalar<T>(tok);
+      //   currentParsePos = next;
+      // }
+      // for (int d=0;d<D;d++) {
+      //   std::string tok = tokenizer::findFirst(currentParsePos,next);
+      //   assert(tok != "");
+      //   upper[d] = to_scalar<T>(tok);
+      //   currentParsePos = next;
+      // }
       source = BoxGenerator<T,D>::createAndParse(currentParsePos);
     }
 
@@ -436,7 +468,6 @@ namespace cuBQL {
       const char *next = 0;
       while (true) {
         const std::string tag = tokenizer::findFirst(currentParsePos,next);
-        PING; PRINT(tag); PRINT(currentParsePos); PRINT(next);
         if (tag == "")
           break;
 
@@ -455,7 +486,6 @@ namespace cuBQL {
           currentParsePos = next;
           
           std::string scale = tokenizer::findFirst(currentParsePos,next);
-          PING; PRINT(scale); PRINT(next);
           assert(scale != "");
           currentParsePos = next;
           gaussianSize.scale = std::stof(scale); 
@@ -852,14 +882,78 @@ namespace cuBQL {
       std::string prob = tokenizer::findFirst(currentParsePos,next);
       currentParsePos = next;
       
-      PRINT(prob);
       if (prob == "") throw std::runtime_error("no mixture probabilty specified");
 
       prob_a = std::stof(prob);
-      PING; PRINT(currentParsePos);
       gen_a = BoxGenerator<T,D>::createAndParse(currentParsePos);
-      PING; PRINT(currentParsePos);
       gen_b = BoxGenerator<T,D>::createAndParse(currentParsePos);
+    }
+    
+    template<typename T, int D>
+    __global__ void mixKernel(vec_t<T,D> *out, int outCount,
+                              float prob_a,
+                              int seed,
+                              const vec_t<T,D> *a, int aCount,
+                              const vec_t<T,D> *b, int bCount)
+    {
+      int tid = threadIdx.x+blockIdx.x*blockDim.x;
+      if (tid >= outCount) return;
+      
+      vec_t<T,D> &mine = out[tid];
+      LCG<8> rng(seed,tid);
+      
+      bool use_a
+        = (prob_a < 1.f)
+        ? (rng() < prob_a)
+        : (tid < (int)prob_a);
+      const vec_t<T,D> *in = (use_a ? a : b);
+      int inCount = (use_a ? aCount : bCount);
+      
+      int which
+                           = (inCount == outCount)
+                           ? tid
+                           : (rng.ui32() & inCount);
+      mine = in[which];
+    }
+    
+    // ==================================================================
+    /*! "mixture" generator - generates a new distributoin based by
+      randomly picking between two input distributions */
+    template<typename T, int D>
+    CUDAArray<vec_t<T,D>> MixturePointGenerator<T,D>::generate(int numRequested, int seed)
+    {
+      assert(gen_a);
+      assert(gen_b);
+      CUDAArray<vec_t<T,D>>  pointes_a
+        = gen_a->generate(numRequested,3*seed+0);
+      CUDAArray<vec_t<T,D>>  pointes_b
+        = gen_b->generate(numRequested,3*seed+1);
+
+      CUDAArray<vec_t<T,D>>  pointes(numRequested);
+      
+      int bs = 128;
+      int nb = divRoundUp(numRequested,bs);
+      mixKernel<<<nb,bs>>>(pointes.data(),pointes.size(),
+                           prob_a,
+                           3*seed+2,
+                           pointes_a.data(),pointes_a.size(),
+                           pointes_b.data(),pointes_b.size());
+      return pointes;
+    }
+    
+    template<typename T, int D>
+    void MixturePointGenerator<T,D>::parse(const char *&currentParsePos)
+    {
+      const char *next = 0;
+
+      std::string prob = tokenizer::findFirst(currentParsePos,next);
+      currentParsePos = next;
+      
+      if (prob == "") throw std::runtime_error("no mixture probabilty specified");
+
+      prob_a = std::stof(prob);
+      gen_a = PointGenerator<T,D>::createAndParse(currentParsePos);
+      gen_b = PointGenerator<T,D>::createAndParse(currentParsePos);
     }
     
   } // ::cuBQL::test_rig

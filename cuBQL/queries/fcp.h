@@ -72,7 +72,7 @@ namespace cuBQL {
         float dist0 = fSqrDistance(child0.bounds,query);
         float dist1 = fSqrDistance(child1.bounds,query);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
-        if (dist1 <= maxQueryDistSquare) {
+        if (dist1 < maxQueryDistSquare) {
           float dist = max(dist0,dist1);
           int distBits = __float_as_int(dist);
           *stackPtr++ = make_int2(closeChild^1,distBits);

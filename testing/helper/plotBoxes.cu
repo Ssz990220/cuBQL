@@ -21,7 +21,7 @@ using namespace cuBQL::test_rig;
 
 std::string outFileName = "a.svg";
 std::string generatorString = "uniform";
-int numBoxes = 10000;
+int dataCount = 10000;
 
 int main(int ac, char **av)
 {
@@ -31,15 +31,17 @@ int main(int ac, char **av)
       generatorString = arg;
     else if (arg == "-o")
       outFileName = av[++i];
-    else if (arg == "-n" || arg == "-np" || arg == "--num-pints")
-      numBoxes = std::stoi(av[++i]);
+    else if (arg == "-dc" || arg == "--data-count")
+      dataCount = std::stoi(av[++i]);
+    else if (arg == "-dg" || arg == "--data-generator")
+      generatorString = arg;
     else
       throw std::runtime_error("unknown cmd-line arg '"+arg+"'");
   }
   
   typename BoxGenerator<float,2>::SP gen
     = BoxGenerator<float,2>::createFromString(generatorString);
-  CUDAArray<box2f> d_boxes = gen->generate(numBoxes,0);
+  CUDAArray<box2f> d_boxes = gen->generate(dataCount,0);
   
   std::vector<box2f> boxes = d_boxes.download();
   box2f bounds;
@@ -52,6 +54,8 @@ int main(int ac, char **av)
   for (auto box : boxes) {
     vec2f lo = (box.lower - bounds.lower) * (1.f / sz);
     vec2f hi = (box.upper - bounds.lower) * (1.f / sz);
+    lo.y = 1.f-lo.y;
+    hi.y = 1.f-hi.y;
     int x0 = int(1000*lo.x);
     int y0 = int(1000*lo.y);
     int x1 = int(1000*hi.x);

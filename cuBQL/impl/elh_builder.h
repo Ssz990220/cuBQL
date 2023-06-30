@@ -67,27 +67,27 @@ namespace cuBQL {
     inline __device__
     float edgeLengths(box_t<T,D> box)
     {
-// #if 0
-//       T sum = T(0);
-//       for (int i=0;i<D;i++) {
-//         sum += (box.upper[i] - box.lower[i]);
-//       }
-//       return sum;
-// #elif 1
+#if 0
+      T sum = T(0);
+      for (int i=0;i<D;i++) {
+        sum += (box.upper[i] - box.lower[i]);
+      }
+      return sum;
+#elif 1
       float sum = 0.f;
       for (int i=0;i<D;i++) {
         sum += float(box.upper[i] - box.lower[i])*float(box.upper[i] - box.lower[i]);
       }
       return sum;
-// #else
-//       // T sum = T(0);
-//       T maxLength = T(0);
-//       for (int i=0;i<D;i++) {
-//         // sum += (box.upper[i] - box.lower[i]);
-//         maxLength = max(maxLength,box.upper[i] - box.lower[i]);
-//       }
-//       return maxLength;// * sum;
-// #endif
+#else
+      // T sum = T(0);
+      T maxLength = T(0);
+      for (int i=0;i<D;i++) {
+        // sum += (box.upper[i] - box.lower[i]);
+        maxLength = max(maxLength,box.upper[i] - box.lower[i]);
+      }
+      return maxLength;// * sum;
+#endif
     }
     
     template<typename T, int D>

@@ -221,6 +221,19 @@ namespace cuBQL {
       float prob_a;
     };
 
+    /*! "mixture" generator - generates a new distributoin based by
+      randomly picking between two input distributions */
+    template<typename T, int D>
+    struct MixturePointGenerator : public PointGenerator<T,D> {
+      virtual CUDAArray<vec_t<T,D>> generate(int numRequested, int seed);
+    
+      void parse(const char *&currentParsePos) override;
+    
+      typename PointGenerator<T,D>::SP gen_a;
+      typename PointGenerator<T,D>::SP gen_b;
+      float prob_a;
+    };
+
   } // ::cuBQL::test_rig
 } // ::cuBQL
 
