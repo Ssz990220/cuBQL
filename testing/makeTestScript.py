@@ -89,7 +89,7 @@ def run(gen_id,gen_string,num_points,num_dims,data_type):
     # common stuffs
     #
     out_base="knn{type}_nd{nd}_dc{dc}_dg{dg}".format(nd=num_dims,type=data_type,dg=gen_id,dc=num_points)
-    base_cmd="./cuBQL_fcpAndKnn{type} --knn-k 64-nd {dims} -dc {npts} -dg '{gen}' -qc 100000 -qg uniform".format(npts=num_points,dims=num_dims,id=gen_id,gen=gen_string,pname=name,type=data_type)
+    base_cmd="./cuBQL_fcpAndKnn{type} --knn-k 64 -nd {dims} -dc {npts} -dg '{gen}' -qc 100000 -qg uniform".format(npts=num_points,dims=num_dims,id=gen_id,gen=gen_string,pname=name,type=data_type)
     #
     # default version, no elh, lt 1
     #
