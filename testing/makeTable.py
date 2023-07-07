@@ -4,7 +4,6 @@ import subprocess
 
 num_queries=1000000
 dims_list=[2,3,4,8]
-dims_list=[8]
 
 #all_num_points = [ 10000, 1000000 ]
 #all_num_points = [ 1000000 ]
@@ -171,7 +170,7 @@ def do_distribution(tex_name, generator_string, k):
     print("""
     \hline
     \hline
-    \multicolumn{4}{c}{"""+tex_name+" {\small{\texttt{"+generator_string+"}}}"+"""} \\\\
+    \multicolumn{4}{c}{"""+tex_name+" {\\small{\\texttt{"+generator_string+"}}}"+"""} \\\\
     \hline""")
     ref_line = "kd-tree "
     #bvh_line = "bvh(lt=k/2) "
