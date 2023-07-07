@@ -15,7 +15,7 @@ point_generators = [
     [ "uniform", "uniform"],
     [ "clustered", "clustered"],
     # hot-spot/teapot:
-    [ "single hot-spot", "mixture .5 uniform remap [ .1 .2 ]  [ .15 .25 ] uniform " ],
+    [ "single hot-spot", "mixture .9 remap [ .1 .2 ]  [ .15 .25 ] uniform  uniform " ],
     # cluster-outliers:
 #    [ "clustered-outliers", "mixture 10 remap [ 3 4 ]  [ 5 5 ] clustered clustered"],
     # uniform-outliers:
