@@ -205,7 +205,7 @@ namespace cuBQL {
           ,d_stats
 #endif
           );
-      results[tid] = kNearest.maxDist2;
+      results[tid] = sqrtf(kNearest.maxDist2);
     }
   
 
@@ -305,6 +305,15 @@ namespace cuBQL {
 #endif
            );
         break;
+      case 8:
+        runKNN<8><<<divRoundUp(numQueries,128),128>>>
+          (closest.data(),bvh,data.get(),queryPoints.get(),
+           testConfig.maxQueryRadius,numQueries
+#if DO_STATS
+           ,stats.get()
+#endif
+           );
+        break;
       case 16:
         runKNN<16><<<divRoundUp(numQueries,128),128>>>
           (closest.data(),bvh,data.get(),queryPoints.get(),
@@ -323,18 +332,50 @@ namespace cuBQL {
 #endif
            );
         break;
+      case 50:
+        runKNN<50><<<divRoundUp(numQueries,128),128>>>
+          (closest.data(),bvh,data.get(),queryPoints.get(),
+           testConfig.maxQueryRadius,numQueries
+#if DO_STATS
+           ,stats.get()
+#endif
+           );
+        break;
+      case 20:
+        runKNN<20><<<divRoundUp(numQueries,128),128>>>
+          (closest.data(),bvh,data.get(),queryPoints.get(),
+           testConfig.maxQueryRadius,numQueries
+#if DO_STATS
+           ,stats.get()
+#endif
+           );
+        break;
       default:
         throw std::runtime_error("un-supported k="+std::to_string(testConfig.knn_k)+" for knn queries...");
       };
       CUBQL_CUDA_SYNC_CHECK();
 #if DO_STATS
+      auto results = closest.download();
+      CUBQL_CUDA_SYNC_CHECK();
+      for (int i=0;i<14;i++) {
+        int idx = results.size()-1-(1<<i);
+        std::cout << "  result[" << idx << "] = " << results[idx] << std::endl;;
+      }
+      double sum = 0;
+      for (auto r : results)
+        sum += r;
+      std::cout << "CHECKSUM " << sum << std::endl;
       PRINT(stats.get()->numNodes);
       PRINT(stats.get()->numPrims);
       PRINT(prettyNumber(stats.get()->numNodes));
       PRINT(prettyNumber(stats.get()->numPrims));
       std::cout << "STATS_DIGEST " << (stats.get()->numNodes+stats.get()->numPrims) << std::endl;
+      std::cout << "NICE_DIGEST " << prettyNumber(stats.get()->numNodes+stats.get()->numPrims) << std::endl;
       exit(0);
 #endif
+
+
+
       if (reference.empty()) {
         reference = closest.download();
       } else {

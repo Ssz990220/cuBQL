@@ -52,7 +52,7 @@ namespace cuBQL {
     float    maxDist2;
   private:
     inline __device__ static uint64_t makeItem(float dist, int itemID);
-
+  public:
     inline __device__ void printCurrent()
     {
       printf("kNearest, count = %i, maxDist2 = %f\n",count,maxDist2);
@@ -65,7 +65,7 @@ namespace cuBQL {
                getDist(i),getItem(i));
       }
     }
-    
+  private:
     int      count;
     uint64_t items[K];
   };
@@ -205,7 +205,16 @@ namespace cuBQL {
           atomicAdd(&d_stats->numNodes,numNodes);
           atomicAdd(&d_stats->numPrims,numPrims);
 #endif
-          return;
+          int tid = threadIdx.x+blockIdx.x*blockDim.x;
+          bool dbg = tid == 1117;
+          if (dbg) {
+            printf("query %f %f result radius2 %f \n",query[0],query[1],results.maxDist2);
+      
+            results.printCurrent();
+          }
+          
+
+      return;
         }
         --stackPtr;
         if (__int_as_float(stackPtr->y) > results.maxDist2) continue;
