@@ -208,6 +208,7 @@ namespace cuBQL {
           int tid = threadIdx.x+blockIdx.x*blockDim.x;
           bool dbg = tid == 1117;
           if (dbg) {
+            printf("numnodes %i numprims %i\n",numNodes,numPrims);
             printf("query %f %f result radius2 %f \n",query[0],query[1],results.maxDist2);
       
             results.printCurrent();

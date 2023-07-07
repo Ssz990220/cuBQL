@@ -23,8 +23,8 @@
 # define STATS(a) a
 
   struct Stats {
-    int numNodes;
-    int numPrims;
+    unsigned long long numNodes;
+    unsigned long long numPrims;
   };
 #else
 # define STATS(a) 
@@ -97,8 +97,8 @@ namespace cuBQL {
         if (stackPtr == stackBase) {
 #if DO_STATS
           if (d_stats) {
-            atomicAdd(&d_stats->numNodes,numNodes);
-            atomicAdd(&d_stats->numPrims,numPrims);
+            atomicAdd(&d_stats->numNodes,(unsigned long long)numNodes);
+            atomicAdd(&d_stats->numPrims,(unsigned long long)numPrims);
           }
 #endif
           return result;

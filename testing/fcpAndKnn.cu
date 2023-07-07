@@ -196,6 +196,12 @@ namespace cuBQL {
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= numQueries) return;
 
+
+
+      if (tid != 1117) return;
+      printf("QUERYING tid 17\n");
+
+      
       KNNResults<K> kNearest;
       kNearest.clear(maxRadius*maxRadius);
       const vec_t<float,D> query = queries[tid];
@@ -357,10 +363,10 @@ namespace cuBQL {
 #if DO_STATS
       auto results = closest.download();
       CUBQL_CUDA_SYNC_CHECK();
-      for (int i=0;i<14;i++) {
-        int idx = results.size()-1-(1<<i);
-        std::cout << "  result[" << idx << "] = " << results[idx] << std::endl;;
-      }
+      // for (int i=0;i<14;i++) {
+      //   int idx = results.size()-1-(1<<i);
+      //   std::cout << "  result[" << idx << "] = " << results[idx] << std::endl;;
+      // }
       double sum = 0;
       for (auto r : results)
         sum += r;

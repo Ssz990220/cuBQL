@@ -290,6 +290,7 @@ namespace cuBQL {
   float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
   {
     float sum = 0.f;
+#pragma unroll(D)
     for (int i=0;i<D;i++)
       sum += fSqrLength(a[i]-b[i]);
     return sum;

@@ -1,9 +1,10 @@
-#!/usr/bin/python2.7
+#!/usr/bin/python3
 import os
 import subprocess
 
 num_queries=1000000
 dims_list=[2,3,4,8]
+dims_list=[8]
 
 #all_num_points = [ 10000, 1000000 ]
 #all_num_points = [ 1000000 ]
@@ -67,11 +68,7 @@ def measure(generator, dims, k, count) :
     
     bvh_base_cmd="./cuBQL_fcpAndKnnPoints -nd {ndims} -dc {npts} -dg '{gen}' {kk} -qc {qc} -qg uniform --dump-test-data".format(ndims=dims,npts=count,gen=generator,kk=k_arg,qc=num_queries)
 
-    if k>1:
-        #        bvh_cmd = bvh_base_cmd + " -lt "+str(k/2)
-        bvh_cmd = bvh_base_cmd + " -lt 8"
-    else:
-        bvh_cmd = bvh_base_cmd + " -lt 1"
+    bvh_cmd = bvh_base_cmd + " -lt 8"
     bvh1_cmd = bvh_base_cmd + " -lt 1"
         
     if k==1:
@@ -90,25 +87,33 @@ def measure(generator, dims, k, count) :
     os.system(ref_cmd+" > ref.out")
     os.system(imp_cmd+" > imp.out")
 
+    print("% "+ref_cmd)
+    print("% "+bvh_cmd)
+    print("% "+bvh1_cmd)
+    print("% "+imp_cmd)
     #print("#bvh_cmd "+bvh_cmd)
     #print("#ref_cmd "+ref_cmd)
     #print("#imp_cmd "+imp_cmd)
     result = subprocess.run(['fgrep', 'STATS_DIGEST', 'bvh.out'],capture_output=True).stdout.decode('utf-8')
+    print("% result bvh: >> "+result)
     #print("#bvh result : "+result)
     bvh = int(result.split()[1]) / float(num_queries)
     #print("#bvh result val "+str(bvh))
 
     result = subprocess.run(['fgrep', 'STATS_DIGEST', 'bvh1.out'],capture_output=True).stdout.decode('utf-8')
+    print("% result bvh1: >> "+result)
     #print("#bvh result : "+result)
     bvh1 = int(result.split()[1]) / float(num_queries)
     #print("#bvh result val "+str(bvh))
     
     result = subprocess.run(['fgrep', 'KDTREE_STATS', 'ref.out'],capture_output=True).stdout.decode('utf-8')
     #print("#bvh result : "+result)
+    print("% result ref: >> "+result)
     ref = int(result.split()[1]) / float(num_queries)
 
     result = subprocess.run(['fgrep', 'KDTREE_STATS', 'imp.out'],capture_output=True).stdout.decode('utf-8')
     #print("#bvh result : "+result)
+    print("% result imp: >> "+result)
     imp = int(result.split()[1]) / float(num_queries)
 
     #print("ref "+str(ref))
@@ -238,7 +243,8 @@ def make_table(k):
     print("\\end{table*}")
     
 def main():
-    for k in [ 1, 8, 64 ] :
+    #for k in [ 1, 8, 64 ] :
+    for k in [ 64 ] :
         make_table(k)
 
 main()
