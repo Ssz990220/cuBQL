@@ -71,28 +71,27 @@ def measure(generator, dims, k, count) :
     bvh1_cmd = bvh_base_cmd + " -lt 1"
         
     if k==1:
-        ref_cmd="./cukd_float"+str(dims)+"-fcp-sb-reg"
-        imp_cmd="./cukd_float"+str(dims)+"-fcp-sb-imp"
+        ref_cmd="./cukd_float"+str(dims)+"-fcp-default"
+        cct_cmd="./cukd_float"+str(dims)+"-fcp-cct"
+        refxd_cmd="./cukd_float"+str(dims)+"-fcp-default-xd"
+        cctxd_cmd="./cukd_float"+str(dims)+"-fcp-cct-xd"
     else:
-        ref_cmd="./cukd_float"+str(dims)+"-knn-sb-reg -k "+str(k)
-        imp_cmd="./cukd_float"+str(dims)+"-knn-sb-imp -k "+str(k)
+        ref_cmd="./cukd_float"+str(dims)+"-knn-default -k "+str(k)
+        cct_cmd="./cukd_float"+str(dims)+"-knn-cct -k "+str(k)
+        refxd_cmd="./cukd_float"+str(dims)+"-knn-default-xd -k "+str(k)
+        cctxd_cmd="./cukd_float"+str(dims)+"-knn-cct-xd -k "+str(k)
     #print("ref "+ref_cmd)
     #print("bvh "+bvh_cmd)
     #print("bvh1 "+bvh1_cmd)
-    #print("imp "+imp_cmd)
+    #print("cct "+cct_cmd)
     
     os.system(bvh_cmd+" > bvh.out")
     os.system(bvh1_cmd+" > bvh1.out")
     os.system(ref_cmd+" > ref.out")
-    os.system(imp_cmd+" > imp.out")
+    os.system(cct_cmd+" > cct.out")
+    os.system(refxd_cmd+" > refxd.out")
+    os.system(cctxd_cmd+" > cctxd.out")
 
-    print("% "+ref_cmd)
-    print("% "+bvh_cmd)
-    print("% "+bvh1_cmd)
-    print("% "+imp_cmd)
-    #print("#bvh_cmd "+bvh_cmd)
-    #print("#ref_cmd "+ref_cmd)
-    #print("#imp_cmd "+imp_cmd)
     result = subprocess.run(['fgrep', 'STATS_DIGEST', 'bvh.out'],capture_output=True).stdout.decode('utf-8')
     print("% result bvh: >> "+result)
     #print("#bvh result : "+result)
@@ -110,15 +109,25 @@ def measure(generator, dims, k, count) :
     print("% result ref: >> "+result)
     ref = int(result.split()[1]) / float(num_queries)
 
-    result = subprocess.run(['fgrep', 'KDTREE_STATS', 'imp.out'],capture_output=True).stdout.decode('utf-8')
+    result = subprocess.run(['fgrep', 'KDTREE_STATS', 'refxd.out'],capture_output=True).stdout.decode('utf-8')
     #print("#bvh result : "+result)
-    print("% result imp: >> "+result)
-    imp = int(result.split()[1]) / float(num_queries)
+    print("% result refxd: >> "+result)
+    refxd = int(result.split()[1]) / float(num_queries)
+
+    result = subprocess.run(['fgrep', 'KDTREE_STATS', 'cct.out'],capture_output=True).stdout.decode('utf-8')
+    #print("#bvh result : "+result)
+    print("% result cct: >> "+result)
+    cct = int(result.split()[1]) / float(num_queries)
+
+    result = subprocess.run(['fgrep', 'KDTREE_STATS', 'cctxd.out'],capture_output=True).stdout.decode('utf-8')
+    #print("#bvh result : "+result)
+    print("% result cctxd: >> "+result)
+    cctxd = int(result.split()[1]) / float(num_queries)
 
     #print("ref "+str(ref))
     #print("bvh "+str(bvh))
-    #print("imp "+str(imp))
-    return ref, bvh, bvh1, imp
+    #print("cct "+str(cct))
+    return ref, bvh, bvh1, cct, refxd, cctxd
 
 def three_digits_number(n):
     if n >= 100 :
@@ -172,19 +181,21 @@ def do_distribution(tex_name, generator_string, k):
     \hline
     \multicolumn{17}{c}{"""+tex_name+" {\\small{\\texttt{"+generator_string+"}}}"+"""} \\\\
     \hline""")
-    ref_line = "kd-tree "
+    ref_line = "kd-tree (default)"
+    refxd_line = "kd-tree (xd)"
     #bvh_line = "bvh(lt=k/2) "
     bvh_line  = "bvh(lt=8) "
     bvh1_line = "bvh(lt=1) "
-    imp_line = "kd-improved "
+    cct_line = "kd-tree (cct) "
+    cctxd_line = "kd-tree (cct,xd) "
     for dims in dims_list :
             for count in [ 10000, 1000000 ] :
-                ref, bvh, bvh1, imp = measure(generator_string, dims, k, count)
+                ref, bvh, bvh1, cct, refxd, cctxd = measure(generator_string, dims, k, count)
                 #print(" ---- ")
                 #print("ref "+str(ref))
                 #print("bvh "+str(bvh))
-                #print("imp "+str(imp))
-                best = min(min(ref,imp),min(bvh,bvh1))
+                #print("cct "+str(cct))
+                best = min(min(min(ref,cct),min(bvh,bvh1)),min(refxd,cctxd))
                 
                 #if k==1:
                 #    bvh_cell = "(n/a)"
@@ -200,18 +211,30 @@ def do_distribution(tex_name, generator_string, k):
                     bvh1_cell = "\\textbf{"+bvh1_cell+"}"
                 bvh1_speedup = pretty_relAccesses(bvh1*1./ref)
 
-                imp_cell = pretty_number(imp)
-                imp_speedup = pretty_relAccesses(imp*1./ref)
-                if imp == best :
-                    imp_cell = "\\textbf{"+imp_cell+"}"
+                cct_cell = pretty_number(cct)
+                cct_speedup = pretty_relAccesses(cct*1./ref)
+                if cct == best :
+                    cct_cell = "\\textbf{"+cct_cell+"}"
+
+                cctxd_cell = pretty_number(cctxd)
+                cctxd_speedup = pretty_relAccesses(cctxd*1./ref)
+                if cctxd == best :
+                    cctxd_cell = "\\textbf{"+cctxd_cell+"}"
 
                 ref_cell = pretty_number(ref)
                 ref_speedup = ""
                 if ref == best :
                     ref_cell = "\\textbf{"+ref_cell+"}"
 
+                refxd_cell = pretty_number(refxd)
+                refxd_speedup = ""
+                if refxd == best :
+                    refxd_cell = "\\textbf{"+refxd_cell+"}"
+
                 ref_line = ref_line + "& " + ref_cell + " & " + ref_speedup
-                imp_line = imp_line + "& " + imp_cell + " & " + imp_speedup
+                refxd_line = refxd_line + "& " + refxd_cell + " & " + refxd_speedup
+                cct_line = cct_line + "& " + cct_cell + " & " + cct_speedup
+                cctxd_line = cctxd_line + "& " + cctxd_cell + " & " + cctxd_speedup
                 bvh_line = bvh_line + "& " + bvh_cell + " & " + bvh_speedup
                 bvh1_line = bvh1_line + "& " + bvh1_cell + " & " + bvh1_speedup
     print(ref_line)
@@ -220,7 +243,7 @@ def do_distribution(tex_name, generator_string, k):
     print("\\\\")
     print(bvh_line)
     print("\\\\")
-    print(imp_line)
+    print(cct_line)
     print("\\\\")
 
 def make_table(k):
