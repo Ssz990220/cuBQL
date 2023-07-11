@@ -170,7 +170,7 @@ def do_distribution(tex_name, generator_string, k):
     print("""
     \hline
     \hline
-    \multicolumn{4}{c}{"""+tex_name+" {\\small{\\texttt{"+generator_string+"}}}"+"""} \\\\
+    \multicolumn{17}{c}{"""+tex_name+" {\\small{\\texttt{"+generator_string+"}}}"+"""} \\\\
     \hline""")
     ref_line = "kd-tree "
     #bvh_line = "bvh(lt=k/2) "
