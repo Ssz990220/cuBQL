@@ -198,8 +198,8 @@ namespace cuBQL {
 
 
 
-      if (tid != 1117) return;
-      printf("QUERYING tid 17\n");
+      // if (tid != 1117) return;
+      // printf("QUERYING tid 17\n");
 
       
       KNNResults<K> kNearest;

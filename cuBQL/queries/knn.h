@@ -205,17 +205,17 @@ namespace cuBQL {
           atomicAdd(&d_stats->numNodes,numNodes);
           atomicAdd(&d_stats->numPrims,numPrims);
 #endif
-          int tid = threadIdx.x+blockIdx.x*blockDim.x;
-          bool dbg = tid == 1117;
-          if (dbg) {
-            printf("numnodes %i numprims %i\n",numNodes,numPrims);
-            printf("query %f %f result radius2 %f \n",query[0],query[1],results.maxDist2);
+          // int tid = threadIdx.x+blockIdx.x*blockDim.x;
+          // bool dbg = tid == 1117;
+          // if (dbg) {
+          //   printf("numnodes %i numprims %i\n",numNodes,numPrims);
+          //   printf("query %f %f result radius2 %f \n",query[0],query[1],results.maxDist2);
       
-            results.printCurrent();
-          }
+          //   results.printCurrent();
+          // }
           
 
-      return;
+          return;
         }
         --stackPtr;
         if (__int_as_float(stackPtr->y) > results.maxDist2) continue;
