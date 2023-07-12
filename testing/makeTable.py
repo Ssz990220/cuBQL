@@ -179,15 +179,15 @@ def do_distribution(tex_name, generator_string, k):
     print("""
     \hline
     \hline
-    \multicolumn{17}{c}{"""+tex_name+" {\\small{\\texttt{"+generator_string+"}}}"+"""} \\\\
+    \multicolumn{17}{c}{"""+tex_name+"\\quad\\quad{\\relsize{-2}{\\texttt{('"+generator_string+"')}}}"+"""} \\\\
     \hline""")
     ref_line = "kd-tree (default)"
     refxd_line = "kd-tree (xd)"
     #bvh_line = "bvh(lt=k/2) "
     bvh_line  = "bvh(lt=8) "
     bvh1_line = "bvh(lt=1) "
-    cct_line = "kd-tree (cct) "
-    cctxd_line = "kd-tree (cct,xd) "
+    cct_line = "kd-tree (cdpt) "
+    cctxd_line = "kd-tree (cdpt,xd) "
     for dims in dims_list :
             for count in [ 10000, 1000000 ] :
                 ref, bvh, bvh1, cct, refxd, cctxd = measure(generator_string, dims, k, count)
