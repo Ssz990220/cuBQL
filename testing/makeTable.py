@@ -239,11 +239,15 @@ def do_distribution(tex_name, generator_string, k):
                 bvh1_line = bvh1_line + "& " + bvh1_cell + " & " + bvh1_speedup
     print(ref_line)
     print("\\\\")
+    print(refxd_line)
+    print("\\\\")
+    print(cct_line)
+    print("\\\\")
+    print(cctxd_line)
+    print("\\\\")
     print(bvh1_line)
     print("\\\\")
     print(bvh_line)
-    print("\\\\")
-    print(cct_line)
     print("\\\\")
 
 def make_table(k):
