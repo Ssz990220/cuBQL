@@ -107,6 +107,27 @@ namespace cuBQL {
   };
 
   // ------------------------------------------------------------------
+
+  struct GpuMemoryResource {
+    virtual cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) = 0;
+    virtual cudaError_t free(void* ptr, cudaStream_t s) = 0;
+  };
+
+  struct AsyncGpuMemoryResource final : GpuMemoryResource {
+    cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) override {
+      return cudaMallocAsync(ptr, size, s);
+    }
+    cudaError_t free(void* ptr, cudaStream_t s) override {
+      return cudaFreeAsync(ptr, s);
+    }
+  };
+
+  GpuMemoryResource& defaultGpuMemResource() {
+    static AsyncGpuMemoryResource mem_resource;
+    return mem_resource;
+  }
+
+  // ------------------------------------------------------------------
   
   /*! builds a wide-bvh over a given set of primitive bounding boxes.
 
@@ -122,7 +143,8 @@ namespace cuBQL {
                   const box3f *boxes,
                   uint32_t     numBoxes,
                   BuildConfig  buildConfig,
-                  cudaStream_t s=0);
+                  cudaStream_t s=0,
+                  GpuMemoryResource& mem_resource=defaultGpuMemResource());
   
   /*! builds a BinaryBVH over the given set of boxes (using the given
       stream), using a simple adaptive spatial median builder (ie,
@@ -136,29 +158,34 @@ namespace cuBQL {
                   const box3f *boxes,
                   uint32_t     numBoxes,
                   BuildConfig  buildConfig,
-                  cudaStream_t s=0);
+                  cudaStream_t s=0,
+                  GpuMemoryResource& mem_resource=defaultGpuMemResource());
 
   // ------------------------------------------------------------------
   
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
       building the BVH. this assumes */
   void free(BinaryBVH   &bvh,
-            cudaStream_t s=0);
+            cudaStream_t s=0,
+            GpuMemoryResource& mem_resource=defaultGpuMemResource());
 
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
       building the BVH. this assumes */
   template<int N>
   void free(WideBVH<N>  &bvh,
-            cudaStream_t s=0);
+            cudaStream_t s=0,
+            GpuMemoryResource& mem_resource=defaultGpuMemResource());
 
   // ------------------------------------------------------------------
   
   /*! computes the SAH cost of a already built BinaryBVH. This is
       often a useful metric for how "good" a BVH is */
+  // NOTE: does some memory allocations/free but not yet covered by a memory resource.
   float computeSAH(const BinaryBVH &bvh);
   
   /*! computes the SAH cost of a already built WideBVH. This is often a
       useful metric for how "good" a BVH is */
+  // NOTE: does some memory allocations/free but not yet covered by a memory resource.
   template<int N>
   float computeSAH(const WideBVH<N> &bvh);
 } // ::cuBQL

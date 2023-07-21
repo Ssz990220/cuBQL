@@ -23,27 +23,31 @@ namespace cuBQL {
                            const box3f *boxes,
                            uint32_t     numBoxes,
                            BuildConfig  buildConfig,
-                           cudaStream_t s);
+                           cudaStream_t s,
+                           GpuMemoryResource& mem_resource);
   template void gpuBuilder(WideBVH<4>   &bvh,
                            const box3f *boxes,
                            uint32_t     numBoxes,
                            BuildConfig  buildConfig,
-                           cudaStream_t s);
+                           cudaStream_t s,
+                           GpuMemoryResource& mem_resource);
   template void gpuBuilder(WideBVH<8>   &bvh,
                            const box3f *boxes,
                            uint32_t     numBoxes,
                            BuildConfig  buildConfig,
-                           cudaStream_t s);
+                           cudaStream_t s,
+                           GpuMemoryResource& mem_resource);
   template void gpuBuilder(WideBVH<16>   &bvh,
                            const box3f *boxes,
                            uint32_t     numBoxes,
                            BuildConfig  buildConfig,
-                           cudaStream_t s);
+                           cudaStream_t s,
+                           GpuMemoryResource& mem_resource);
 
-  template void free(WideBVH<2>  &bvh, cudaStream_t s);
-  template void free(WideBVH<4>  &bvh, cudaStream_t s);
-  template void free(WideBVH<8>  &bvh, cudaStream_t s);
-  template void free(WideBVH<16> &bvh, cudaStream_t s);
+  template void free(WideBVH<2>  &bvh, cudaStream_t s, GpuMemoryResource& mem_resource);
+  template void free(WideBVH<4>  &bvh, cudaStream_t s, GpuMemoryResource& mem_resource);
+  template void free(WideBVH<8>  &bvh, cudaStream_t s, GpuMemoryResource& mem_resource);
+  template void free(WideBVH<16> &bvh, cudaStream_t s, GpuMemoryResource& mem_resource);
   
   template float computeSAH(const WideBVH<2>  &bvh);
   template float computeSAH(const WideBVH<4>  &bvh);

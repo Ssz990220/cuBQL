@@ -381,7 +381,8 @@ namespace cuBQL {
                     const box3f *boxes,
                     int          numPrims,
                     BuildConfig  buildConfig,
-                    cudaStream_t s)
+                    cudaStream_t s,
+                    GpuMemoryResource& mem_resource)
     {
       // std::cout << "#######################################################" << std::endl;
       // ==================================================================
@@ -393,11 +394,11 @@ namespace cuBQL {
       BuildState *buildState = 0;
       SAHBins    *sahBins    = 0;
       int maxActiveSAHs = 4+numPrims/(8*SAHBins::numBins);
-      _ALLOC(tempNodes,2*numPrims,s);
-      _ALLOC(nodeStates,2*numPrims,s);
-      _ALLOC(primStates,numPrims,s);
-      _ALLOC(buildState,1,s);
-      _ALLOC(sahBins,maxActiveSAHs,s);
+      _ALLOC(tempNodes,2*numPrims,s,mem_resource);
+      _ALLOC(nodeStates,2*numPrims,s,mem_resource);
+      _ALLOC(primStates,numPrims,s,mem_resource);
+      _ALLOC(buildState,1,s,mem_resource);
+      _ALLOC(sahBins,maxActiveSAHs,s,mem_resource);
       
       initState<<<1,1,0,s>>>(buildState,
                              nodeStates,
@@ -477,24 +478,24 @@ namespace cuBQL {
       uint8_t   *d_temp_storage = NULL;
       size_t     temp_storage_bytes = 0;
       PrimState *sortedPrimStates;
-      _ALLOC(sortedPrimStates,numPrims,s);
+      _ALLOC(sortedPrimStates,numPrims,s,mem_resource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      _ALLOC(d_temp_storage,temp_storage_bytes,s);
+      _ALLOC(d_temp_storage,temp_storage_bytes,s,mem_resource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(d_temp_storage,s);
+      _FREE(d_temp_storage,s,mem_resource);
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
 
       bvh.numPrims = numPrims;
-      _ALLOC(bvh.primIDs,numPrims,s);
+      _ALLOC(bvh.primIDs,numPrims,s,mem_resource);
       writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
 
@@ -502,16 +503,16 @@ namespace cuBQL {
       // allocate and write final nodes
       // ==================================================================
       bvh.numNodes = numNodes;
-      _ALLOC(bvh.nodes,numNodes,s);
+      _ALLOC(bvh.nodes,numNodes,s,mem_resource);
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(sortedPrimStates,s);
-      _FREE(tempNodes,s);
-      _FREE(nodeStates,s);
-      _FREE(primStates,s);
-      _FREE(buildState,s);
-      _FREE(sahBins,s);
+      _FREE(sortedPrimStates,s,mem_resource);
+      _FREE(tempNodes,s,mem_resource);
+      _FREE(nodeStates,s,mem_resource);
+      _FREE(primStates,s,mem_resource);
+      _FREE(buildState,s,mem_resource);
+      _FREE(sahBins,s,mem_resource);
     }
 
   } // ::cuBQL::sahBuilder_impl

@@ -27,22 +27,23 @@ namespace cuBQL {
                   const box3f *boxes,
                   uint32_t     numBoxes,
                   BuildConfig  buildConfig,
-                  cudaStream_t s)
+                  cudaStream_t s,
+                  GpuMemoryResource& mem_resource)
   {
     if (buildConfig.buildMethod == BuildConfig::SAH) {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 1;
-      sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,buildConfig,s);
+      sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,buildConfig,s,mem_resource);
     } else {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 8;
-      gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s);
+      gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s,mem_resource);
     }
-    gpuBuilder_impl::refit(bvh,boxes,s);
+    gpuBuilder_impl::refit(bvh,boxes,s,mem_resource);
     CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
 
@@ -52,11 +53,12 @@ namespace cuBQL {
   }
   
   void free(BinaryBVH   &bvh,
-            cudaStream_t s)
+            cudaStream_t s,
+            GpuMemoryResource& mem_resource)
   {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
-    CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
-    CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
+    gpuBuilder_impl::_FREE(bvh.primIDs,s,mem_resource);
+    gpuBuilder_impl::_FREE(bvh.nodes,s,mem_resource);
     CUBQL_CUDA_CALL(StreamSynchronize(s));
     bvh.primIDs = 0;
   }
