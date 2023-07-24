@@ -40,10 +40,11 @@ namespace cuBQL {
       int     wideNodeID;
     };
   
+    template<typename T, int D>
     __global__
     void collapseInit(int *d_numWideNodes,
                       CollapseInfo *d_infos,
-                      BinaryBVH bvh)
+                      BinaryBVH<T,D> bvh)
     {
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= bvh.numNodes) return;
@@ -71,11 +72,11 @@ namespace cuBQL {
       d_infos[node.offset+1].binaryRoot = -1;
     }
 
-    template<int N>
+    template<typename T, int D, int N>
     __global__
     void collapseSummarize(int *d_numWideNodes,
                            CollapseInfo *d_infos,
-                           BinaryBVH bvh)
+                           BinaryBVH<T,D> bvh)
     {
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= bvh.numNodes) return;
@@ -114,11 +115,11 @@ namespace cuBQL {
     }
 
 
-    template<int N>
+    template<typename T, int D, int N>
     __global__
     void collapseExecute(CollapseInfo *d_infos,
-                         WideBVH<N> wideBVH,
-                         BinaryBVH  binary)
+                         WideBVH<T,D,N> wideBVH,
+                         BinaryBVH<T,D>  binary)
     {
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= wideBVH.numNodes)
@@ -128,7 +129,7 @@ namespace cuBQL {
       int binaryRoot = d_infos[tid].binaryRoot;
       *stackPtr++ = binaryRoot;
 
-      typename WideBVH<N>::Node &target = wideBVH.nodes[tid];
+      typename WideBVH<T,D,N>::Node &target = wideBVH.nodes[tid];
       int numWritten = 0;
       while (stackPtr > nodeStack) {
         int nodeID = *--stackPtr;
@@ -150,10 +151,11 @@ namespace cuBQL {
         }
       }
       while (numWritten < N) {
-        target.children[numWritten].bounds.lower
-          = make_float3(+INFINITY,+INFINITY,+INFINITY);
-        target.children[numWritten].bounds.upper
-          = make_float3(-INFINITY,-INFINITY,-INFINITY);
+        target.children[numWritten].bounds.set_empty();
+        // lower
+        //   = make_float3(+INFINITY,+INFINITY,+INFINITY);
+        // target.children[numWritten].bounds.upper
+        //   = make_float3(-INFINITY,-INFINITY,-INFINITY);
         target.children[numWritten].offset = (uint32_t)-1;
         target.children[numWritten].count  = (uint32_t)-1;
         target.children[numWritten].valid  = 0;
@@ -161,15 +163,15 @@ namespace cuBQL {
       }
     }
 
-    template<int N, typename box_t>
-    void gpuBuilder(WideBVH<N>  &wideBVH,
-                    const box_t *boxes,
+    template<typename T, int D, int N>
+    void gpuBuilder(WideBVH<T,D,N> &wideBVH,
+                    const box_t<T,D> *boxes,
                     uint32_t     numBoxes,
                     BuildConfig  buildConfig,
                     cudaStream_t s)
     {
       
-      BinaryBVH binaryBVH;
+      BinaryBVH<T,D> binaryBVH;
       gpuBuilder(binaryBVH,boxes,numBoxes,buildConfig,s);
 
       int          *d_numWideNodes;
@@ -180,7 +182,7 @@ namespace cuBQL {
       collapseInit<<<divRoundUp((int)binaryBVH.numNodes,1024),1024,0,s>>>
         (d_numWideNodes,d_infos,binaryBVH);
 
-      collapseSummarize<N><<<divRoundUp((int)binaryBVH.numNodes,1024),1024,0,s>>>
+      collapseSummarize<T,D,N><<<divRoundUp((int)binaryBVH.numNodes,1024),1024,0,s>>>
         (d_numWideNodes,d_infos,binaryBVH);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
 
@@ -202,63 +204,11 @@ namespace cuBQL {
       free(binaryBVH,s);
     }
 
-    template<int N>
-    __global__
-    void computeNodeCosts(WideBVH<N> bvh, float *nodeCosts)
-    {
-      const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= bvh.numNodes) return;
-
-      auto &node = bvh.nodes[nodeID];
-      float area = 0.f;
-      for (int i=0;i<N;i++) {
-        box3f box = node.children[i].bounds;
-        if (box.lower.x > box.upper.x) continue;
-        area += surfaceArea(box);
-      }
-      box3f rootBox; rootBox.set_empty();
-      for (int i=0;i<N;i++)
-        rootBox.grow(bvh.nodes[0].children[i].bounds);
-      area /= surfaceArea(rootBox);
-      nodeCosts[nodeID] = area;
-    }
-
-    template<int N>
-    float computeSAH(const WideBVH<N> &bvh)
-    {
-      float *nodeCosts;
-      float *reducedCosts;
-      CUBQL_CUDA_CALL(MallocManaged((void**)&nodeCosts,bvh.numNodes*sizeof(float)));
-      CUBQL_CUDA_CALL(MallocManaged((void**)&reducedCosts,sizeof(float)));
-      computeNodeCosts<<<divRoundUp(int(bvh.numNodes),1024),1024>>>(bvh,nodeCosts);
-
-      CUBQL_CUDA_SYNC_CHECK();
-      
-      // Determine temporary device storage requirements
-      void     *d_temp_storage = NULL;
-      size_t   temp_storage_bytes = 0;
-      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes,
-                             nodeCosts, reducedCosts, bvh.numNodes);
-      // Allocate temporary storage
-      CUBQL_CUDA_CALL(Malloc(&d_temp_storage, temp_storage_bytes));
-      // Run sum-reduction
-      cub::DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, 
-                             nodeCosts, reducedCosts, bvh.numNodes);
-      
-      CUBQL_CUDA_SYNC_CHECK();
-      float result = reducedCosts[0];
-
-      CUBQL_CUDA_CALL(Free(d_temp_storage));
-      CUBQL_CUDA_CALL(Free(nodeCosts));
-      CUBQL_CUDA_CALL(Free(reducedCosts));
-      return result;
-    }
-    
   } // ::cuBQL::gpuBuilder_impl
 
-  template<int N>
-  void gpuBuilder(WideBVH<N>   &bvh,
-                  const box3f *boxes,
+  template<typename T, int D, int N>
+  void gpuBuilder(WideBVH<T,D,N>   &bvh,
+                  const box_t<T,D> *boxes,
                   uint32_t     numBoxes,
                   BuildConfig  buildConfig,
                   cudaStream_t s)
@@ -266,8 +216,8 @@ namespace cuBQL {
     gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,buildConfig,s);
   }
 
-  template<int N>
-  void free(WideBVH<N>   &bvh,
+  template<typename T, int D, int N>
+  void free(WideBVH<T,D,N>   &bvh,
             cudaStream_t s)
   {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
@@ -277,11 +227,11 @@ namespace cuBQL {
     bvh.primIDs = 0;
   }
 
-  template<int N>
-  float computeSAH(const WideBVH<N> &bvh)
-  {
-    return gpuBuilder_impl::computeSAH(bvh);
-  }
+  // template<typename T, int D, int N>
+  // float computeSAH(const WideBVH<T,D,N> &bvh)
+  // {
+  //   return gpuBuilder_impl::computeSAH(bvh);
+  // }
   
 } // :: cuBQL
 

@@ -19,7 +19,7 @@
 #include "cuBQL/impl/sm_builder.h"
 
 namespace cuBQL {
-  namespace sahBuilder_impl {
+  namespace elhBuilder_impl {
     using gpuBuilder_impl::AtomicBox;
     using gpuBuilder_impl::PrimState;
     using gpuBuilder_impl::NodeState;
@@ -30,15 +30,16 @@ namespace cuBQL {
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
 
+    template<typename T, int D>
     struct CUBQL_ALIGN(16) TempNode {
       union {
         struct {
-          AtomicBox<box3f> centBounds;
+          AtomicBox<box_t<T,D>> centBounds;
           uint32_t         count;
           uint32_t         unused;
         } openBranch;
         struct {
-          AtomicBox<box3f> centBounds;
+          AtomicBox<box_t<T,D>> centBounds;
           uint32_t offset;
           int8_t   dim;
           int8_t   bin;
@@ -51,43 +52,72 @@ namespace cuBQL {
       };
     };
     
-    struct SAHBins {
+    template<typename T, int D>
+    struct ELHBins {
       enum { numBins = 8 };
       struct {
         struct CUBQL_ALIGN(16) {
-          AtomicBox<box3f> bounds;
+          AtomicBox<box_t<T,D>> bounds;
           int   count;
         } bins[numBins];
-      } dims[3];
+      } dims[D];
     };
 
+    template<typename T, int D>
     inline __device__
-    void evaluateSAH(int &splitDim,
+    float edgeLengths(box_t<T,D> box)
+    {
+#if 1
+      T sum = T(0);
+      for (int i=0;i<D;i++) {
+        sum += (box.upper[i] - box.lower[i]);
+      }
+      return sum;
+#elif 0
+      float sum = 0.f;
+      for (int i=0;i<D;i++) {
+        sum += float(box.upper[i] - box.lower[i])*float(box.upper[i] - box.lower[i]);
+      }
+      return sum;
+#else
+      // T sum = T(0);
+      T maxLength = T(0);
+      for (int i=0;i<D;i++) {
+        // sum += (box.upper[i] - box.lower[i]);
+        maxLength = max(maxLength,box.upper[i] - box.lower[i]);
+      }
+      return maxLength;// * sum;
+#endif
+    }
+    
+    template<typename T, int D>
+    inline __device__
+    void evaluateELH(int &splitDim,
                      int &splitBin,
-                     const SAHBins &sah)
+                     const ELHBins<T,D> &elh)
     {
       float bestCost = INFINITY;
-      
-      float rAreas[sah.numBins];
-      for (int d=0;d<3;d++) {
-        box3f box; box.set_empty();
+
+      float rLengths[elh.numBins];
+      for (int d=0;d<D;d++) {
+        box_t<T,D> box; box.set_empty();
         int   rCount = 0;
-        for (int b=sah.numBins-1;b>=0;--b) {
-          auto bin = sah.dims[d].bins[b];
+        for (int b=elh.numBins-1;b>=0;--b) {
+          auto bin = elh.dims[d].bins[b];
           grow(box,bin.bounds.make_box());
           rCount += bin.count;
-          rAreas[b] = surfaceArea(box);
+          rLengths[b] = edgeLengths(box);
         }
-        const float leafCost = rAreas[0] * rCount;
+        const float leafCost = rLengths[0] * rCount;
         if (leafCost < bestCost) {
           bestCost = leafCost;
           splitDim = -1;
         }
         box.set_empty();
         int lCount = 0;
-        for (int b=0;b<sah.numBins;b++) {
-          float rArea = rAreas[b];
-          float lArea = surfaceArea(box);
+        for (int b=0;b<elh.numBins;b++) {
+          float rArea = rLengths[b];
+          float lArea = edgeLengths(box);
           if (lCount>0 && rCount>0) {
             float cost = lArea*lCount+rArea*rCount;
             if (cost < bestCost) {
@@ -96,7 +126,7 @@ namespace cuBQL {
               splitBin = b;
             }
           }
-          auto bin = sah.dims[d].bins[b];
+          auto bin = elh.dims[d].bins[b];
           grow(box,bin.bounds.make_box());
           lCount += bin.count;
           rCount -= bin.count;
@@ -104,10 +134,11 @@ namespace cuBQL {
       }
     }
     
+    template<typename T, int D>
     __global__
     void initState(BuildState *buildState,
                    NodeState  *nodeStates,
-                   TempNode   *nodes)
+                   TempNode<T,D>   *nodes)
     {
       // buildState->nodes = nodes;
       buildState->numNodes = 2;
@@ -121,10 +152,11 @@ namespace cuBQL {
       nodes[1].doneNode.count  = 0;
     }
 
+    template<typename T, int D>
     __global__
-    void initPrims(TempNode    *nodes,
+    void initPrims(TempNode<T,D>    *nodes,
                    PrimState   *primState,
-                   const box3f *primBoxes,
+                   const box_t<T,D> *primBoxes,
                    uint32_t     numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -133,7 +165,7 @@ namespace cuBQL {
       auto &me = primState[primID];
       me.primID = primID;
                                                     
-      const box3f box = primBoxes[primID];
+      const box_t<T,D> box = primBoxes[primID];
       if (box.get_lower(0) <= box.get_upper(0)) {
         me.nodeID = 0;
         me.done   = false;
@@ -147,13 +179,14 @@ namespace cuBQL {
     }
 
     
+    template<typename T, int D>
     __global__
-    void binPrims(SAHBins          *sahBins,
-                  int               sahNodeBegin,
-                  int               sahNodeEnd,
-                  TempNode         *nodes,
+    void binPrims(ELHBins<T,D>          *elhBins,
+                  int               elhNodeBegin,
+                  int               elhNodeEnd,
+                  TempNode<T,D>         *nodes,
                   PrimState        *primState,
-                  const box3f      *primBoxes,
+                  const box_t<T,D>      *primBoxes,
                   uint32_t          numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -163,15 +196,15 @@ namespace cuBQL {
       if (ps.done) return;
 
       int nodeID = ps.nodeID;
-      if (nodeID < sahNodeBegin || nodeID >= sahNodeEnd)
+      if (nodeID < elhNodeBegin || nodeID >= elhNodeEnd)
         return;
 
-      const box3f primBox = primBoxes[primID];
+      const box_t<T,D> primBox = primBoxes[primID];
 
-      auto &sah = sahBins[nodeID-sahNodeBegin];
-      box3f centBounds = nodes[nodeID].openBranch.centBounds.make_box();
-#pragma unroll(3)
-      for (int d=0;d<3;d++) {
+      auto &elh = elhBins[nodeID-elhNodeBegin];
+      box_t<T,D> centBounds = nodes[nodeID].openBranch.centBounds.make_box();
+#pragma unroll(D)
+      for (int d=0;d<D;d++) {
         int bin = 0;
         float lo = centBounds.get_lower(d);
         float hi = centBounds.get_upper(d);
@@ -180,8 +213,8 @@ namespace cuBQL {
           float rel
             = (prim_d - centBounds.get_lower(d))
             / (centBounds.get_upper(d)-centBounds.get_lower(d));
-          bin = int(rel*SAHBins::numBins);
-          bin = max(0,min(SAHBins::numBins-1,bin));
+          bin = int(rel*ELHBins<T,D>::numBins);
+          bin = max(0,min(ELHBins<T,D>::numBins-1,bin));
           // printf("prim %i in node %i, pos %f %f %f in cent %f %f %f - %f %f %f; dim %i: rel %f bin %i\n",
           //        primID,nodeID,
           //        primBox.lower.x,
@@ -195,16 +228,17 @@ namespace cuBQL {
           //        centBounds.upper.z,
           //        d,rel,bin);
         }
-        auto &myBin = sah.dims[d].bins[bin];
+        auto &myBin = elh.dims[d].bins[bin];
         atomic_grow(myBin.bounds,primBox);
         atomicAdd(&myBin.count,1);
       }
     }
     
+    template<typename T, int D>
     __global__
     void closeOpenNodes(BuildState *buildState,
                         NodeState  *nodeStates,
-                        TempNode   *nodes,
+                        TempNode<T,D>   *nodes,
                         int numNodes)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -227,28 +261,29 @@ namespace cuBQL {
       // cannot be anything else...
     }
     
+    template<typename T, int D>
     __global__
     void selectSplits(BuildState *buildState,
-                      SAHBins    *sahBins,
-                      int         sahNodeBegin,
-                      int         sahNodeEnd,
+                      ELHBins<T,D>    *elhBins,
+                      int         elhNodeBegin,
+                      int         elhNodeEnd,
                       NodeState  *nodeStates,
-                      TempNode   *nodes,
+                      TempNode<T,D>   *nodes,
                       BuildConfig buildConfig)
     {
-      const int nodeID = sahNodeBegin + threadIdx.x+blockIdx.x*blockDim.x;
+      const int nodeID = elhNodeBegin + threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID == 1) return;
       
-      if (nodeID < sahNodeBegin || nodeID >= sahNodeEnd) return;
+      if (nodeID < elhNodeBegin || nodeID >= elhNodeEnd) return;
       
       NodeState &nodeState = nodeStates[nodeID];
       auto in = nodes[nodeID].openBranch;
-      auto &sah = sahBins[nodeID-sahNodeBegin];
+      auto &elh = elhBins[nodeID-elhNodeBegin];
       int   splitDim = -1;
       int   splitBin;
       if (in.count > buildConfig.makeLeafThreshold) {
-        evaluateSAH(splitDim,splitBin,sah);
-        // printf("evaluated sah, result is dim %i bin %i\n",splitDim,splitBin);
+        evaluateELH(splitDim,splitBin,elh);
+        // printf("evaluated elh, result is dim %i bin %i\n",splitDim,splitBin);
       }
       if (splitDim < 0) {
         nodeState   = DONE_NODE;
@@ -280,11 +315,12 @@ namespace cuBQL {
       }
     }
 
+    template<typename T, int D>
     __global__
     void updatePrims(NodeState       *nodeStates,
-                     TempNode        *nodes,
+                     TempNode<T,D>        *nodes,
                      PrimState       *primStates,
-                     const box3f     *primBoxes,
+                     const box_t<T,D>     *primBoxes,
                      int numPrims)
     {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -301,7 +337,7 @@ namespace cuBQL {
       }
 
       auto open = nodes[me.nodeID].openNode;
-      const box3f primBox = primBoxes[me.primID];
+      const box_t<T,D> primBox = primBoxes[me.primID];
 
       const int d = open.dim;
       float lo = open.centBounds.get_lower(d);
@@ -311,8 +347,8 @@ namespace cuBQL {
       float rel
         = (prim_d - lo)
         / (hi - lo);
-      int prim_bin = int(rel*SAHBins::numBins);
-      prim_bin = max(0,min(SAHBins::numBins-1,prim_bin));
+      int prim_bin = int(rel*ELHBins<T,D>::numBins);
+      prim_bin = max(0,min(ELHBins<T,D>::numBins-1,prim_bin));
       
       int side = (prim_bin >= open.bin);
       // printf("updateprim %i node %i state %i dim %i bin %i -> prim bin %i -> side %i\n",
@@ -330,8 +366,9 @@ namespace cuBQL {
        bvh's primIDs[] array; and b) it writes, for each leaf nod ein
        the nodes[] array, the node.offset value to point to the first
        of this nodes' items in that bvh.primIDs[] list. */
+    template<typename T, int D>
     __global__
-    void writePrimsAndLeafOffsets(TempNode        *nodes,
+    void writePrimsAndLeafOffsets(TempNode<T,D>        *nodes,
                                   uint32_t        *bvhItemList,
                                   PrimState       *primStates,
                                   int              numPrims)
@@ -349,15 +386,16 @@ namespace cuBQL {
       atomicMin(&node.doneNode.offset,offset);
     }
 
+    template<typename T, int D>
     __global__
-    void clearBins(SAHBins *sahBins, int numActive)
+    void clearBins(ELHBins<T,D> *elhBins, int numActive)
     {
       const int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= numActive) return;
 
-      for (int d=0;d<3;d++)
-        for (int b=0;b<SAHBins::numBins;b++) {
-          auto &mine = sahBins[tid].dims[d].bins[b];
+      for (int d=0;d<D;d++)
+        for (int b=0;b<ELHBins<T,D>::numBins;b++) {
+          auto &mine = elhBins[tid].dims[d].bins[b];
           mine.count = 0;
           mine.bounds.set_empty();
         }
@@ -365,9 +403,10 @@ namespace cuBQL {
     
     /* writes main phase's temp nodes into final bvh.nodes[]
        layout. actual bounds of that will NOT yet bewritten */
+    template<typename T, int D>
     __global__
-    void writeNodes(BinaryBVH<float,3>::Node *finalNodes,
-                    TempNode  *tempNodes,
+    void writeNodes(typename BinaryBVH<T,D>::Node *finalNodes,
+                    TempNode<T,D>  *tempNodes,
                     int        numNodes)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
@@ -377,26 +416,28 @@ namespace cuBQL {
       finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
     }
 
-    void sahBuilder(BinaryBVH<float,3>  &bvh,
-                    const box3f *boxes,
+    template<typename T, int D>
+    void elhBuilder(BinaryBVH<T,D>  &bvh,
+                    const box_t<T,D> *boxes,
                     int          numPrims,
                     BuildConfig  buildConfig,
                     cudaStream_t s)
     {
+      // std::cout << "#######################################################" << std::endl;
       // ==================================================================
       // do build on temp nodes
       // ==================================================================
-      TempNode   *tempNodes = 0;
+      TempNode<T,D>   *tempNodes = 0;
       NodeState  *nodeStates = 0;
       PrimState  *primStates = 0;
       BuildState *buildState = 0;
-      SAHBins    *sahBins    = 0;
-      int maxActiveSAHs = 4+numPrims/(8*SAHBins::numBins);
+      ELHBins<T,D>    *elhBins    = 0;
+      int maxActiveELHs = 4+numPrims/(8*ELHBins<T,D>::numBins);
       _ALLOC(tempNodes,2*numPrims,s);
       _ALLOC(nodeStates,2*numPrims,s);
       _ALLOC(primStates,numPrims,s);
       _ALLOC(buildState,1,s);
-      _ALLOC(sahBins,maxActiveSAHs,s);
+      _ALLOC(elhBins,maxActiveELHs,s);
       
       initState<<<1,1,0,s>>>(buildState,
                              nodeStates,
@@ -421,35 +462,35 @@ namespace cuBQL {
             (buildState,nodeStates,tempNodes,numDone);
 
         // compute which nodes (by defintion, at the of the array) are
-        // currently open and need binning/sah plane selection
+        // currently open and need binning/elh plane selection
         const int openBegin = numDone;
         const int openEnd   = numNodes;
 
-        // go over these nodes in blocks of 'maxActiveSAH' nodes
-        // (because that's all we have SAH bin storage for), and do
-        // these sah bin-and-select steps
-        for (int sahBegin=openBegin;sahBegin<openEnd;sahBegin+=maxActiveSAHs) {
-          const int sahEnd = std::min(sahBegin+maxActiveSAHs,openEnd);
-          const int numSAH = sahEnd-sahBegin;
+        // go over these nodes in blocks of 'maxActiveELH' nodes
+        // (because that's all we have ELH bin storage for), and do
+        // these elh bin-and-select steps
+        for (int elhBegin=openBegin;elhBegin<openEnd;elhBegin+=maxActiveELHs) {
+          const int elhEnd = std::min(elhBegin+maxActiveELHs,openEnd);
+          const int numELH = elhEnd-elhBegin;
 
           // clear as many of our current set of bins as we might need.
-          clearBins<<<divRoundUp(numSAH,32),32,0,s>>>
-            (sahBins,numSAH);
+          clearBins<<<divRoundUp(numELH,32),32,0,s>>>
+            (elhBins,numELH);
 
           // bin all prims into those bins; note this will
           // automatically do an immediate return/no-op for all prims
           // that are not in an yof the currently processed nodes.
           binPrims<<<divRoundUp(numPrims,128),128,0,s>>>
-            (sahBins,sahBegin,sahEnd,
+            (elhBins,elhBegin,elhEnd,
              tempNodes,
              primStates,boxes,numPrims);
 
-          // now that we have SAH bin information for all those nodes,
+          // now that we have ELH bin information for all those nodes,
           // go over those active nodes and select their split plane
           // (or make them into a leaf)
-          selectSplits<<<divRoundUp(numSAH,32),32,0,s>>>
+          selectSplits<<<divRoundUp(numELH,32),32,0,s>>>
             (buildState,
-             sahBins,sahBegin,sahEnd,
+             elhBins,elhBegin,elhEnd,
              nodeStates,tempNodes,
              buildConfig);
         }
@@ -510,9 +551,9 @@ namespace cuBQL {
       _FREE(nodeStates,s);
       _FREE(primStates,s);
       _FREE(buildState,s);
-      _FREE(sahBins,s);
+      _FREE(elhBins,s);
     }
-  } // ::cuBQL::sahBuilder_impl
+  } // ::cuBQL::elhBuilder_impl
 
 } // :: cuBQL
 

@@ -14,28 +14,18 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#pragma once
+#include "testing/helper/Generator.h"
 
-#include "cuBQL/math/vec.h"
-#include "testing/helper.h"
+using namespace cuBQL::test_rig;
 
-namespace cuBQL {
-  namespace test_rig {
+int main(int ac, char **av)
+{
+  CUDAArray<vec_t<float,3>> points;
+  
+  UniformPointGenerator<float,3> uni3f;
+  points = uni3f.generate(1024,0x12345);
 
-    struct Triangle {
-      vec3f a, b, c;
-    };
-
-    inline __both__ float area(Triangle tri)
-    { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
-
-    std::vector<Triangle> loadOBJ(const std::string &fileName);
-    std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
-
-    std::vector<vec3f> sample(const std::vector<Triangle> &triangles,
-                              size_t numSamples,
-                              int seed=0x34234987);
-    void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
-
-  } // ::cuBQL::test_rig
-} // ::cuBQL
+  ClusteredPointGenerator<float,3> cluster3f;
+  points = cluster3f.generate(1024,0x12345);
+  
+}

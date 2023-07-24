@@ -1,3 +1,5 @@
+DEPRECATED
+
 // ======================================================================== //
 // Copyright 2023-2023 Ingo Wald                                            //
 //                                                                          //
@@ -55,9 +57,9 @@ int main(int ac, char **av)
   for(auto tri : tris) {
     box3f bbox;
     bbox.set_empty();
-    grow(bbox,tri.a);
-    grow(bbox,tri.b);
-    grow(bbox,tri.c);
+    bbox.grow(tri.a);
+    bbox.grow(tri.b);
+    bbox.grow(tri.c);
     boxes.push_back(bbox);
   }
   

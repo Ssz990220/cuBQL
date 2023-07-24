@@ -137,7 +137,7 @@ namespace cuBQL {
         throw std::runtime_error(str);
 #else
 #ifndef NDEBUG
-      std::string bt = ::detail::backtrace();
+      std::string bt = cuBQL::detail::backtrace();
       fprintf(stderr,"%s\n",bt.c_str());
 #endif
       raise(SIGINT);

@@ -16,6 +16,7 @@
 
 #include "cuBQL/bvh.h"
 #include "cuBQL/queries/fcp.h"
+#include "cuBQL/computeSAH.h"
 
 #include "testing/helper/CUDAArray.h"
 #include "testing/helper.h"
@@ -24,28 +25,28 @@ namespace cuBQL {
   template<typename bvh_t>
   struct BLAS {
     bvh_t   bvh;
-    float3 *data;
+    vec_t<float,3> *data;
   };
   
   template<typename bvh_t>
   inline __device__
   int2 twoLevel_fcp(bvh_t bvh,
                     const BLAS<bvh_t> *blases,
-                    float3 query,
+                    vec_t<float,3> query,
                     float &maxQueryDistSquare);
 
   /*! fcp kernel for a binary two-level BVH. The 'blases' are a list
-      of the bottom-level acceleration structures (also BinaryBVHs),
-      maxQueryDist isthe maximum search distance. Return value is a
-      int2, where result.x is the index of the BLAS that contained the
-      closest point, and index.y is the ID of the primitive within
-      that BLAS. If no point could be found within the given search
-      radius, this returns result.x==-1 */
+    of the bottom-level acceleration structures (also BinaryBVHs),
+    maxQueryDist isthe maximum search distance. Return value is a
+    int2, where result.x is the index of the BLAS that contained the
+    closest point, and index.y is the ID of the primitive within
+    that BLAS. If no point could be found within the given search
+    radius, this returns result.x==-1 */
   inline __device__
-  int2 twoLevel_fcp(BinaryBVH bvh,
-                   const BLAS<BinaryBVH> *blases,
-                   float3 query,
-                   float &maxQueryDistSquare)
+  int2 twoLevel_fcp(BinaryBVH<float,3> bvh,
+                    const BLAS<BinaryBVH<float,3>> *blases,
+                    vec_t<float,3> query,
+                    float &maxQueryDistSquare)
   {
     int2 result = {-1,-1};
     
@@ -60,10 +61,10 @@ namespace cuBQL {
         if (count>0)
           // leaf
           break;
-        BinaryBVH::Node child0 = bvh.nodes[offset+0];
-        BinaryBVH::Node child1 = bvh.nodes[offset+1];
-        float dist0 = sqrDistance(child0,query);
-        float dist1 = sqrDistance(child1,query);
+        BinaryBVH<float,3>::Node child0 = bvh.nodes[offset+0];
+        BinaryBVH<float,3>::Node child1 = bvh.nodes[offset+1];
+        float dist0 = sqrDistance(child0.bounds,query);
+        float dist1 = sqrDistance(child1.bounds,query);
         int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
         if (dist1 <= maxQueryDistSquare) {
           float dist = max(dist0,dist1);
@@ -98,6 +99,8 @@ namespace cuBQL {
     }
   }
 
+#if 0
+  NEEDS REACTIVATING
   /*! fcp kernel for a binary two-level BVH. The 'blases' are a list
     of the bottom-level acceleration structures (also BinaryBVHs),
     maxQueryDist isthe maximum search distance. Return value is a
@@ -107,9 +110,9 @@ namespace cuBQL {
     radius, this returns result.x==-1 */
   template<int N>
   inline __device__
-  int2 twoLevel_fcp(WideBVH<N> bvh,
-                    const BLAS<WideBVH<N>> *blases,
-                    float3 query,
+  int2 twoLevel_fcp(WideBVH<float,3,N> bvh,
+                    const BLAS<WideBVH<float,3,N>> *blases,
+                    vec_t<float,3> query,
                     float &maxQueryDistSquare)
   {
     int2 result = {-1,-1};
@@ -132,7 +135,7 @@ namespace cuBQL {
         if (nodeID & (1<<31))
           break;
         
-        const typename WideBVH<N>::Node &node = bvh.nodes[nodeID];
+        const typename WideBVH<float,3,N>::Node &node = bvh.nodes[nodeID];
 #pragma unroll(N)
         for (int c=0;c<N;c++) {
           const auto child = node.children[c];
@@ -182,188 +185,196 @@ namespace cuBQL {
       nodeID = -1;
     }
   }
-
+#endif
 
 }
 
-namespace testing {
+namespace cuBQL {
+  namespace test_rig {
 
-  using box_t = cuBQL::box3f;
+    using box_t = cuBQL::box3f;
 
-  std::vector<float> reference;
+    std::vector<float> reference;
   
-  struct TestConfig {
-    float maxTimeThreshold = 10.f;
-    float maxQueryRadius = INFINITY;
-  };
-  
-  void usage(const std::string &error = "")
-  {
-    if (!error.empty()) {
-      std::cerr << error << "\n\n";
-    }
-    std::cout << "./cuBQL_fcp dataPoints.dat queryPoints.dat\n\n";
-    exit(error.empty()?0:1);
-  }
-
-  __global__
-  void makeBoxes(box_t *boxes, float3 *points, int numPoints)
-  {
-    int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    if (tid >= numPoints) return;
-    float3 point = points[tid];
-    boxes[tid].lower = point;
-    boxes[tid].upper = point;
-  }
-
-  __global__
-  void resetResults(float *results, int numQueries)
-  {
-    int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    if (tid >= numQueries) return;
-    results[tid] = INFINITY;//-1;
-  }
-  
-  template<typename bvh_t>
-  __global__
-  void runFCP(float *results,
-              bvh_t bvh,
-              const BLAS<bvh_t> *blases,
-              const float3 *queries,
-              float maxQueryRadius,
-              int   numQueries)
-  {
-    int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    if (tid >= numQueries) return;
-
-    const float3 query = queries[tid];
-    /* careful: fcp kernel expects SQUARE of maxradius */
-    float sqrMaxDist = maxQueryRadius*maxQueryRadius;
-    int2 res = cuBQL::twoLevel_fcp(bvh,blases,query,
-                                   /* this also serves as return value: */
-                                   sqrMaxDist);
-    if (res.x == -1)
-      results[tid] = INFINITY;
-    else
-      // results[tid] = sqrDistance(blases[res.x].data[res.y],query);
-      results[tid] = sqrMaxDist;
-  }
-
-  template<typename bvh_t>
-  void testFCP(const std::vector<std::vector<float3>> &h_dataPoints,
-               const std::vector<float3> &h_queryPoints,
-               BuildConfig buildConfig,
-               TestConfig testConfig
-               )
-  {
-    std::vector<BLAS<bvh_t>> blases(h_dataPoints.size());
-    std::vector<box3f> blasBoxes(h_dataPoints.size());
-    std::vector<CUDAArray<float3>> blasDatas(h_dataPoints.size());
-    for (int blasID=0;blasID<h_dataPoints.size();blasID++) {
-      CUDAArray<float3> &thisBlasData = blasDatas[blasID];
-      thisBlasData.upload(h_dataPoints[blasID]);
-      
-      box3f bbox; bbox.set_empty();
-      for (auto pt : h_dataPoints[blasID])
-        bbox.grow(pt);
-      blasBoxes[blasID] = bbox;
-      
-      CUDAArray<box_t> boxes(thisBlasData.size());
-      {
-        int bs = 256;
-        int nb = divRoundUp((int)thisBlasData.size(),bs);
-        makeBoxes<<<nb,bs>>>(boxes.data(),thisBlasData.data(),(int)thisBlasData.size());
-      };
-      CUBQL_CUDA_SYNC_CHECK();
-      
-      // cuBQL::BinaryBVH
-      bvh_t &bvh = blases[blasID].bvh;
-      blases[blasID].data = thisBlasData.data();
-      std::cout << "building blas over " << prettyNumber(h_dataPoints.size()) << " points..." << std::endl;
-      cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
-      std::cout << "blas bvh is built, SAH cost is " << cuBQL::computeSAH(bvh) << std::endl;
-    }
-
-    CUDAArray<box3f> d_blasBoxes;
-    d_blasBoxes.upload(blasBoxes);
-    CUDAArray<BLAS<bvh_t>> d_blases;
-    d_blases.upload(blases);
-
-    bvh_t tlas;
-    buildConfig.maxAllowedLeafSize = 1;
-    cuBQL::gpuBuilder(tlas,d_blasBoxes.data(),d_blasBoxes.size(),buildConfig);
-    std::cout << "tlas bvh is built, SAH cost is " << cuBQL::computeSAH(tlas) << std::endl;
-
-    
-    CUDAArray<float3> queryPoints;
-    queryPoints.upload(h_queryPoints);
-    
-    int numQueries = queryPoints.size();
-    CUDAArray<float> closest(numQueries);
-
-    // ------------------------------------------------------------------
-    std::cout << "first query for warm-up and checking reference data (if provided)"
-              << std::endl;
-    // ------------------------------------------------------------------
-    resetResults<<<divRoundUp(numQueries,128),128>>>(closest.data(),numQueries);
-    runFCP<<<divRoundUp(numQueries,128),128>>>
-      (closest.data(),
-       tlas,
-       d_blases.data(),
-       queryPoints.data(),
-       testConfig.maxQueryRadius,
-       numQueries);
-    CUBQL_CUDA_SYNC_CHECK();
-    if (reference.empty()) {
-      reference = closest.download();
-    } else {
-      std::cout << "checking reference...." << std::endl;
-      std::vector<float> ours = closest.download();
-      if (ours.size() != reference.size())
-        throw std::runtime_error("reference file size odes not have expected number of entries!?");
-      for (int i=0;i<ours.size();i++) {
-        if (ours[i] > reference[i] && sqr(reference[i]) <= sqr(testConfig.maxQueryRadius)) {
-          std::cout << "ours/reference mismatch at index "
-                    << i << "/" << reference.size() << ":" << std::endl;
-          std::cout << "  ours      is " << ours[i] << std::endl;
-          std::cout << "  reference is " << reference[i] << std::endl;
-          throw std::runtime_error("does NOT match!");
-        }
-      }
-      std::cout << "all good, ours matches reference array ..." << std::endl;
-    }
-
-    // ------------------------------------------------------------------
-    // actual timing runs
-    // ------------------------------------------------------------------
-    int numPerRun = 1;
-    while (true) {
-      CUBQL_CUDA_SYNC_CHECK();
-      std::cout << "timing run with " << numPerRun << " repetition.." << std::endl;
-      double t0 = getCurrentTime();
-      for (int i=0;i<numPerRun;i++) {
-        resetResults<<<divRoundUp(numQueries,128),128>>>(closest.data(),numQueries);
-        runFCP<<<divRoundUp(numQueries,128),128>>>
-          (closest.data(),
-           tlas,
-           d_blases.data(),
-           queryPoints.data(),
-           testConfig.maxQueryRadius,
-           numQueries);
-        CUBQL_CUDA_SYNC_CHECK();
-      }
-      double t1 = getCurrentTime();
-      std::cout << "done " << numPerRun
-                << " queries in " << prettyDouble(t1-t0) << "s, that's "
-                << prettyDouble((t1-t0)/numPerRun) << "s query" << std::endl;
-      if ((t1 - t0) > testConfig.maxTimeThreshold)
-        break;
-      numPerRun*=2;
+    struct TestConfig {
+      float maxTimeThreshold = 10.f;
+      float maxQueryRadius = INFINITY;
     };
+  
+    void usage(const std::string &error = "")
+    {
+      if (!error.empty()) {
+        std::cerr << error << "\n\n";
+      }
+      std::cout << "./cuBQL_fcp dataPoints.dat queryPoints.dat\n\n";
+      exit(error.empty()?0:1);
+    }
+
+    __global__
+    void makeBoxes(box_t *boxes, vec_t<float,3> *points, int numPoints)
+    {
+      int tid = threadIdx.x+blockIdx.x*blockDim.x;
+      if (tid >= numPoints) return;
+      vec_t<float,3> point = points[tid];
+      boxes[tid].lower = point;
+      boxes[tid].upper = point;
+    }
+
+    __global__
+    void resetResults(float *results, int numQueries)
+    {
+      int tid = threadIdx.x+blockIdx.x*blockDim.x;
+      if (tid >= numQueries) return;
+      results[tid] = INFINITY;//-1;
+    }
+  
+    template<typename bvh_t>
+    __global__
+    void runFCP(float *results,
+                bvh_t bvh,
+                const BLAS<bvh_t> *blases,
+                const vec_t<float,3> *queries,
+                float maxQueryRadius,
+                int   numQueries)
+    {
+      int tid = threadIdx.x+blockIdx.x*blockDim.x;
+      if (tid >= numQueries) return;
+
+      const vec_t<float,3> query = queries[tid];
+      /* careful: fcp kernel expects SQUARE of maxradius */
+      float sqrMaxDist = maxQueryRadius*maxQueryRadius;
+      int2 res = cuBQL::twoLevel_fcp(bvh,blases,query,
+                                     /* this also serves as return value: */
+                                     sqrMaxDist);
+      if (res.x == -1)
+        results[tid] = INFINITY;
+      else
+        // results[tid] = sqrDistance(blases[res.x].data[res.y],query);
+        results[tid] = sqrMaxDist;
+    }
+
+    template<typename bvh_t>
+    void testFCP(const std::vector<std::vector<vec_t<float,3>>> &h_dataPoints,
+                 const std::vector<vec_t<float,3>> &h_queryPoints,
+                 BuildConfig buildConfig,
+                 TestConfig testConfig
+                 )
+    {
+      std::vector<BLAS<bvh_t>> blases(h_dataPoints.size());
+      std::vector<box3f> blasBoxes(h_dataPoints.size());
+      std::vector<CUDAArray<vec_t<float,3>>> blasDatas(h_dataPoints.size());
+      for (int blasID=0;blasID<h_dataPoints.size();blasID++) {
+        CUDAArray<vec_t<float,3>> &thisBlasData = blasDatas[blasID];
+        thisBlasData.upload(h_dataPoints[blasID]);
+      
+        box3f bbox; bbox.set_empty();
+        for (auto pt : h_dataPoints[blasID])
+          bbox.grow(pt);
+        blasBoxes[blasID] = bbox;
+      
+        CUDAArray<box_t> boxes(thisBlasData.size());
+        {
+          int bs = 256;
+          int nb = divRoundUp((int)thisBlasData.size(),bs);
+          makeBoxes<<<nb,bs>>>(boxes.data(),thisBlasData.data(),(int)thisBlasData.size());
+        };
+        CUBQL_CUDA_SYNC_CHECK();
+      
+        // cuBQL::BinaryBVH
+        bvh_t &bvh = blases[blasID].bvh;
+        blases[blasID].data = thisBlasData.data();
+        std::cout << "building blas over " << prettyNumber(h_dataPoints.size()) << " points..." << std::endl;
+        cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
+        if (bvh_t::numDims == 3) 
+          std::cout << "blas bvh built, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
+        else
+          std::cout << "blas bvh built..." << std::endl;
+      }
+
+      CUDAArray<box3f> d_blasBoxes;
+      d_blasBoxes.upload(blasBoxes);
+      CUDAArray<BLAS<bvh_t>> d_blases;
+      d_blases.upload(blases);
+
+      bvh_t tlas;
+      buildConfig.maxAllowedLeafSize = 1;
+      cuBQL::gpuBuilder(tlas,d_blasBoxes.data(),d_blasBoxes.size(),buildConfig);
+      if (bvh_t::numDims == 3) 
+        std::cout << "tlas bvh built, sah cost is " << cuBQL::computeSAH(tlas) << std::endl;
+      else
+        std::cout << "tlas bvh built..." << std::endl;
+
+    
+      CUDAArray<vec_t<float,3>> queryPoints;
+      queryPoints.upload(h_queryPoints);
+    
+      int numQueries = queryPoints.size();
+      CUDAArray<float> closest(numQueries);
+
+      // ------------------------------------------------------------------
+      std::cout << "first query for warm-up and checking reference data (if provided)"
+                << std::endl;
+      // ------------------------------------------------------------------
+      resetResults<<<divRoundUp(numQueries,128),128>>>(closest.data(),numQueries);
+      runFCP<<<divRoundUp(numQueries,128),128>>>
+        (closest.data(),
+         tlas,
+         d_blases.data(),
+         queryPoints.data(),
+         testConfig.maxQueryRadius,
+         numQueries);
+      CUBQL_CUDA_SYNC_CHECK();
+      if (reference.empty()) {
+        reference = closest.download();
+      } else {
+        std::cout << "checking reference...." << std::endl;
+        std::vector<float> ours = closest.download();
+        if (ours.size() != reference.size())
+          throw std::runtime_error("reference file size odes not have expected number of entries!?");
+        for (int i=0;i<ours.size();i++) {
+          if (ours[i] > reference[i] && sqr(reference[i]) <= sqr(testConfig.maxQueryRadius)) {
+            std::cout << "ours/reference mismatch at index "
+                      << i << "/" << reference.size() << ":" << std::endl;
+            std::cout << "  ours      is " << ours[i] << std::endl;
+            std::cout << "  reference is " << reference[i] << std::endl;
+            throw std::runtime_error("does NOT match!");
+          }
+        }
+        std::cout << "all good, ours matches reference array ..." << std::endl;
+      }
+
+      // ------------------------------------------------------------------
+      // actual timing runs
+      // ------------------------------------------------------------------
+      int numPerRun = 1;
+      while (true) {
+        CUBQL_CUDA_SYNC_CHECK();
+        std::cout << "timing run with " << numPerRun << " repetition.." << std::endl;
+        double t0 = getCurrentTime();
+        for (int i=0;i<numPerRun;i++) {
+          resetResults<<<divRoundUp(numQueries,128),128>>>(closest.data(),numQueries);
+          runFCP<<<divRoundUp(numQueries,128),128>>>
+            (closest.data(),
+             tlas,
+             d_blases.data(),
+             queryPoints.data(),
+             testConfig.maxQueryRadius,
+             numQueries);
+          CUBQL_CUDA_SYNC_CHECK();
+        }
+        double t1 = getCurrentTime();
+        std::cout << "done " << numPerRun
+                  << " queries in " << prettyDouble(t1-t0) << "s, that's "
+                  << prettyDouble((t1-t0)/numPerRun) << "s query" << std::endl;
+        if ((t1 - t0) > testConfig.maxTimeThreshold)
+          break;
+        numPerRun*=2;
+      };
+    }
   }
 }
 
-using namespace testing;
+using namespace cuBQL::test_rig;
 
 int main(int ac, char **av)
 {
@@ -400,23 +411,25 @@ int main(int ac, char **av)
   }
   if (dataFiles.size() != 1)
     usage("unexpected number of data file names");
-  std::vector<std::vector<float3>> dataBlocks
-    = read_from<std::vector<std::vector<float3>>>(dataFiles[0]);
+  std::vector<std::vector<vec_t<float,3>>> dataBlocks
+    = read_from<std::vector<std::vector<vec_t<float,3>>>>(dataFiles[0]);
   for (auto df : dataFiles)
-    dataBlocks.push_back(loadData<float3>(df));
-  std::vector<float3> queryPoints = loadData<float3>(queryFile);
+    dataBlocks.push_back(loadData<vec_t<float,3>>(df));
+  std::vector<vec_t<float,3>> queryPoints = loadData<vec_t<float,3>>(queryFile);
   
   if (!referenceFileName.empty() && !make_reference)
     reference = loadData<float>(referenceFileName);
 
   if (bvhType == "binary")
-    testing::testFCP<BinaryBVH>(dataBlocks,queryPoints,buildConfig,testConfig);
-  else if (bvhType == "bvh2")
-    testing::testFCP<WideBVH<2>>(dataBlocks,queryPoints,buildConfig,testConfig);
+    cuBQL::test_rig::testFCP<BinaryBVH<float,3>>(dataBlocks,queryPoints,buildConfig,testConfig);
+  // else if (bvhType == "bvh2")
+  //   cuBQL::test_rig::testFCP<WideBVH<2>>(dataBlocks,queryPoints,buildConfig,testConfig);
+#if 0
   else if (bvhType == "bvh4")
-    testing::testFCP<WideBVH<4>>(dataBlocks,queryPoints,buildConfig,testConfig);
+    cuBQL::test_rig::testFCP<WideBVH<float,3,4>>(dataBlocks,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh8")
-    testing::testFCP<WideBVH<8>>(dataBlocks,queryPoints,buildConfig,testConfig);
+    cuBQL::test_rig::testFCP<WideBVH<float,3,8>>(dataBlocks,queryPoints,buildConfig,testConfig);
+#endif
   else
     throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
 

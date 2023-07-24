@@ -14,28 +14,23 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#pragma once
+#include "cuBQL/bvh.h"
 
-#include "cuBQL/math/vec.h"
-#include "testing/helper.h"
+template<typename T, int D>
+void foo()
+{
+  using vec_t = cuBQL::vec_t<T,D>;
+  using box_t = cuBQL::box_t<T,D>;
+  using bvh_t = cuBQL::bvh_t<T,D>;
 
-namespace cuBQL {
-  namespace test_rig {
+  bvh_t bvh __attribute__((unused));
+}
 
-    struct Triangle {
-      vec3f a, b, c;
-    };
-
-    inline __both__ float area(Triangle tri)
-    { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
-
-    std::vector<Triangle> loadOBJ(const std::string &fileName);
-    std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
-
-    std::vector<vec3f> sample(const std::vector<Triangle> &triangles,
-                              size_t numSamples,
-                              int seed=0x34234987);
-    void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
-
-  } // ::cuBQL::test_rig
-} // ::cuBQL
+int main(int, char **)
+{
+  foo<float,2>();
+  foo<float,3>();
+  foo<float,4>();
+  foo<float,CUBQL_TEST_N>();
+  return 0;
+}

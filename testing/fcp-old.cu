@@ -1,3 +1,4 @@
+DEPRECATED, use fcp-gen instead
 // ======================================================================== //
 // Copyright 2023-2023 Ingo Wald                                            //
 //                                                                          //
@@ -16,6 +17,7 @@
 
 // #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
+#include "cuBQL/computeSAH.h"
 #include "cuBQL/queries/fcp.h"
 
 #include "testing/helper/CUDAArray.h"
@@ -103,7 +105,10 @@ namespace testing {
     // cuBQL::BinaryBVH
     bvh_t bvh;
     cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
-    std::cout << "bvh is built, SAH cost is " << cuBQL::computeSAH(bvh) << std::endl;
+    if (bvh_t::numDims == 3) 
+      std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
+    else
+      std::cout << "done build..." << std::endl;
 
     CUDAArray<float3> queryPoints;
     queryPoints.upload(h_queryPoints);
@@ -214,13 +219,13 @@ int main(int ac, char **av)
     reference = loadData<float>(referenceFileName);
 
   if (bvhType == "binary")
-    testing::testFCP<BinaryBVH>(dataPoints,queryPoints,buildConfig,testConfig);
-  else if (bvhType == "bvh2")
-    testing::testFCP<WideBVH<2>>(dataPoints,queryPoints,buildConfig,testConfig);
+    testing::testFCP<BinaryBVH<float,3>>(dataPoints,queryPoints,buildConfig,testConfig);
+  // else if (bvhType == "bvh2")
+  //   testing::testFCP<WideBVH<float,3,2>>(dataPoints,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh4")
-    testing::testFCP<WideBVH<4>>(dataPoints,queryPoints,buildConfig,testConfig);
+    testing::testFCP<WideBVH<float,3,4>>(dataPoints,queryPoints,buildConfig,testConfig);
   else if (bvhType == "bvh8")
-    testing::testFCP<WideBVH<8>>(dataPoints,queryPoints,buildConfig,testConfig);
+    testing::testFCP<WideBVH<float,3,8>>(dataPoints,queryPoints,buildConfig,testConfig);
   else
     throw std::runtime_error("unknown or not-yet-hooked-up bvh type '"+bvhType+"'");
 

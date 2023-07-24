@@ -16,26 +16,22 @@
 
 #pragma once
 
-#include "cuBQL/math/vec.h"
-#include "testing/helper.h"
+#include "cuBQL/math/common.h"
 
 namespace cuBQL {
-  namespace test_rig {
 
-    struct Triangle {
-      vec3f a, b, c;
-    };
+  using ::min;
+  using ::max;
 
-    inline __both__ float area(Triangle tri)
-    { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
+  using ::make_float3;
+  
+  template<int N> struct log_of;
+  template<> struct log_of< 2> { enum { value = 1 }; };
+  template<> struct log_of< 4> { enum { value = 2 }; };
+  template<> struct log_of< 8> { enum { value = 3 }; };
+  template<> struct log_of<16> { enum { value = 4 }; };
 
-    std::vector<Triangle> loadOBJ(const std::string &fileName);
-    std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
+  /*! square of a value */
+  inline __both__ float sqr(float f) { return f*f; }
+}
 
-    std::vector<vec3f> sample(const std::vector<Triangle> &triangles,
-                              size_t numSamples,
-                              int seed=0x34234987);
-    void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
-
-  } // ::cuBQL::test_rig
-} // ::cuBQL

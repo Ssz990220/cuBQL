@@ -26,7 +26,7 @@ if(${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.18)
 endif()
 
 if (NOT (${CMAKE_CURRENT_SOURCE_DIR} STREQUAL ${CMAKE_SOURCE_DIR}))
-  set(CUBQL_IS_SUBMODULE ON)
+  set(CUBQL_IS_SUBPROJECT ON)
 else()
   set(CUBQL_IS_SUBPROJECT OFF)
 endif()
@@ -44,7 +44,6 @@ if (NOT CUBQL_IS_SUBPROJECT)
       set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "" FORCE) 
     else()
       if(NOT CMAKE_BUILD_TYPE)
-	#            message("Defaulting to release build.")
         set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
       endif()
       set_property(CACHE CMAKE_BUILD_TYPE PROPERTY HELPSTRING "Choose the type of build")
@@ -58,12 +57,22 @@ if (NOT CUBQL_IS_SUBPROJECT)
   SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()
 
-set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86)
+if (CUBQL_IS_SUBPROJECT)
+  # if we're used as a subproject, parent project can set
+  # cmake_cuda_archs first; if it isn't set, let's set some of our own
+  if (NOT CMAKE_CUDA_ARCHITECTURES)
+    set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86)
+  endif()
+else()
+  # if this is NOT a subproject (we're building standalone) then we
+  # need to set some cuda archs to build against.
+  set(CMAKE_CUDA_ARCHITECTURES "80" CACHE STRING "Specific CUDA Arch(s) to build against")
+endif()
+
 if(${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.17)
   # nothing to do, setting CMAKE_CUDA_ARCHITECTURES is hte way to go
 else()
   foreach (arch IN ITEMS ${CMAKE_CUDA_ARCHITECTURES})
-#    message("status adding arch=${arch}")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
   endforeach()
 endif()
@@ -73,12 +82,15 @@ endif()
 # in one of his/her source files
 add_library(cuBQL_interface INTERFACE)
 target_sources(cuBQL_interface INTERFACE
-  # "public" stuff
+  # main public "interface" to this library
   cuBQL/bvh.h
   cuBQL/queries/fcp.h
+  # general math struff to make public stuff work
+  cuBQL/math/common.h
+  cuBQL/math/math.h
+  cuBQL/math/vec.h
+  cuBQL/math/box.h
   # internal stuff
-  cuBQL/common/common.h
-  cuBQL/common/math.h
   cuBQL/impl/builder_common.h
   cuBQL/impl/sm_builder.h
   cuBQL/impl/sah_builder.h

@@ -20,11 +20,13 @@
 #include "cuBQL/impl/builder_common.h"
 #include "cuBQL/impl/sm_builder.h"
 #include "cuBQL/impl/sah_builder.h"
+#include "cuBQL/impl/elh_builder.h"
 
 namespace cuBQL {
 
-  void gpuBuilder(BinaryBVH   &bvh,
-                  const box3f *boxes,
+  template<typename T, int D>
+  void gpuBuilder(BinaryBVH<T,D> &bvh,
+                  const box_t<T,D> *boxes,
                   uint32_t     numBoxes,
                   BuildConfig  buildConfig,
                   cudaStream_t s)
@@ -34,24 +36,28 @@ namespace cuBQL {
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 1;
-      sahBuilder_impl::sahBuilder(bvh,boxes,numBoxes,buildConfig,s);
+      if (D == 3)
+        /* for D == 3 these typecasts won't do anything; for D != 3
+           they'd be invalid, but won't ever happen */
+        sahBuilder_impl::sahBuilder((BinaryBVH<T,3>&)bvh,(const box_t<T,3> *)boxes,
+                                    numBoxes,buildConfig,s);
+      else
+        throw std::runtime_error("SAH builder not supported for this type of BVH");
+    } if (buildConfig.buildMethod == BuildConfig::ELH) {
+      elhBuilder_impl::elhBuilder(bvh,boxes,numBoxes,buildConfig,s);
     } else {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
         // builder:
-        buildConfig.makeLeafThreshold = 8;
+        buildConfig.makeLeafThreshold = 1;
       gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s);
     }
     gpuBuilder_impl::refit(bvh,boxes,s);
     CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
 
-  float computeSAH(const BinaryBVH &bvh)
-  {
-    return gpuBuilder_impl::computeSAH(bvh);
-  }
-  
-  void free(BinaryBVH   &bvh,
+  template<typename T, int D>
+  void free(BinaryBVH<T,D>   &bvh,
             cudaStream_t s)
   {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
@@ -61,5 +67,27 @@ namespace cuBQL {
     bvh.primIDs = 0;
   }
 }
+
+
+#define CUBQL_INSTANTIATE_BINARY_BVH(T,D)                       \
+  namespace cuBQL {                                             \
+    template void gpuBuilder(BinaryBVH<T,D>   &bvh,             \
+                             const box_t<T,D> *boxes,           \
+                             uint32_t     numBoxes,             \
+                             BuildConfig  buildConfig,          \
+                             cudaStream_t s);                   \
+    template void free(BinaryBVH<T,D>  &bvh, cudaStream_t s);   \
+  }                                                             \
+  
+#define CUBQL_INSTANTIATE_WIDE_BVH(T,D,N)                       \
+  namespace cuBQL {                                             \
+    template void gpuBuilder(WideBVH<T,D,N>   &bvh,             \
+                             const box_t<T,D> *boxes,           \
+                             uint32_t     numBoxes,             \
+                             BuildConfig  buildConfig,          \
+                             cudaStream_t s);                   \
+    template void free(WideBVH<T,D,N>  &bvh, cudaStream_t s);   \
+  }
+
 #endif
 

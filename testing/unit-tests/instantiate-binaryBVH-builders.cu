@@ -14,28 +14,36 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#pragma once
+#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
+#include "cuBQL/bvh.h"
 
-#include "cuBQL/math/vec.h"
-#include "testing/helper.h"
+template<typename T>
+void foo()
+{
+  using box_t = cuBQL::box_t<T,UNIT_TEST_N_FROM_CMAKE>;
+  using bvh_t = cuBQL::bvh_t<T,UNIT_TEST_N_FROM_CMAKE>;
+  using bvh4_t = cuBQL::WideBVH<T,UNIT_TEST_N_FROM_CMAKE,4>;
+  using bvh8_t = cuBQL::WideBVH<T,UNIT_TEST_N_FROM_CMAKE,8>;
 
-namespace cuBQL {
-  namespace test_rig {
+  /* this obviously will not RUN, but it should at least trigger the
+     template instantiation */
+  box_t *d_boxes = 0;
+  int numBoxes = 0;
 
-    struct Triangle {
-      vec3f a, b, c;
-    };
+  cuBQL::BuildConfig       buildConfig;
+  
+  bvh_t bvh;
+  gpuBuilder(bvh,d_boxes,numBoxes,buildConfig);
+  
+  bvh4_t bvh4;
+  gpuBuilder(bvh4,d_boxes,numBoxes,buildConfig);
+  
+  bvh8_t bvh8;
+  gpuBuilder(bvh8,d_boxes,numBoxes,buildConfig);
+}
 
-    inline __both__ float area(Triangle tri)
-    { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
-
-    std::vector<Triangle> loadOBJ(const std::string &fileName);
-    std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
-
-    std::vector<vec3f> sample(const std::vector<Triangle> &triangles,
-                              size_t numSamples,
-                              int seed=0x34234987);
-    void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
-
-  } // ::cuBQL::test_rig
-} // ::cuBQL
+int main(int, char **)
+{
+  foo<float>();
+  return 0;
+}
