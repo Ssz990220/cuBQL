@@ -81,18 +81,6 @@ if (NOT CUBQL_IS_SUBMODULE)
   # actual kernels, benchmarks, etc that _exercise_ this library
   # ==================================================================
   
-  add_executable(cuBQL_buildPerf_points buildPerf.cu)
-  target_link_libraries(cuBQL_buildPerf_points PUBLIC cuBQL_testing)
-  target_compile_definitions(cuBQL_buildPerf_points PUBLIC -DEXPECT_POINTS=1)
-    
-  add_executable(cuBQL_buildPerf_tris buildPerf.cu)
-  target_link_libraries(cuBQL_buildPerf_tris PUBLIC cuBQL_testing)
-  target_compile_definitions(cuBQL_buildPerf_tris PUBLIC -DEXPECT_TRIS=1)
-
-#  
-# add_executable(cuBQL_fcp fcp.cu)
-# target_link_libraries(cuBQL_fcp PUBLIC cuBQL_testing)
-
   add_executable(cuBQL_fcpAndKnnPoints fcpAndKnn.cu)
   target_link_libraries(cuBQL_fcpAndKnnPoints PUBLIC cuBQL_testing)
 
@@ -100,7 +88,4 @@ if (NOT CUBQL_IS_SUBMODULE)
   target_link_libraries(cuBQL_fcpAndKnnBoxes PUBLIC cuBQL_testing)
   target_compile_definitions(cuBQL_fcpAndKnnBoxes PUBLIC -D USE_BOXES=1)
 
-  add_executable(cuBQL_twoLevel twoLevel.cu)
-  target_link_libraries(cuBQL_twoLevel PUBLIC cuBQL_testing)
-  
 endif()
