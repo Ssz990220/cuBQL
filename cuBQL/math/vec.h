@@ -129,6 +129,10 @@ namespace cuBQL {
   using vec3f = vec_t<float,3>;
   using vec4f = vec_t<float,4>;
 
+  using vec2i = vec_t<int,2>;
+  using vec3i = vec_t<int,3>;
+  using vec4i = vec_t<int,4>;
+  
   template<typename T>
   inline __both__ vec_t<T,3> cross(vec_t<T,3> a, vec_t<T,3> b)
   {

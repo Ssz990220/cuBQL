@@ -30,6 +30,9 @@ namespace cuBQL {
     { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
 
     std::vector<Triangle> loadOBJ(const std::string &fileName);
+    void loadOBJ(std::vector<vec3i> &indices,
+                 std::vector<vec3f> &vertices,
+                 const std::string &fileName);
     std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
 
     std::vector<vec3f> sample(const std::vector<Triangle> &triangles,

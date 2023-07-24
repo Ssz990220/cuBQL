@@ -77,7 +77,56 @@ namespace cuBQL {
       }
       return triangles;
     }
-  
+
+    void loadOBJ(std::vector<vec3i> &indices,
+                 std::vector<vec3f> &vertices,
+                 const std::string &objFile)
+    {
+      std::string modelDir = "";
+      tinyobj::attrib_t attributes;
+      std::vector<tinyobj::shape_t> shapes;
+      std::vector<tinyobj::material_t> materials;
+    
+      std::string err = "";
+      bool readOK
+        = tinyobj::LoadObj(&attributes,
+                           &shapes,
+                           &materials,
+                           &err,
+                           &err,
+                           objFile.c_str(),
+                           modelDir.c_str(),
+                           /* triangulate */true);
+      if (!readOK) 
+        throw std::runtime_error("Could not read OBJ model from "+objFile+" : "+err);
+
+      std::vector<Triangle> triangles;
+      const vec3f *vertex_array   = (const vec3f*)attributes.vertices.data();
+      int maxUsedVertex = 0;
+      for (int shapeID=0;shapeID<(int)shapes.size();shapeID++) {
+        tinyobj::shape_t &shape = shapes[shapeID];
+        for (size_t faceID=0;faceID<shape.mesh.material_ids.size();faceID++) {
+          tinyobj::index_t idx0 = shape.mesh.indices[3*faceID+0];
+          tinyobj::index_t idx1 = shape.mesh.indices[3*faceID+1];
+          tinyobj::index_t idx2 = shape.mesh.indices[3*faceID+2];
+
+          int a = idx0.vertex_index;
+          int b = idx1.vertex_index;
+          int c = idx2.vertex_index;
+          maxUsedVertex = std::max(maxUsedVertex,a);
+          maxUsedVertex = std::max(maxUsedVertex,b);
+          maxUsedVertex = std::max(maxUsedVertex,c);
+          // vec3f a = vertex_array[idx0.vertex_index];
+          // vec3f b = vertex_array[idx1.vertex_index];
+          // vec3f c = vertex_array[idx2.vertex_index];
+          if (a >= 0 && b >=0 && c >= 0 && a != b && a != c && b != c)
+            indices.push_back({a,b,c});
+        }
+      }
+      vertices.resize(maxUsedVertex+1);
+      std::copy(vertex_array,vertex_array+maxUsedVertex+1,vertices.data());
+    }
+    
     void saveOBJ(const std::vector<Triangle> &triangles,
                  const std::string &outFileName)
     {

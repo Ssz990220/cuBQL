@@ -17,4 +17,7 @@
 add_executable(cuBQL_lineSegs3f lineSegs3f.cu)
 target_link_libraries(cuBQL_lineSegs3f cuBQL_interface)
 
+add_executable(cuBQL_fcpTriangles fcpTriangles.cu)
+target_link_libraries(cuBQL_fcpTriangles cuBQL_testing cuBQL_interface)
+
 
