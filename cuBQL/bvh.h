@@ -168,6 +168,10 @@ namespace cuBQL {
 
   template<typename T, int D>
   using bvh_t = BinaryBVH<T,D>;
+
+  // easy short-hand - though cubql also supports other types of bvhs,
+  // scalars, etc, this will likely be the most commonly used one.
+  using bvh3f = BinaryBVH<float,3>;
 } // ::cuBQL
 
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION

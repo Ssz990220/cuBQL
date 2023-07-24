@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cuBQL/math/math.h"
+#include <type_traits>
 
 namespace cuBQL {
 
@@ -44,8 +45,8 @@ namespace cuBQL {
   template<typename T>
   struct vec_t_data<T,2> {
     using cuda_t = typename cuda_eq_t<T,2>::type;
-    inline __both__ T  operator[](int i) const { return (&x)[i]; }
-    inline __both__ T &operator[](int i)       { return (&x)[i]; }
+    inline __both__ T  operator[](int i) const { return i?y:x; }
+    inline __both__ T &operator[](int i)       { return i?y:x; }
     /*! auto-cast to equivalent cuda type */
     inline __both__ operator cuda_t() { cuda_t t; t.x = x; t.y = y; return t; }
     T x, y;
@@ -53,8 +54,8 @@ namespace cuBQL {
   template<typename T>
   struct vec_t_data<T,3> {
     using cuda_t = typename cuda_eq_t<T,3>::type;
-    inline __both__ T  operator[](int i) const { return (&x)[i]; }
-    inline __both__ T &operator[](int i)       { return (&x)[i]; }
+    inline __both__ T  operator[](int i) const { return (i==2)?z:(i?y:x); }
+    inline __both__ T &operator[](int i)       { return (i==2)?z:(i?y:x); }
     /*! auto-cast to equivalent cuda type */
     inline __both__ operator cuda_t() { cuda_t t; t.x = x; t.y = y; return t; }
     T x, y, z;
@@ -82,7 +83,7 @@ namespace cuBQL {
 #pragma unroll
       for (int i=0;i<D;i++) (*this)[i] = (&o.x)[i];
     }
-    
+
     template<typename OT>
     explicit vec_t(const vec_t_data<OT,D> &o)
     {
@@ -98,6 +99,32 @@ namespace cuBQL {
     }
   };
 
+  template<typename T>
+  struct vec_t<T,3> : public vec_t_data<T,3> {
+    enum { numDims = 3 };
+    using scalar_t = T;
+    using cuda_t = typename cuda_eq_t<T,3>::type;
+    using vec_t_data<T,3>::x;
+    using vec_t_data<T,3>::y;
+    using vec_t_data<T,3>::z;
+
+    inline __both__ vec_t() {}
+    inline __both__ vec_t(const T &t) { x = y = z = t; }
+    inline __both__ vec_t(T x, T y, T z)
+    { this->x = x; this->y = y; this->z = z; }
+    inline __both__ vec_t(const vec_t_data<T,3> &o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+    inline __both__ vec_t(const cuda_t &o) 
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+
+    template<typename OT>
+    explicit vec_t(const vec_t_data<OT,3> &o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+    
+    inline __both__ vec_t &operator=(cuda_t o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+  };
+  
   using vec2f = vec_t<float,2>;
   using vec3f = vec_t<float,3>;
   using vec4f = vec_t<float,4>;

@@ -110,19 +110,7 @@ target_link_libraries(cuBQL_impl PUBLIC
   cuBQL_interface
   )
 
-add_subdirectory(testing)
-
-#add_executable(cuBQL_test_float4-fcp testing/float4-fcp.cu)
-#target_link_libraries(cuBQL_test_float4-fcp cudaKDTree)
-
-#add_executable(cuBQL_test_float4-knn testing/float4-knn.cu)
-#target_link_libraries(cuBQL_test_float4-knn cudaKDTree)
-
-#add_executable(cuBQL_test_float3-knn testing/float3-knn.cu)
-#target_link_libraries(cuBQL_test_float3-knn cudaKDTree)
-
-  
-
-
-
-
+if (NOT CUBQL_IS_SUBPROJECT)
+  add_subdirectory(testing)
+  add_subdirectory(samples)
+endif()

@@ -85,7 +85,12 @@ namespace cuBQL {
       lower = vec_t(a);
       upper = vec_t(b);
     }
-      
+
+    /*! returns a box that bounds both 'this' and another point 'v';
+        this does not get modified */
+    inline __both__ box_t including(const vec_t &v) const
+    { return box_t{min(lower,v),max(upper,v)}; }
+    
     inline __both__ box_t &grow(const vec_t &v)
     { lower = min(lower,v); upper = max(upper,v); return *this; }
     inline __both__ box_t &grow(const box_t &other)

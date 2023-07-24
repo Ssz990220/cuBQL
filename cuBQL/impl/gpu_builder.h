@@ -31,6 +31,8 @@ namespace cuBQL {
                   BuildConfig  buildConfig,
                   cudaStream_t s)
   {
+    if (numBoxes == 0) return;
+    
     if (buildConfig.buildMethod == BuildConfig::SAH) {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
