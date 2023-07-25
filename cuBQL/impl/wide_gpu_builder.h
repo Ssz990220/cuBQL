@@ -164,20 +164,21 @@ namespace cuBQL {
     }
 
     template<typename T, int D, int N>
-    void gpuBuilder(WideBVH<T,D,N> &wideBVH,
-                    const box_t<T,D> *boxes,
-                    uint32_t     numBoxes,
-                    BuildConfig  buildConfig,
-                    cudaStream_t s)
+    void gpuBuilder(WideBVH<T,D,N>    &wideBVH,
+                    const box_t<T,D>  *boxes,
+                    uint32_t           numBoxes,
+                    BuildConfig        buildConfig,
+                    cudaStream_t       s,
+                    GpuMemoryResource &memResource)
     {
       
       BinaryBVH<T,D> binaryBVH;
-      gpuBuilder(binaryBVH,boxes,numBoxes,buildConfig,s);
+      gpuBuilder(binaryBVH,boxes,numBoxes,buildConfig,s,memResource);
 
       int          *d_numWideNodes;
       CollapseInfo *d_infos;
-      _ALLOC(d_numWideNodes,1,s);
-      _ALLOC(d_infos,binaryBVH.numNodes,s);
+      _ALLOC(d_numWideNodes,1,s,memResource);
+      _ALLOC(d_infos,binaryBVH.numNodes,s,memResource);
     
       collapseInit<<<divRoundUp((int)binaryBVH.numNodes,1024),1024,0,s>>>
         (d_numWideNodes,d_infos,binaryBVH);
@@ -189,49 +190,47 @@ namespace cuBQL {
       CUBQL_CUDA_CALL(MemcpyAsync(&wideBVH.numNodes,d_numWideNodes,
                                   sizeof(int),cudaMemcpyDefault,s));
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _ALLOC(wideBVH.nodes,wideBVH.numNodes,s);
+      _ALLOC(wideBVH.nodes,wideBVH.numNodes,s,memResource);
 
       collapseExecute<<<divRoundUp((int)wideBVH.numNodes,1024),1024,0,s>>>
         (d_infos,wideBVH,binaryBVH);
 
-      wideBVH.numPrims = binaryBVH.numPrims;
-      wideBVH.primIDs  = binaryBVH.primIDs;
+      wideBVH.numPrims  = binaryBVH.numPrims;
+      wideBVH.primIDs   = binaryBVH.primIDs;
       binaryBVH.primIDs = 0;
     
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(d_infos,s);
-      _FREE(d_numWideNodes,s);
-      free(binaryBVH,s);
+      _FREE(d_infos,s,memResource);
+      _FREE(d_numWideNodes,s,memResource);
+      free(binaryBVH,s,memResource);
     }
 
   } // ::cuBQL::gpuBuilder_impl
 
   template<typename T, int D, int N>
-  void gpuBuilder(WideBVH<T,D,N>   &bvh,
-                  const box_t<T,D> *boxes,
-                  uint32_t     numBoxes,
-                  BuildConfig  buildConfig,
-                  cudaStream_t s)
+  void gpuBuilder(WideBVH<T,D,N>    &bvh,
+                  const box_t<T,D>  *boxes,
+                  uint32_t           numBoxes,
+                  BuildConfig        buildConfig,
+                  cudaStream_t       s,
+                  GpuMemoryResource &memResource)
   {
-    gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,buildConfig,s);
+    gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,buildConfig,s,memResource);
   }
 
   template<typename T, int D, int N>
   void free(WideBVH<T,D,N>   &bvh,
-            cudaStream_t s)
+            cudaStream_t s,
+            GpuMemoryResource &memResource)
   {
     CUBQL_CUDA_CALL(StreamSynchronize(s));
-    CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
-    CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
+    gpuBuilder_impl::_FREE(bvh.primIDs,s,memResource);
+    gpuBuilder_impl::_FREE(bvh.nodes,s,memResource);
+    // CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
+    // CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
     CUBQL_CUDA_CALL(StreamSynchronize(s));
     bvh.primIDs = 0;
   }
-
-  // template<typename T, int D, int N>
-  // float computeSAH(const WideBVH<T,D,N> &bvh)
-  // {
-  //   return gpuBuilder_impl::computeSAH(bvh);
-  // }
   
 } // :: cuBQL
 

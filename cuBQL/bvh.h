@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cuBQL/math/box.h"
+#include <cuda_runtime_api.h>
 
 namespace cuBQL {
 
@@ -120,6 +121,56 @@ namespace cuBQL {
   };
 
   // ------------------------------------------------------------------
+
+  /*! defines a 'memory resource' that can be used for allocating gpu
+      memory; this allows the user to switch between usign
+      cudaMallocAsync (where avialble) vs regular cudaMalloc (where
+      not), or to use their own memory pool, to use managed memory,
+      etc. All memory allocatoins done during construction will use
+      the memory resource passed to the respective build function. */
+  struct GpuMemoryResource {
+    virtual cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) = 0;
+    virtual cudaError_t free(void* ptr, cudaStream_t s) = 0;
+  };
+
+  struct ManagedMemMemoryResource : public GpuMemoryResource {
+    cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) override
+    {
+      cudaStreamSynchronize(s);
+      return cudaMallocManaged(ptr,size);
+    }
+    cudaError_t free(void* ptr, cudaStream_t s) override
+    {
+      cudaStreamSynchronize(s);
+      return cudaFree(ptr);
+    }
+  };
+
+  /* by default let's use cuda malloc async, which is much better and
+     faster than regular malloc; but that's available on cuda 11, so
+     let's add a fall back for older cuda's, too */
+#if CUDART_VERSION >= 11000
+  struct AsyncGpuMemoryResource final : GpuMemoryResource {
+    cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) override {
+      return cudaMallocAsync(ptr, size, s);
+    }
+    cudaError_t free(void* ptr, cudaStream_t s) override {
+      return cudaFreeAsync(ptr, s);
+    }
+  };
+
+  inline GpuMemoryResource &defaultGpuMemResource() {
+    static AsyncGpuMemoryResource memResource;
+    return memResource;
+  }
+#else
+  inline GpuMemoryResource &defaultGpuMemResource() {
+    static ManagedMemMemoryResource memResource;
+    return memResource;
+  }
+#endif
+
+  // ------------------------------------------------------------------
   
   /*! builds a wide-bvh over a given set of primitive bounding boxes.
 
@@ -132,11 +183,12 @@ namespace cuBQL {
     during traversal nor mess up the tree in any way, shape, or form
   */
   template<typename T, int D>
-  void gpuBuilder(BinaryBVH<T,D> &bvh,
-                  const box_t<T,D>      *boxes,
+  void gpuBuilder(BinaryBVH<T,D>   &bvh,
+                  const box_t<T,D> *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
-                  cudaStream_t      s=0);
+                  cudaStream_t      s=0,
+                  GpuMemoryResource &memResource=defaultGpuMemResource());
   
   /*! builds a BinaryBVH over the given set of boxes (using the given
       stream), using a simple adaptive spatial median builder (ie,
@@ -150,7 +202,8 @@ namespace cuBQL {
                   const box_t<T,D>      *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
-                  cudaStream_t      s=0);
+                  cudaStream_t      s=0,
+                  GpuMemoryResource& memResource=defaultGpuMemResource());
 
   // ------------------------------------------------------------------
   
@@ -158,13 +211,15 @@ namespace cuBQL {
     building the BVH. this assumes */
   template<typename T, int D>
   void free(BinaryBVH<T,D> &bvh,
-            cudaStream_t      s=0);
+            cudaStream_t      s=0,
+            GpuMemoryResource& memResource=defaultGpuMemResource());
 
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
   template<typename T, int D, int N>
   void free(WideBVH<T,D,N> &bvh,
-            cudaStream_t      s=0);
+            cudaStream_t      s=0,
+            GpuMemoryResource& memResource=defaultGpuMemResource());
 
   template<typename T, int D>
   using bvh_t = BinaryBVH<T,D>;
