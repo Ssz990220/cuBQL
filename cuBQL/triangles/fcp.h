@@ -82,7 +82,7 @@ namespace cuBQL {
       vec3f a = triangle.a;
       vec3f b = triangle.b;
       vec3f c = triangle.c;
-#if 1
+#if 0
       // fast and approxiate code; not exact but at least correct
       // within the paramters of that approximateoin
       CPResult result;
