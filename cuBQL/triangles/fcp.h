@@ -82,6 +82,28 @@ namespace cuBQL {
       vec3f a = triangle.a;
       vec3f b = triangle.b;
       vec3f c = triangle.c;
+#if 1
+      // fast and approxiate code; not exact but at least correct
+      // within the paramters of that approximateoin
+      CPResult result;
+      result.sqrDistance = INFINITY;
+      auto doPoint = [&](vec3f p) {
+                       vec3f v = p - q;
+                       float dist2 = dot(v,v);
+                       if (dist2 < result.sqrDistance) {
+                         result.point = p;
+                         result.sqrDistance = dist2;
+                       }
+                     };
+      doPoint(a);
+      doPoint(b);
+      doPoint(c);
+      doPoint(.5f*(a+b));
+      doPoint(.5f*(b+c));
+      doPoint(.5f*(c+a));
+      doPoint(1.f/3.f * (a+b+c));
+      return result;
+#else
       vec3f N = cross(b-a,c-a);
       vec3f Nab = cross(b-a,N);
       vec3f Nbc = cross(c-b,N);
@@ -89,13 +111,13 @@ namespace cuBQL {
       CPResult result;
       lineSegs::Segment edge;
       bool edgeTest = true;
-      if (dot(q-a,Nab) <= 0.f) {
+      if (dot(q-a,Nab) >= 0.f) {
         edge = { a, b };
         // do edge test below
-      } else if (dot(q-b,Nbc) <= 0.f) {
+      } else if (dot(q-b,Nbc) >= 0.f) {
         edge = { b, c };
         // do edge test below
-      } else if (dot(q-c,Nca) <= 0.f) {
+      } else if (dot(q-c,Nca) >= 0.f) {
         edge = { c, a };
         // do edge test below
       } else {
@@ -111,6 +133,7 @@ namespace cuBQL {
 
       result.sqrDistance = sqrDistance(q,result.point);
       return result;
+#endif
     }
     
     /*! find closest point (to query point) among a set of line

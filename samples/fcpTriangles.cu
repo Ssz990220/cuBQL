@@ -38,6 +38,7 @@
 
 // std:
 #include <random>
+#include <fstream>
 
 using cuBQL::vec3i;
 using cuBQL::vec3f;
@@ -104,7 +105,7 @@ void runQueries(float       *results,
   result.clear(INFINITY);
   cuBQL::triangles::fcp(result,queryPoint,
                         trianglesBVH,triangles,vertices);
-  results[tid] = result.sqrDistance;
+  results[tid] = 10.f*sqrtf(result.sqrDistance);
   
   if (firstTime && ((tid % 10000000) == 13))
     printf("for reference: closest triangle to point (%f %f %f) is triangle %i, connecting %i:(%f %f %f), %i:(%f %f %f), and  %i:(%f %f %f); at distance %f\n",
@@ -130,7 +131,7 @@ void runQueries(float       *results,
 
 int main(int ac, const char **av)
 {
-  const char *inFileName = "bunny.obj";
+  const char *inFileName = "../samples/bunny.obj";
   if (ac != 1)
     inFileName = av[1];
   
@@ -139,6 +140,7 @@ int main(int ac, const char **av)
   // ------------------------------------------------------------------
   std::vector<vec3i> h_indices;
   std::vector<vec3f> h_vertices;
+  std::cout << "loading triangles from " << inFileName << std::endl;
   cuBQL::test_rig::loadOBJ(h_indices,h_vertices,inFileName);
   std::cout << "loaded OBJ file, got " << prettyNumber(h_indices.size())
             << " triangles with " << prettyNumber(h_vertices.size())
@@ -201,5 +203,12 @@ int main(int ac, const char **av)
             << gridDim << "x" << gridDim << "x" << gridDim
             << " (= " << prettyNumber(gridDim*gridDim*gridDim) << ")"
             << " queries..." << std::endl;
+
+#if 0
+  // saving to raw volume file, can look at that for sanity testing
+  std::cout << "saving to distances.raw" << std::endl;
+  std::ofstream out("distances.raw",std::ios::binary);
+  out.write((const char *)sqrDist,numQueries*sizeof(float));
+#endif
   return 0;
 }
