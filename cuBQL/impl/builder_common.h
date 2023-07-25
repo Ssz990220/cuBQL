@@ -24,12 +24,12 @@ namespace cuBQL {
   namespace gpuBuilder_impl {
 
     template<typename T, typename count_t>
-    inline void _ALLOC(T *&ptr, count_t count, cudaStream_t s)
-    { CUBQL_CUDA_CALL(MallocAsync((void**)&ptr,count*sizeof(T),s)); }
+    inline void _ALLOC(T *&ptr, count_t count, cudaStream_t s, GpuMemoryResource &mem_resource)
+    { CUBQL_CUDA_CHECK(mem_resource.malloc((void**)&ptr,count*sizeof(T),s)); }
     
     template<typename T>
-    inline void _FREE(T *&ptr, cudaStream_t s)
-    { CUBQL_CUDA_CALL(FreeAsync((void*)ptr,s)); ptr = 0; }
+    inline void _FREE(T *&ptr, cudaStream_t s, GpuMemoryResource &mem_resource)
+    { CUBQL_CUDA_CHECK(mem_resource.free((void*)ptr,s)); ptr = 0; }
     
     typedef enum : int8_t { OPEN_BRANCH, OPEN_NODE, DONE_NODE } NodeState;
     

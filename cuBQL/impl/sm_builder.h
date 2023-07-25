@@ -255,7 +255,8 @@ namespace cuBQL {
                const box_t<T,D> *boxes,
                int numPrims,
                BuildConfig  buildConfig,
-               cudaStream_t s)
+               cudaStream_t s,
+               GpuMemoryResource& memResource)
     {
       // ==================================================================
       // do build on temp nodes
@@ -264,10 +265,10 @@ namespace cuBQL {
       NodeState  *nodeStates = 0;
       PrimState  *primStates = 0;
       BuildState *buildState = 0;
-      _ALLOC(tempNodes,2*numPrims,s);
-      _ALLOC(nodeStates,2*numPrims,s);
-      _ALLOC(primStates,numPrims,s);
-      _ALLOC(buildState,1,s);
+      _ALLOC(tempNodes,2*numPrims,s,memResource);
+      _ALLOC(nodeStates,2*numPrims,s,memResource);
+      _ALLOC(primStates,numPrims,s,memResource);
+      _ALLOC(buildState,1,s,memResource);
       initState<<<1,1,0,s>>>(buildState,
                              nodeStates,
                              tempNodes);
@@ -308,24 +309,24 @@ namespace cuBQL {
       uint8_t *d_temp_storage = NULL;
       size_t temp_storage_bytes = 0;
       PrimState *sortedPrimStates;
-      _ALLOC(sortedPrimStates,numPrims,s);
+      _ALLOC(sortedPrimStates,numPrims,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      _ALLOC(d_temp_storage,temp_storage_bytes,s);
+      _ALLOC(d_temp_storage,temp_storage_bytes,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(d_temp_storage,s);
+      _FREE(d_temp_storage,s,memResource);
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
 
       bvh.numPrims = numPrims;
-      _ALLOC(bvh.primIDs,numPrims,s);
+      _ALLOC(bvh.primIDs,numPrims,s,memResource);
       writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
 
@@ -333,15 +334,15 @@ namespace cuBQL {
       // allocate and write final nodes
       // ==================================================================
       bvh.numNodes = numNodes;
-      _ALLOC(bvh.nodes,numNodes,s);
+      _ALLOC(bvh.nodes,numNodes,s,memResource);
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(sortedPrimStates,s);
-      _FREE(tempNodes,s);
-      _FREE(nodeStates,s);
-      _FREE(primStates,s);
-      _FREE(buildState,s);
+      _FREE(sortedPrimStates,s,memResource);
+      _FREE(tempNodes,s,memResource);
+      _FREE(nodeStates,s,memResource);
+      _FREE(primStates,s,memResource);
+      _FREE(buildState,s,memResource);
     }
 
     template<typename T, int D>
@@ -406,19 +407,20 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    void refit(BinaryBVH<T,D> &bvh,
-               const box_t<T,D> *boxes,
-               cudaStream_t s=0)
+    void refit(BinaryBVH<T,D>    &bvh,
+               const box_t<T,D>  *boxes,
+               cudaStream_t       s=0,
+               GpuMemoryResource &memResource=defaultGpuMemResource())
     {
       uint32_t *refitData;
-      CUBQL_CUDA_CALL(MallocAsync((void**)&refitData,bvh.numNodes*sizeof(int),s));
+      CUBQL_CUDA_CHECK(memResource.malloc((void**)&refitData,bvh.numNodes*sizeof(int),s));
       int numNodes = bvh.numNodes;
       refit_init<T,D><<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,refitData,bvh.numNodes);
       refit_run<<<divRoundUp(numNodes,32),32,0,s>>>
         (bvh,refitData,boxes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      CUBQL_CUDA_CALL(FreeAsync((void*)refitData,s));
+      CUBQL_CUDA_CHECK(memResource.free((void*)refitData,s));
     }
     
   } // ::cuBQL::gpuBuilder_impl
