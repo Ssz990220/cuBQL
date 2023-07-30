@@ -80,12 +80,16 @@ if (NOT CUBQL_IS_SUBMODULE)
   # ==================================================================
   # actual kernels, benchmarks, etc that _exercise_ this library
   # ==================================================================
+  option(DO_STATS "track and print traversal statsin fctAndKnn test case?" OFF)
   
   add_executable(cuBQL_fcpAndKnnPoints fcpAndKnn.cu)
   target_link_libraries(cuBQL_fcpAndKnnPoints PUBLIC cuBQL_testing)
-
+  if (DO_STATS)
+    target_compile_definitions(cuBQL_fcpAndKnnPoints PUBLIC -DDO_STATS=1)
+  endif()
+  
   add_executable(cuBQL_fcpAndKnnBoxes fcpAndKnn.cu)
   target_link_libraries(cuBQL_fcpAndKnnBoxes PUBLIC cuBQL_testing)
-  target_compile_definitions(cuBQL_fcpAndKnnBoxes PUBLIC -D USE_BOXES=1)
+  target_compile_definitions(cuBQL_fcpAndKnnBoxes PUBLIC -DUSE_BOXES=1)
 
 endif()

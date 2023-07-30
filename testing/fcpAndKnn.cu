@@ -170,8 +170,7 @@ namespace cuBQL {
       if (res == -1)
         results[tid] = INFINITY;
       else
-        // results[tid] = sqrDistance(dataPoints[res],query);
-        results[tid] = sqrMaxQueryDist;
+        results[tid] = sqrtf(sqrMaxQueryDist);
     }
 
 
@@ -367,16 +366,16 @@ namespace cuBQL {
       //   int idx = results.size()-1-(1<<i);
       //   std::cout << "  result[" << idx << "] = " << results[idx] << std::endl;;
       // }
-      double sum = 0;
-      for (auto r : results)
-        sum += r;
-      std::cout << "CHECKSUM " << sum << std::endl;
       PRINT(stats.get()->numNodes);
       PRINT(stats.get()->numPrims);
       PRINT(prettyNumber(stats.get()->numNodes));
       PRINT(prettyNumber(stats.get()->numPrims));
       std::cout << "STATS_DIGEST " << (stats.get()->numNodes+stats.get()->numPrims) << std::endl;
       std::cout << "NICE_DIGEST " << prettyNumber(stats.get()->numNodes+stats.get()->numPrims) << std::endl;
+      double sum = 0;
+      for (auto r : results)
+        sum += r;
+      std::cout << "CHECKSUM " << sum << std::endl;
       exit(0);
 #endif
 
