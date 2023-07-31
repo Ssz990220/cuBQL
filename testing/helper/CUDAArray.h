@@ -143,7 +143,7 @@ namespace cuBQL {
       if (d_data) CUBQL_CUDA_CALL(Free(d_data));
       d_data = 0;
       Allocator::alloc((void**)&d_data,N*sizeof(T));
-      assert(d_data);
+      assert(N == 0 || d_data != nullptr);
     }
 
     /*! allocates a host-vector of the same size, downloads device
