@@ -924,21 +924,21 @@ namespace cuBQL {
     {
       assert(gen_a);
       assert(gen_b);
-      CUDAArray<vec_t<T,D>>  pointes_a
+      CUDAArray<vec_t<T,D>>  points_a
         = gen_a->generate(numRequested,3*seed+0);
-      CUDAArray<vec_t<T,D>>  pointes_b
+      CUDAArray<vec_t<T,D>>  points_b
         = gen_b->generate(numRequested,3*seed+1);
 
-      CUDAArray<vec_t<T,D>>  pointes(numRequested);
+      CUDAArray<vec_t<T,D>>  points(numRequested);
       
       int bs = 128;
       int nb = divRoundUp(numRequested,bs);
-      mixKernel<<<nb,bs>>>(pointes.data(),pointes.size(),
+      mixKernel<<<nb,bs>>>(points.data(),points.size(),
                            prob_a,
                            3*seed+2,
-                           pointes_a.data(),pointes_a.size(),
-                           pointes_b.data(),pointes_b.size());
-      return pointes;
+                           points_a.data(),points_a.size(),
+                           points_b.data(),points_b.size());
+      return points;
     }
     
     template<typename T, int D>
