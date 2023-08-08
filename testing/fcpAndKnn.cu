@@ -269,7 +269,7 @@ namespace cuBQL {
     
       // cuBQL::BinaryBVH
       bvh_t bvh;
-      cuBQL::gpuBuilder(bvh,boxes.data(),boxes.size(),buildConfig);
+      cuBQL::gpuBuilder(bvh,boxes.data(),(uint32_t)boxes.size(),buildConfig);
       if (D == 3) 
         std::cout << "done build, sah cost is " << cuBQL::computeSAH(bvh) << std::endl;
       else
@@ -278,7 +278,7 @@ namespace cuBQL {
       // CUDAArray<float3> queryPoints;
       // queryPoints.upload(h_queryPoints);
     
-      int numQueries = queryPoints.size();
+      int numQueries = (int)queryPoints.size();
       CUDAArray<float> closest(numQueries);
 #if DO_STATS
       CUDAArray<Stats,ManagedMem> stats(1);

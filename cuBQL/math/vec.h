@@ -19,6 +19,12 @@
 #include "cuBQL/math/math.h"
 #include <type_traits>
 
+#ifdef _MSC_VER
+# define CUBQL_PRAGMA_UNROLL /* nothing */
+#else
+# define CUBQL_PRAGMA_UNROLL _Pragma("unroll")
+#endif
+
 namespace cuBQL {
 
   template<typename /* scalar type */T, int /*! dimensoins */D>
@@ -70,30 +76,30 @@ namespace cuBQL {
     inline __both__ vec_t() {}
     inline __both__ vec_t(const T &t)
     {
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
       for (int i=0;i<D;i++) (*this)[i] = t;
     }
     inline __both__ vec_t(const vec_t_data<T,D> &o)
     {
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
       for (int i=0;i<D;i++) (*this)[i] = o[i];
     }
     inline __both__ vec_t(const cuda_t &o)
     {
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
       for (int i=0;i<D;i++) (*this)[i] = (&o.x)[i];
     }
 
     template<typename OT>
     explicit vec_t(const vec_t_data<OT,D> &o)
     {
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
       for (int i=0;i<D;i++) (*this)[i] = (T)o[i];
     }
     
     inline __both__ vec_t &operator=(cuda_t v)
     {
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
       for (int i=0;i<numDims;i++) (*this)[i] = (&v.x)[i]; 
       return *this;
     }
@@ -166,7 +172,7 @@ namespace cuBQL {
   inline __both__ vec_t make(typename vec_t::scalar_t v)
   {
     vec_t r;
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
     for (int i=0;i<vec_t::numDims;i++)
       r[i] = v;
     return r;
@@ -176,12 +182,12 @@ namespace cuBQL {
   inline __both__ vec_t make(typename cuda_eq_t<typename vec_t::scalar_t,vec_t::numDims>::type v)
   {
     vec_t r;
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
     for (int i=0;i<vec_t::numDims;i++)
       r[i] = (&v.x)[i];
     return r;
   }
-  
+
 #define CUBQL_OPERATOR(long_op, op)                     \
   /* vec:vec */                                         \
   template<typename T, int D>                           \
@@ -189,7 +195,7 @@ namespace cuBQL {
   vec_t<T,D> long_op(vec_t<T,D> a, vec_t<T,D> b)        \
   {                                                     \
     vec_t<T,D> r;                                       \
-    _Pragma("unroll")                                   \
+    CUBQL_PRAGMA_UNROLL                                 \
       for (int i=0;i<D;i++) r[i] = a[i] op b[i];        \
     return r;                                           \
   }                                                     \
@@ -199,7 +205,7 @@ namespace cuBQL {
   vec_t<T,D> long_op(T a, vec_t<T,D> b)                 \
   {                                                     \
     vec_t<T,D> r;                                       \
-    _Pragma("unroll")                                   \
+    CUBQL_PRAGMA_UNROLL                                 \
       for (int i=0;i<D;i++) r[i] = a op b[i];           \
     return r;                                           \
   }                                                     \
@@ -209,7 +215,7 @@ namespace cuBQL {
   vec_t<T,D> long_op(vec_t<T,D> a, T b)                 \
   {                                                     \
     vec_t<T,D> r;                                       \
-    _Pragma("unroll")                                   \
+    CUBQL_PRAGMA_UNROLL                                 \
       for (int i=0;i<D;i++) r[i] = a[i] op b;           \
     return r;                                           \
   }                                                     \
@@ -219,8 +225,8 @@ namespace cuBQL {
   vec_t<T,D> long_op(typename cuda_eq_t<T,D>::type a, vec_t<T,D> b)  \
   {                                                     \
     vec_t<T,D> r;                                       \
-    _Pragma("unroll")                                   \
-      for (int i=0;i<D;i++) r[i] = (&a.x)[i] op b[i];      \
+    CUBQL_PRAGMA_UNROLL                                 \
+    for (int i=0;i<D;i++) r[i] = (&a.x)[i] op b[i];      \
     return r;                                           \
   }                                                     \
   /* vec:cudaVec */                                      \
@@ -229,7 +235,7 @@ namespace cuBQL {
   vec_t<T,D> long_op(vec_t<T,D> a,  typename cuda_eq_t<T,D>::type b)                 \
   {                                                     \
     vec_t<T,D> r;                                       \
-    _Pragma("unroll")                                   \
+    CUBQL_PRAGMA_UNROLL                                 \
       for (int i=0;i<D;i++) r[i] = a[i] op (&b.x)[i];      \
     return r;                                           \
   }                                                     \
@@ -246,7 +252,7 @@ namespace cuBQL {
   vec_t<T,D> op(vec_t<T,D> a, vec_t<T,D> b)             \
   {                                                     \
     vec_t<T,D> r;                                       \
-    _Pragma("unroll")                                   \
+    CUBQL_PRAGMA_UNROLL                                   \
       for (int i=0;i<D;i++) r[i] = op(a[i],b[i]);       \
     return r;                                           \
   }
@@ -265,7 +271,7 @@ namespace cuBQL {
   typename dot_result_t<T>::type dot(vec_t<T,D> a, vec_t<T,D> b)
   {
     typename dot_result_t<T>::type result = 0;
-#pragma unroll
+    CUBQL_PRAGMA_UNROLL
     for (int i=0;i<D;i++)
       result += a[i]*b[i];
     return result;
@@ -321,7 +327,7 @@ namespace cuBQL {
   float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
   {
     float sum = 0.f;
-#pragma unroll(D)
+    CUBQL_PRAGMA_UNROLL
     for (int i=0;i<D;i++)
       sum += fSqrLength(a[i]-b[i]);
     return sum;

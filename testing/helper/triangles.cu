@@ -181,7 +181,7 @@ namespace cuBQL {
         cdf.push_back(sum);
       }
       for (auto &f : cdf)
-        f *= 1./sum;
+        f *= 1.f/sum;
       cdf.back() = 1.f;
 
       std::default_random_engine reng;
