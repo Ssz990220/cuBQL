@@ -121,7 +121,6 @@ namespace cuBQL {
   };
 
   // ------------------------------------------------------------------
-
   /*! defines a 'memory resource' that can be used for allocating gpu
       memory; this allows the user to switch between usign
       cudaMallocAsync (where avialble) vs regular cudaMalloc (where
@@ -149,7 +148,7 @@ namespace cuBQL {
   /* by default let's use cuda malloc async, which is much better and
      faster than regular malloc; but that's available on cuda 11, so
      let's add a fall back for older cuda's, too */
-#if CUDART_VERSION >= 11000
+#if CUDART_VERSION >= 11020
   struct AsyncGpuMemoryResource final : GpuMemoryResource {
     cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) override {
       return cudaMallocAsync(ptr, size, s);
