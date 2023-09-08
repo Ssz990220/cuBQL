@@ -17,15 +17,16 @@
 #include "cuBQL/math/box.h"
 
 template<typename T, int D>
-void foo()
+cuBQL::box_t<T,D> foo()
 {
   using vec_t = cuBQL::vec_t<T,D>;
   using box_t = cuBQL::box_t<T,D>;
 
-  box_t b0 __attribute__((unused)) ;
+  box_t b0;
   b0.set_empty();
 
   b0.grow(b0.center());
+  return b0;
 }
 
 int main(int, char **)

@@ -17,13 +17,14 @@
 #include "cuBQL/bvh.h"
 
 template<typename T, int D>
-void foo()
+cuBQL::bvh_t<T,D> foo()
 {
   using vec_t = cuBQL::vec_t<T,D>;
   using box_t = cuBQL::box_t<T,D>;
   using bvh_t = cuBQL::bvh_t<T,D>;
 
-  bvh_t bvh __attribute__((unused));
+  bvh_t bvh;
+  return bvh;
 }
 
 int main(int, char **)

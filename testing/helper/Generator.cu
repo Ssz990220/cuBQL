@@ -274,7 +274,7 @@ namespace cuBQL {
       res.resize(count);
       int bs = 1024;
       int nb = divRoundUp(int(count),bs);
-      float size = 0.5f / powf(count,1.f/D);
+      float size = 0.5f / powf((float)count,float(1.f/D));
       uniformBoxGenerator<T,D><<<nb,bs>>>(res.data(),count,seed,size);
       return res;
     }
@@ -432,7 +432,7 @@ namespace cuBQL {
       rng.seed(seed);
       std::uniform_real_distribution<double> uniform(0.f,1.f);
 
-      int numClusters = int(1+powf(count,(D-1.f)/D));
+      int numClusters = int(1+powf((float)count,(D-1.f)/D));
         // = int(1+powf(count/50.f);
       // = int(1+sqrtf(count));
       // = this->numClusters
@@ -442,7 +442,7 @@ namespace cuBQL {
       for (int cc=0;cc<numClusters;cc++) {
         vec_t<float,D> c;
         for (int i=0;i<D;i++)
-          c[i] = uniform(rng);
+          c[i] = (T)uniform(rng);
         clusterCenters.push_back(c);
       }
     
@@ -453,7 +453,7 @@ namespace cuBQL {
         int clusterID = int(uniform(rng)*numClusters) % numClusters;
         vec_t<float,D> pt;
         for (int i=0;i<D;i++)
-          pt[i] = gaussian(rng) + clusterCenters[clusterID][i];
+          pt[i] = T(gaussian(rng) + clusterCenters[clusterID][i]);
         points.push_back(pt);
       }
     
@@ -502,14 +502,14 @@ namespace cuBQL {
       rng.seed(seed);
       std::uniform_real_distribution<double> uniform(0.f,1.f);
   
-      int numClusters = int(1+powf(count,(D-1.f)/D));
+      int numClusters = int(1+powf((float)count,(D-1.f)/D));
       // int numClusters
       //   = int(1+count/50.f);
       std::vector<vec_t<float,D>> clusterCenters;
       for (int cc=0;cc<numClusters;cc++) {
         vec_t<float,D> c;
         for (int i=0;i<D;i++)
-          c[i] = uniform(rng);
+          c[i] = (T)uniform(rng);
         clusterCenters.push_back(c);
       }
 
@@ -549,17 +549,16 @@ namespace cuBQL {
         int clusterID = int(uniform(rng)*numClusters) % numClusters;
         vec_t<float,D> center, halfSize;
         for (int i=0;i<D;i++)
-          center[i] = gaussian(rng) + clusterCenters[clusterID][i];
+          center[i] = T(gaussian(rng) + clusterCenters[clusterID][i]);
 
         if (sizeMean > 0) {
           for (int d=0;d<D;d++)
-            halfSize[d] = fabsf(0.5f*sizeGaussian(rng));
-          // PRINT(halfSize);
+            halfSize[d] = (T)fabsf(0.5f*(float)sizeGaussian(rng));
         } else {
           for (int d=0;d<D;d++)
             halfSize[d]
-              = uniformSize.min
-              + (uniformSize.max-uniformSize.min) * uniform(rng);
+              = T(uniformSize.min
+              + (uniformSize.max-uniformSize.min) * uniform(rng));
         }
         box_t<float,D> box;
         box.lower = center - halfSize;
@@ -583,7 +582,7 @@ namespace cuBQL {
     template<typename T, int D>
     CUDAArray<vec_t<T,D>> NRooksPointGenerator<T,D>::generate(int count, int seed)
     {
-      int numClusters = (int)(1+powf(count,0.5f*(D-1.f)/D));//count/(float)50);
+      int numClusters = (int)(1+powf((float)count,0.5f*(D-1.f)/D));
       LCG<8> rng(seed,290374);
       std::vector<vec_t<float,D>> clusterLower(numClusters);
       for (int d=0;d<D;d++) {
@@ -645,7 +644,7 @@ namespace cuBQL {
     template<typename T, int D>
     CUDAArray<box_t<T,D>> NRooksBoxGenerator<T,D>::generate(int count, int seed)
     {
-      int numClusters = (int)(1+powf(count,0.5f*(D-1.f)/D));//count/(float)50);
+      int numClusters = (int)(1+powf((float)count,0.5f*(D-1.f)/D));
       LCG<8> lcg(seed,290374);
       std::vector<vec_t<float,D>> clusterLower(numClusters);
       for (int d=0;d<D;d++) {
@@ -709,12 +708,12 @@ namespace cuBQL {
         vec_t<T,D> halfSize;
         if (sizeMean > 0) {
           for (int d=0;d<D;d++)
-            halfSize[d] = fabsf(0.5f*sizeGaussian(reng));
+            halfSize[d] = fabsf(0.5f*(float)sizeGaussian(reng));
         } else {
           for (int d=0;d<D;d++)
             halfSize[d]
-              = uniformSize.min
-              + (uniformSize.max-uniformSize.min) * uniform(reng);
+              = T(uniformSize.min
+              + (uniformSize.max-uniformSize.min) * uniform(reng));
         }
         box_t<float,D> box;
         box.lower = center - halfSize;
@@ -866,11 +865,11 @@ namespace cuBQL {
       
       int bs = 128;
       int nb = divRoundUp(numRequested,bs);
-      mixKernel<<<nb,bs>>>(boxes.data(),boxes.size(),
+      mixKernel<<<nb,bs>>>(boxes.data(),(int)boxes.size(),
                            prob_a,
                            3*seed+2,
-                           boxes_a.data(),boxes_a.size(),
-                           boxes_b.data(),boxes_b.size());
+                           boxes_a.data(),(int)boxes_a.size(),
+                           boxes_b.data(),(int)boxes_b.size());
       return boxes;
     }
     
@@ -933,11 +932,11 @@ namespace cuBQL {
       
       int bs = 128;
       int nb = divRoundUp(numRequested,bs);
-      mixKernel<<<nb,bs>>>(points.data(),points.size(),
+      mixKernel<<<nb,bs>>>(points.data(), (int)points.size(),
                            prob_a,
                            3*seed+2,
-                           points_a.data(),points_a.size(),
-                           points_b.data(),points_b.size());
+                           points_a.data(), (int)points_a.size(),
+                           points_b.data(), (int)points_b.size());
       return points;
     }
     
