@@ -439,7 +439,7 @@ namespace cuBQL {
 using namespace ::cuBQL::test_rig;
 
 int main(int ac, char **av)
-{
+{ 
   BuildConfig buildConfig;
   std::string bvhType = "binary";
   TestConfig testConfig;

@@ -18,7 +18,6 @@
 
 #include "cuBQL/bvh.h"
 
-#define DO_STATS 1
 #if DO_STATS
 # define STATS(a) a
 
