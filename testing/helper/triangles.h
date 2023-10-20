@@ -26,7 +26,7 @@ namespace cuBQL {
       vec3f a, b, c;
     };
 
-    inline __both__ float area(Triangle tri)
+    inline __cubql_both float area(Triangle tri)
     { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
 
     std::vector<Triangle> loadOBJ(const std::string &fileName);
