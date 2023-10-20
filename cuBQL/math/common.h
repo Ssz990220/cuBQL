@@ -91,7 +91,7 @@
 # define __cubql_host     /* ignore */
 #endif
 
-# define __both__   __cubql_host __cubql_device
+# define __cubql_both   __cubql_host __cubql_device
 
 
 #ifdef __GNUC__
@@ -190,13 +190,13 @@ namespace cuBQL {
 
 namespace cuBQL {
 
-  inline __both__ float  rcp(float f)      { return 1.f/f; }
-  inline __both__ double rcp(double d)    { return 1./d; }
+  inline __cubql_both float  rcp(float f)      { return 1.f/f; }
+  inline __cubql_both double rcp(double d)    { return 1./d; }
   
-  inline __both__ int32_t  divRoundUp(int32_t a, int32_t b) { return (a+b-1)/b; }
-  inline __both__ uint32_t divRoundUp(uint32_t a, uint32_t b) { return (a+b-1)/b; }
-  inline __both__ int64_t  divRoundUp(int64_t a, int64_t b) { return (a+b-1)/b; }
-  inline __both__ uint64_t divRoundUp(uint64_t a, uint64_t b) { return (a+b-1)/b; }
+  inline __cubql_both int32_t  divRoundUp(int32_t a, int32_t b) { return (a+b-1)/b; }
+  inline __cubql_both uint32_t divRoundUp(uint32_t a, uint32_t b) { return (a+b-1)/b; }
+  inline __cubql_both int64_t  divRoundUp(int64_t a, int64_t b) { return (a+b-1)/b; }
+  inline __cubql_both uint64_t divRoundUp(uint64_t a, uint64_t b) { return (a+b-1)/b; }
   
 #ifdef __WIN32__
 #  define cubql_snprintf sprintf_s
