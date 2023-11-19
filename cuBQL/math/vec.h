@@ -257,9 +257,7 @@ namespace cuBQL {
     return r;                                           \
   }
 
-  using ::min;
   CUBQL_BINARY(min)
-  using ::max;
   CUBQL_BINARY(max)
 #undef CUBQL_FUNCTOR
 
@@ -287,8 +285,13 @@ namespace cuBQL {
   template<typename T> inline __device__ float fSqrLength(T v);
   template<> inline __device__ float fSqrLength<float>(float v)
   { return v*v; }
+
+#ifdef __CUDA_ARCH__
   template<> inline __device__ float fSqrLength<int>(int _v)
   { float v = __int2float_rz(_v); return v*v; }
+#else
+  template<> inline __device__ float fSqrLength<int>(int _v);
+#endif
 
   /*! accurate square-length of a vector; due to the 'square' involved
     in computing the distance this may need to change the type from
