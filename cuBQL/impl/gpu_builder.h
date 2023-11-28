@@ -33,20 +33,20 @@ namespace cuBQL {
                   GpuMemoryResource &memResource)
   {
     if (numBoxes == 0) return;
-    
+
     if (buildConfig.buildMethod == BuildConfig::SAH) {
       if (buildConfig.makeLeafThreshold == 0)
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 1;
-      if (D == 3)
+      if (D == 3) {
         /* for D == 3 these typecasts won't do anything; for D != 3
            they'd be invalid, but won't ever happen */
         sahBuilder_impl::sahBuilder((BinaryBVH<T,3>&)bvh,(const box_t<T,3> *)boxes,
                                     numBoxes,buildConfig,s,memResource);
-      else
+      } else
         throw std::runtime_error("SAH builder not supported for this type of BVH");
-    } if (buildConfig.buildMethod == BuildConfig::ELH) {
+    } else if (buildConfig.buildMethod == BuildConfig::ELH) {
       elhBuilder_impl::elhBuilder(bvh,boxes,numBoxes,buildConfig,s,memResource);
     } else {
       if (buildConfig.makeLeafThreshold == 0)
