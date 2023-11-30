@@ -63,8 +63,6 @@ namespace cuBQL {
       for (int d=0;d<box_t::numDims;d++) {
         box.lower[d] = decode(lower[d]);
         box.upper[d] = decode(upper[d]);
-        // (&box.lower.x)[d] = decode(lower[d]);
-        // (&box.upper.x)[d] = decode(upper[d]);
       }
       return box;
     }

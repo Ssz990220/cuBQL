@@ -47,6 +47,10 @@ namespace cuBQL {
       } else
         throw std::runtime_error("SAH builder not supported for this type of BVH");
     } else if (buildConfig.buildMethod == BuildConfig::ELH) {
+      /* edge-length-heurstic; splits based on sum of the lengths of
+         the edges of the bounding box - not as good as sah for
+         tracing rays, but often somewhat better than spatial median
+         for kNN style queries */
       elhBuilder_impl::elhBuilder(bvh,boxes,numBoxes,buildConfig,s,memResource);
     } else {
       if (buildConfig.makeLeafThreshold == 0)
