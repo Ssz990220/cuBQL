@@ -31,10 +31,25 @@ else()
   set(CUBQL_IS_SUBPROJECT OFF)
 endif()
 
+set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING "which arch to use for cubby" )
+if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
+  # leave CMAKE_CUDA_ARCHITECTURES to whatever the may may or may not have set
+else()
+  set(CMAKE_CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES})
+endif()
+if (NOT (DEFINED CMAKE_CUDA_ARCHITECTURES))
+  # new cmake policy: make sure that CMAKE_CUDA_ARCHITECTURES is set
+  # to _something_, even if it's only "OFF"
+  set(CMAKE_CUDA_ARCHITECTURES OFF)
+endif()
+
+
 # ------------------------------------------------------------------
 # general cmake project configs
 # ------------------------------------------------------------------
-if (NOT CUBQL_IS_SUBPROJECT)
+if (CUBQL_IS_SUBPROJECT)
+  mark_as_advanced(CUBQL_CUDA_ARCHITECTURES)
+else()
   if(NOT SET_UP_CONFIGURATIONS_DONE)
     set(SET_UP_CONFIGURATIONS_DONE 1)
 
@@ -55,18 +70,6 @@ if (NOT CUBQL_IS_SUBPROJECT)
   SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   SET(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
   SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-endif()
-
-if (CUBQL_IS_SUBPROJECT)
-  # if we're used as a subproject, parent project can set
-  # cmake_cuda_archs first; if it isn't set, let's set some of our own
-  if (NOT CMAKE_CUDA_ARCHITECTURES)
-    set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86)
-  endif()
-else()
-  # if this is NOT a subproject (we're building standalone) then we
-  # need to set some cuda archs to build against.
-  set(CMAKE_CUDA_ARCHITECTURES "80" CACHE STRING "Specific CUDA Arch(s) to build against")
 endif()
 
 if(${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.17)
