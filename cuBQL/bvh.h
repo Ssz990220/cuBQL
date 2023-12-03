@@ -228,6 +228,7 @@ namespace cuBQL {
   using bvh3f = BinaryBVH<float,3>;
 } // ::cuBQL
 
+#ifdef __CUDACC__
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/gpu_builder.h"  
 #endif
@@ -240,6 +241,8 @@ namespace cuBQL {
 #if CUBQL_GPU_BUILDER_IMPLEMENTATION
 # include "cuBQL/impl/wide_gpu_builder.h"  
 #endif
+#endif
+
 
 
 

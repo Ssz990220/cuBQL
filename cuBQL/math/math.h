@@ -19,11 +19,13 @@
 #include "cuBQL/math/common.h"
 
 namespace cuBQL {
-
+  
+#ifdef __CUDACC__
+  // make sure we use the built-in cuda functoins that use floats, not
+  // the c-stdlib ones that use doubles.
   using ::min;
   using ::max;
-
-  using ::make_float3;
+#endif
   
   template<int N> struct log_of;
   template<> struct log_of< 2> { enum { value = 1 }; };
@@ -32,6 +34,6 @@ namespace cuBQL {
   template<> struct log_of<16> { enum { value = 4 }; };
 
   /*! square of a value */
-  inline __both__ float sqr(float f) { return f*f; }
+  inline __cubql_both float sqr(float f) { return f*f; }
 }
 

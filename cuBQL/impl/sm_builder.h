@@ -102,11 +102,11 @@ namespace cuBQL {
 
     template<typename T, int D>
     __global__
-    void selectSplits(BuildState      *buildState,
-                      NodeState       *nodeStates,
+    void selectSplits(BuildState    *buildState,
+                      NodeState     *nodeStates,
                       TempNode<T,D> *nodes,
-                      uint32_t         numNodes,
-                      BuildConfig      buildConfig)
+                      uint32_t       numNodes,
+                      BuildConfig    buildConfig)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= numNodes) return;
@@ -251,20 +251,22 @@ namespace cuBQL {
 
     
     template<typename T, int D>
-    void build(BinaryBVH<T,D> &bvh,
-               const box_t<T,D> *boxes,
-               int numPrims,
-               BuildConfig  buildConfig,
-               cudaStream_t s,
-               GpuMemoryResource& memResource)
+    void build(BinaryBVH<T,D>    &bvh,
+               const box_t<T,D>  *boxes,
+               int                numPrims,
+               BuildConfig        buildConfig,
+               cudaStream_t       s,
+               GpuMemoryResource &memResource)
     {
+      assert(sizeof(PrimState) == sizeof(uint64_t));
+      
       // ==================================================================
       // do build on temp nodes
       // ==================================================================
-      TempNode<T,D>   *tempNodes = 0;
-      NodeState  *nodeStates = 0;
-      PrimState  *primStates = 0;
-      BuildState *buildState = 0;
+      TempNode<T,D> *tempNodes = 0;
+      NodeState     *nodeStates = 0;
+      PrimState     *primStates = 0;
+      BuildState    *buildState = 0;
       _ALLOC(tempNodes,2*numPrims,s,memResource);
       _ALLOC(nodeStates,2*numPrims,s,memResource);
       _ALLOC(primStates,numPrims,s,memResource);
@@ -292,8 +294,6 @@ namespace cuBQL {
            nodeStates,tempNodes,numNodes,
            buildConfig);
 
-        CUBQL_CUDA_CALL(StreamSynchronize(s));
-        
         numDone = numNodes;
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
@@ -306,9 +306,9 @@ namespace cuBQL {
       // ==================================================================
       
       // set up sorting of prims
-      uint8_t *d_temp_storage = NULL;
-      size_t temp_storage_bytes = 0;
-      PrimState *sortedPrimStates;
+      uint8_t   *d_temp_storage     = NULL;
+      size_t     temp_storage_bytes = 0;
+      PrimState *sortedPrimStates   = 0;
       _ALLOC(sortedPrimStates,numPrims,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,

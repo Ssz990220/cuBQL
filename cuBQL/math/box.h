@@ -23,12 +23,12 @@ namespace cuBQL {
   /*! @{ defines what box.lower/box.upper coordinate values to use for
       indicating an "empty box" of the given type */
   template<typename scalar_t>
-  inline __both__ scalar_t empty_box_lower_value();
+  inline __cubql_both scalar_t empty_box_lower_value();
   template<typename scalar_t>
-  inline __both__ scalar_t empty_box_upper_value();
+  inline __cubql_both scalar_t empty_box_upper_value();
 
-  template<> inline __both__ float empty_box_lower_value<float>() { return +INFINITY; }
-  template<> inline __both__ float empty_box_upper_value<float>() { return -INFINITY; }
+  template<> inline __cubql_both float empty_box_lower_value<float>() { return +INFINITY; }
+  template<> inline __cubql_both float empty_box_upper_value<float>() { return -INFINITY; }
   /*! @} */
   
   /*! data-only part of a axis-aligned bounding box, made up of a
@@ -64,7 +64,7 @@ namespace cuBQL {
     /*! default constructor - creates an "empty" box (ie, not an
         un-initialized one like a POD version, but one that is
         explicitly marked as inverted b yhavin lower > upper) */
-    inline __both__ box_t()
+    inline __cubql_both box_t()
     {
       lower = vec_t(empty_box_lower_value<T>());
       upper = vec_t(empty_box_upper_value<T>());
@@ -72,15 +72,15 @@ namespace cuBQL {
     
     /*! copy-constructor - create a box from another box (or
         POD-version of such) of same type */
-    inline __both__ box_t(const box_t_pod<T,D> &ob);
+    inline __cubql_both box_t(const box_t_pod<T,D> &ob);
 
     /*! create a box containing a single point */
-    inline __both__ explicit box_t(const vec_t_data<T,D> &v) { lower = upper = v; }
+    inline __cubql_both explicit box_t(const vec_t_data<T,D> &v) { lower = upper = v; }
 
     /*! create a box from two points. note this will NOT make sure
         that a<b; if this is an empty box it will just create an empty
         box! */
-    inline __both__ explicit box_t(const vec_t_data<T,D> &a, const vec_t_data<T,D> &b)
+    inline __cubql_both explicit box_t(const vec_t_data<T,D> &a, const vec_t_data<T,D> &b)
     {
       lower = vec_t(a);
       upper = vec_t(b);
@@ -88,21 +88,21 @@ namespace cuBQL {
 
     /*! returns a box that bounds both 'this' and another point 'v';
         this does not get modified */
-    inline __both__ box_t including(const vec_t &v) const
+    inline __cubql_both box_t including(const vec_t &v) const
     { return box_t{min(lower,v),max(upper,v)}; }
     
-    inline __both__ box_t &grow(const vec_t &v)
+    inline __cubql_both box_t &grow(const vec_t &v)
     { lower = min(lower,v); upper = max(upper,v); return *this; }
-    inline __both__ box_t &grow(const box_t &other)
+    inline __cubql_both box_t &grow(const box_t &other)
     { lower = min(lower,other.lower); upper = max(upper,other.upper); return *this; }
-    inline __both__ box_t &set_empty()
+    inline __cubql_both box_t &set_empty()
     {
       this->lower = make<vec_t>(empty_box_lower_value<scalar_t>());
       this->upper = make<vec_t>(empty_box_upper_value<scalar_t>());
       return *this;
     }
 
-    inline __both__ box_t &grow(cuda_vec_t other)
+    inline __cubql_both box_t &grow(cuda_vec_t other)
     {
       this->lower = min(this->lower,make<vec_t>(other));
       this->upper = max(this->upper,make<vec_t>(other)); return *this;
@@ -111,10 +111,10 @@ namespace cuBQL {
     /*! returns the center of the box, up to rounding errors. (i.e. on
         its, the center of a box with lower=2 and upper=3 is 2, not
         2.5! */
-    inline __both__ vec_t center() const
+    inline __cubql_both vec_t center() const
     { return (this->lower+this->upper)/scalar_t(2); }
 
-    inline __both__ vec_t size() const
+    inline __cubql_both vec_t size() const
     { return this->upper - this->lower; }
     
     /*! returns TWICE the center (which happens to be the SUM of lower
@@ -123,20 +123,20 @@ namespace cuBQL {
         errors for int types; it's obviously not the center but twice
         the center - but as long as all routines that expect centers
         use that same 'times 2' this will still work out */
-    inline __both__ vec_t twice_center() const
+    inline __cubql_both vec_t twice_center() const
     { return (this->lower+this->upper); }
 
     /*! for convenience's sake, get_lower(i) := lower[i] */
-    inline __both__ scalar_t get_lower(int i) const { return this->lower[i]; }
+    inline __cubql_both scalar_t get_lower(int i) const { return this->lower[i]; }
     /*! for convenience's sake, get_upper(i) := upper[i] */
-    inline __both__ scalar_t get_upper(int i) const { return this->upper[i]; }
+    inline __cubql_both scalar_t get_upper(int i) const { return this->upper[i]; }
   };
 
   using box2f = box_t<float,2>;
   using box3f = box_t<float,3>;
   using box4f = box_t<float,4>;
 
-  inline __both__
+  inline __cubql_both
   float surfaceArea(box3f box)
   {
     const float sx = box.upper[0]-box.lower[0];
@@ -146,52 +146,34 @@ namespace cuBQL {
   }
 
   
-  template<typename T, int D> inline __both__
+  template<typename T, int D> inline __cubql_both
   typename dot_result_t<T>::type sqrDistance(box_t<T,D> box, vec_t<T,D> point)
   {
     vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
     return sqrDistance(closestPoint,point);
   }
 
-  template<typename T, int D> inline __both__
+  template<typename T, int D> inline __cubql_both
   float fSqrDistance(box_t<T,D> box, vec_t<T,D> point)
   {
     vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
     return sqrDistance(closestPoint,point);
   }
 
-  template<typename T, int D> inline __both__
+  template<typename T, int D> inline __cubql_both
   box_t<T,D> &grow(box_t<T,D> &b, vec_t<T,D> v)
   { b.grow(v); return b; }
   
-  template<typename T, int D> inline __both__
+  template<typename T, int D> inline __cubql_both
   box_t<T,D> &grow(box_t<T,D> &b, box_t<T,D> ob)
   { b.grow(ob); return b; }
 
 
 
 
-  template<typename T, int D> inline __both__
+  template<typename T, int D> inline __cubql_both
   box_t<T,D> make_box(vec_t<T,D> v) { return box_t<T,D>(v); }
   
   
-  // inline __both__
-  // box3f make_box3f(vec3f lower, vec3f upper) { return {lower,upper}; }
-  // /*! deprecated...*/
-  // inline __both__
-  // box3f make_box3f(float3 lower, float3 upper) { return {make<vec3f>(lower),make<vec3f>(upper)}; }
-                   
-  // inline __both__
-  // void grow(box3f &box, const vec3f &other) { box.grow(other); }
-  
-  // inline __both__
-  // void grow(box3f &box, const box3f &other) { box.grow(other); }
-    
-  // inline __both__
-  // float3 centerOf(box3f box)
-  // {
-  //   return 0.5f * (box.lower + box.upper);
-  // }
-
 }
 

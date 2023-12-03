@@ -204,10 +204,10 @@ namespace cuBQL {
     // uniform points
     // ==================================================================
 
-    template<typename T> inline __both__ T uniform_default_lower();
-    template<typename T> inline __both__ T uniform_default_upper();
-    template<> inline __both__ float uniform_default_lower<float>() { return 0.f; }
-    template<> inline __both__ float uniform_default_upper<float>() { return 1.f; }
+    template<typename T> inline __cubql_both T uniform_default_lower();
+    template<typename T> inline __cubql_both T uniform_default_upper();
+    template<> inline __cubql_both float uniform_default_lower<float>() { return 0.f; }
+    template<> inline __cubql_both float uniform_default_upper<float>() { return 1.f; }
   
     template<typename T, int D>
     __global__

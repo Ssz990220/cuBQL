@@ -25,19 +25,14 @@ namespace cuBQL {
   template<unsigned int N=4>
   struct LCG {
     
-    inline __both__ LCG()
+    inline __cubql_both LCG()
     { /* intentionally empty so we can use it in device vars that
          don't allow dynamic initialization (ie, PRD) */
     }
-    inline __both__ LCG(unsigned int val0, unsigned int val1)
+    inline __cubql_both LCG(unsigned int val0, unsigned int val1)
     { init(val0,val1); }
 
-    // inline __both__ LCG(const vec2i &seed)
-    // { init((unsigned)seed.x,(unsigned)seed.y); }
-    // inline __both__ LCG(const vec2ui &seed)
-    // { init(seed.x,seed.y); }
-      
-    inline __both__ void init(unsigned int val0, unsigned int val1)
+    inline __cubql_both void init(unsigned int val0, unsigned int val1)
     {
       unsigned int v0 = val0;
       unsigned int v1 = val1;
@@ -51,7 +46,7 @@ namespace cuBQL {
       state = v0;
     }
     
-    inline __both__ uint32_t ui32()
+    inline __cubql_both uint32_t ui32()
     {
       const uint32_t LCG_A = 1664525u;
       const uint32_t LCG_C = 1013904223u;
@@ -61,7 +56,7 @@ namespace cuBQL {
     
     /*! Generate random unsigned int in [0, 2^24), then use that to
       generate random float in [0.f,1.f) */
-    inline __both__ float operator() ()
+    inline __cubql_both float operator() ()
     {
       const uint32_t LCG_A = 1664525u;
       const uint32_t LCG_C = 1013904223u;

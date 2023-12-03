@@ -63,8 +63,6 @@ namespace cuBQL {
       for (int d=0;d<box_t::numDims;d++) {
         box.lower[d] = decode(lower[d]);
         box.upper[d] = decode(upper[d]);
-        // (&box.lower.x)[d] = decode(lower[d]);
-        // (&box.upper.x)[d] = decode(upper[d]);
       }
       return box;
     }
@@ -95,6 +93,18 @@ namespace cuBQL {
         upper[d] = encode(-FLT_MAX);
       }
     }
+
+    template<typename box_t> inline __device__
+    void atomic_grow(AtomicBox<box_t> &abox, const typename box_t::vec_t &other)
+    {
+#pragma unroll
+      for (int d=0;d<box_t::numDims;d++) {
+        const int32_t enc = AtomicBox<box_t>::encode(other[d]);//get(other,d));
+        if (enc < abox.lower[d]) atomicMin(&abox.lower[d],enc);
+        if (enc > abox.upper[d]) atomicMax(&abox.upper[d],enc);
+      }
+    }
+    
     template<typename box_t>
     inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const box_t &other)
     {
@@ -107,15 +117,15 @@ namespace cuBQL {
       }
     }
 
-    template<typename box_t> inline __device__
-    void atomic_grow(AtomicBox<box_t> &abox, const typename box_t::vec_t &other)
-    // inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const float3 &other)
+    template<typename box_t>
+    inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const AtomicBox<box_t> &other)
     {
 #pragma unroll
       for (int d=0;d<box_t::numDims;d++) {
-        const int32_t enc = AtomicBox<box_t>::encode(other[d]);//get(other,d));
-        if (enc < abox.lower[d]) atomicMin(&abox.lower[d],enc);
-        if (enc > abox.upper[d]) atomicMax(&abox.upper[d],enc);
+        const int32_t enc_lower = other.lower[d];
+        const int32_t enc_upper = other.upper[d];
+        if (enc_lower < abox.lower[d]) atomicMin(&abox.lower[d],enc_lower);
+        if (enc_upper > abox.upper[d]) atomicMax(&abox.upper[d],enc_upper);
       }
     }
     
