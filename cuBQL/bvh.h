@@ -183,6 +183,8 @@ namespace cuBQL {
   */
   template<typename T, int D>
   void gpuBuilder(BinaryBVH<T,D>   &bvh,
+                  /*! array of bounding boxes to build BVH over, must
+                      be in device memory */
                   const box_t<T,D> *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
@@ -198,7 +200,9 @@ namespace cuBQL {
       of a subtree get to or below buildConfig.makeLeafThreshold */
   template<typename /*scalar type*/T, int /*dims*/D, int /*branching factor*/N>
   void gpuBuilder(WideBVH<T,D,N> &bvh,
-                  const box_t<T,D>      *boxes,
+                  /*! array of bounding boxes to build BVH over, must
+                      be in device memory */
+                  const box_t<T,D>  *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
                   cudaStream_t      s=0,
