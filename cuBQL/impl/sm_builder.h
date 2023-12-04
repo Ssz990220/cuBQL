@@ -420,7 +420,8 @@ namespace cuBQL {
       refit_run<<<divRoundUp(numNodes,32),32,0,s>>>
         (bvh,refitData,boxes);
       CUBQL_CUDA_CHECK(memResource.free((void*)refitData,s));
-      CUBQL_CUDA_CALL(StreamSynchronize(s));
+      // let APP do the syncing
+      // CUBQL_CUDA_CALL(StreamSynchronize(s));
     }
     
   } // ::cuBQL::gpuBuilder_impl

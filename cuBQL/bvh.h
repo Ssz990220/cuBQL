@@ -157,6 +157,13 @@ namespace cuBQL {
      let's add a fall back for older cuda's, too */
 #if CUDART_VERSION >= 11020
   struct AsyncGpuMemoryResource final : GpuMemoryResource {
+    AsyncGpuMemoryResource()
+    {
+      cudaMemPool_t mempool;
+      cudaDeviceGetDefaultMemPool(&mempool, 0);
+      uint64_t threshold = UINT64_MAX;
+      cudaMemPoolSetAttribute(mempool, cudaMemPoolAttrReleaseThreshold, &threshold);
+    }
     cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) override {
       return cudaMallocAsync(ptr, size, s);
     }

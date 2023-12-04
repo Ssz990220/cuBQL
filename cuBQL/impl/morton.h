@@ -28,7 +28,7 @@ namespace cuBQL {
     using gpuBuilder_impl::_FREE;
     
     /*! maintains high-level summary of the build process */
-    struct BuildState {
+    struct CUBQL_ALIGN(16) BuildState {
       /*! number of nodes alloced so far */
       int numNodesAlloced;
 
@@ -52,7 +52,7 @@ namespace cuBQL {
     void clearBuildState(BuildState  *buildState,
                          int          numPrims)
     {
-      if (threadIdx.x != 1) return;
+      if (threadIdx.x != 0) return;
       
       buildState->a_centBounds.clear();
       // let's _start_ with the assumption that all are valid, and
@@ -89,7 +89,7 @@ namespace cuBQL {
     __global__
     void finishBuildState(BuildState  *buildState)
     {
-      if (threadIdx.x != 1) return;
+      if (threadIdx.x != 0) return;
       
       box3f centBounds = buildState->a_centBounds.make_box();
       buildState->centBounds = centBounds;
@@ -100,7 +100,7 @@ namespace cuBQL {
       buildState->quantizeBias
         = centBounds.lower;
       buildState->quantizeScale
-        = vec3f(1<<21)*rcp(max(centBounds.size(),vec3f(1e20f)));
+        = vec3f(1<<21)*rcp(max(centBounds.size(),vec3f(1e-20f)));
     }
 
 
@@ -140,19 +140,19 @@ namespace cuBQL {
        stage -5
        ____.____:____.____:____.____:____.____:____.____:___u.tsrq:ponm.lkji:hgfe.dcba:
        move:
-       0000.0000:0000.0000:0000.0000:0000.0000:0000.0000:0001.0000:0000.0000:0000.0000
+       0000.0000:0000.0000:0000.0000:0000.0000:0000.0000:0001.1111:0000.0000:0000.0000
        move by 32
-       hex    00:       00:       00:       00:       00:       10:       00:       00
+       hex    00:       00:       00:       00:       00:       1f:       00:       00
     */
     inline __device__
-    uint64_t shiftBits(uint32_t x, uint64_t maskOfBitstoMove, int howMuchToShift)
+    uint64_t shiftBits(uint64_t x, uint64_t maskOfBitstoMove, int howMuchToShift)
     { return ((x & maskOfBitstoMove)<<howMuchToShift) | (x & ~maskOfBitstoMove); }
     
     inline __device__
-    uint64_t bitInterleave21(uint32_t x)
+    uint64_t bitInterleave21(uint64_t x)
     {
       //hex    00:       00:       00:       00:       00:       10:       00:       00
-      x = shiftBits(x,0x0000000000100000ull,32); 
+      x = shiftBits(x,0x00000000001f0000ull,32); 
       //hex     00:      00:       00:       00:       00:       00:       ff:       00
       x = shiftBits(x,0x000000000000ff00ull,16); 
       //hex    00:       f0:       00:       00:       f0:       00:       00:       f0
@@ -169,12 +169,11 @@ namespace cuBQL {
     uint64_t computeMortonCode(vec3f P, vec3f quantizeBias, vec3f quantizeScale)
     {
       P = (P - quantizeBias) * quantizeScale;
-      vec3i idx = min(vec3i(P),vec3i((1<<21)-1));
-
+      vec3i mortonCell = min(vec3i(P),vec3i((1<<21)-1));
       return
-        (bitInterleave21(idx.z) << 2) |
-        (bitInterleave21(idx.y) << 1) |
-        (bitInterleave21(idx.x) << 0);
+        (bitInterleave21(mortonCell.z) << 2) |
+        (bitInterleave21(mortonCell.y) << 1) |
+        (bitInterleave21(mortonCell.x) << 0);
     }
     
     __global__
@@ -230,13 +229,37 @@ namespace cuBQL {
                    const uint64_t *__restrict__ keys,
                    int begin, int end)
     {
+      uint64_t firstKey = keys[begin];
+      uint64_t lastKey  = keys[end-1];
+      
+      if (firstKey == lastKey)
+        // same keys entire range - no split in there ....
+        return false;
+      
+      int numMatchingBits = __clzll(firstKey ^ lastKey);
+      // the first key in the plane we're searching has
+      // 'numMatchingBits+1' top bits of lastkey, and 0es otherwise
+      const uint64_t searchKey = lastKey & (0xffffffffffffffffull<<(63-numMatchingBits));
+
+      while (end > begin) {
+        int mid = (begin+end)/2;
+        if (keys[mid] < searchKey) {
+          begin = mid+1;
+        } else {
+          end = mid;
+        }
+      }
+      split = begin;
+      return true;
     }
 
     __global__
-    void initNodes(BuildState  *buildState,
-                   TempNode *nodes,
+    void initNodes(BuildState *buildState,
+                   TempNode   *nodes,
                    int numValidPrims)
     {
+      if (threadIdx.x != 0) return;
+      
       buildState->numNodesAlloced = 1;
       TempNode n0, n1;
       n0.open.begin = 0;
@@ -307,6 +330,8 @@ namespace cuBQL {
         node.finished.offset = childID;
         node.finished.count  = 0;
       }
+      if (validNode)
+        nodes[nodeID] = node;
     }
                      
     __global__
@@ -334,8 +359,7 @@ namespace cuBQL {
         = (buildConfig.makeLeafThreshold > 0)
         ? min(buildConfig.makeLeafThreshold,buildConfig.maxAllowedLeafSize)
         : 1;
-        
-      CUBQL_CUDA_SYNC_CHECK();
+
       // ==================================================================
       // first MAJOR step: compute buildstate's centBounds value,
       // which we need for computing morton codes.
@@ -345,41 +369,35 @@ namespace cuBQL {
         step */
       BuildState *d_buildState = 0;
       _ALLOC(d_buildState,1,s,memResource);
-      CUBQL_CUDA_SYNC_CHECK();
       clearBuildState<<<32,1,0,s>>>
         (d_buildState,numPrims);
-      CUBQL_CUDA_SYNC_CHECK();
       /* step 1.2, compute the centbounds we need for morton codes; we
          do this by atomically growing this shared centBounds with
          each (non-invalid) input prim */
       fillBuildState<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (d_buildState,boxes,numPrims);
-      CUBQL_CUDA_SYNC_CHECK();
       /* step 1.3, convert vom atomic_box to regular box, which is
          cheaper to digest for the following kernels */
       finishBuildState<<<32,1,0,s>>>
         (d_buildState);
-      CUBQL_CUDA_SYNC_CHECK();
 
       static BuildState *h_buildState = 0;
       if (!h_buildState)
         CUBQL_CUDA_CALL(MallocHost((void**)&h_buildState,
-                                   sizeof(h_buildState)));
+                                   sizeof(*h_buildState)));
 
       
       cudaEvent_t stateDownloadedEvent;
       CUBQL_CUDA_CALL(EventCreate(&stateDownloadedEvent));
-      CUBQL_CUDA_SYNC_CHECK();
       
       CUBQL_CUDA_CALL(MemcpyAsync(h_buildState,d_buildState,
                                   sizeof(*h_buildState),
                                   cudaMemcpyDeviceToHost,s));
       CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
       CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
-      
+
       const int numValidPrims = h_buildState->numValidPrims;
 
-  
       // ==================================================================
       // second MAJOR step: compute morton codes and primIDs array,
       // and do key/value sort to get those pairs sorted by ascending
@@ -397,7 +415,6 @@ namespace cuBQL {
         (d_primKeys_unsorted,d_primIDs_unsorted,
          d_buildState,boxes,numPrims);
 
-      
       /* 2.2: ask cub radix sorter for how much temp mem it needs, and
          allocate */
       size_t cub_tempMemSize;
@@ -439,16 +456,16 @@ namespace cuBQL {
       /* 3.1: allocate nodes array (do this only onw so we can re-use
          just freed memory); and initialize node 0 to span entire
          range of prims */
-      uint32_t upperBoundOnNumNodeUsed = 2*numValidPrims;
+      uint32_t upperBoundOnNumNodesToBeCreated = 2*numValidPrims;
       TempNode *nodes = 0;
-      _ALLOC(nodes,upperBoundOnNumNodeUsed,s,memResource);
+      _ALLOC(nodes,upperBoundOnNumNodesToBeCreated,s,memResource);
       initNodes<<<32,1,0,s>>>(d_buildState,nodes,numValidPrims);
 
       /* 3.2 extract nodes until no more (temp-)nodes get created */
       int numNodesAlloced = 1;
       int numNodesDone    = 0;
       while (numNodesDone < numNodesAlloced) {
-        int numNodesStillToDo = numNodesDone - numNodesAlloced;
+        int numNodesStillToDo = numNodesAlloced - numNodesDone;
         createNodes<<<divRoundUp(numNodesStillToDo,1024),1024,0,s>>>
           (d_buildState,makeLeafThreshold,
            nodes,numNodesDone,numNodesAlloced,
@@ -457,6 +474,7 @@ namespace cuBQL {
                                     cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
         CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
+
         numNodesDone = numNodesAlloced;
         numNodesAlloced = h_buildState->numNodesAlloced;
       }
