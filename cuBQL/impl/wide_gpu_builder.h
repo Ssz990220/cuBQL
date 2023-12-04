@@ -16,10 +16,6 @@
 
 #pragma once
 
-// #include <vector>
-
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-
 namespace cuBQL {
   namespace gpuBuilder_impl {
     
@@ -234,4 +230,3 @@ namespace cuBQL {
   
 } // :: cuBQL
 
-#endif

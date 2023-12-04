@@ -35,7 +35,9 @@ namespace cuBQL {
     
     template<typename box_t>
     struct AtomicBox {
-      inline __device__ void set_empty();
+      inline __device__ void  set_empty();
+      // set_empty, in owl::common-style naming
+      inline __device__ void  clear() { set_empty(); }
       inline __device__ float get_center(int dim) const;
       inline __device__ box_t make_box() const;
 

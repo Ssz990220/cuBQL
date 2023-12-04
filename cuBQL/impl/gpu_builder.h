@@ -16,7 +16,6 @@
 
 #pragma once
 
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
 #include "cuBQL/impl/builder_common.h"
 #include "cuBQL/impl/sm_builder.h"
 #include "cuBQL/impl/sah_builder.h"
@@ -60,7 +59,6 @@ namespace cuBQL {
       gpuBuilder_impl::build(bvh,boxes,numBoxes,buildConfig,s,memResource);
     }
     gpuBuilder_impl::refit(bvh,boxes,s,memResource);
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
   }
 
   template<typename T, int D>
@@ -102,6 +100,4 @@ namespace cuBQL {
                        cudaStream_t s,                                  \
                        GpuMemoryResource& mem_resource);                \
   }
-
-#endif
 

@@ -78,10 +78,17 @@ namespace cuBQL {
           nodes.offset+1. For leaf nodes, this points into the
           primIDs[] array, which first prim beign primIDs[offset],
           next one primIDs[offset+1], etc. */
-      uint64_t offset : 48;
-      /* number of primitives in this leaf, if a leaf; 0 for inner
-         nodes. */
-      uint64_t count  : 16;
+      union {
+        struct {
+          uint64_t offset : 48;
+          /* number of primitives in this leaf, if a leaf; 0 for inner
+             nodes. */
+          uint64_t count  : 16;
+        };
+        // the same as a single int64, so we can read/write with a
+        // single op
+        uint64_t offsetAndCountBits;
+      };
     };
 
     Node     *nodes    = 0;
@@ -208,6 +215,18 @@ namespace cuBQL {
                   cudaStream_t      s=0,
                   GpuMemoryResource& memResource=defaultGpuMemResource());
 
+
+  
+  // ------------------------------------------------------------------
+  /*! fast radix/morton builder for float3 data */
+  // ------------------------------------------------------------------
+  void mortonBuilder(BinaryBVH<float,3>   &bvh,
+                     const box_t<float,3> *boxes,
+                     int                   numPrims,
+                     BuildConfig           buildConfig,
+                     cudaStream_t          s=0,
+                     GpuMemoryResource    &memResource=defaultGpuMemResource());
+  
   // ------------------------------------------------------------------
   
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
@@ -233,18 +252,14 @@ namespace cuBQL {
 } // ::cuBQL
 
 #ifdef __CUDACC__
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/gpu_builder.h"  
-#endif
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/sah_builder.h"  
-#endif
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/elh_builder.h"  
-#endif
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/wide_gpu_builder.h"  
-#endif
+# if CUBQL_GPU_BUILDER_IMPLEMENTATION
+#  include "cuBQL/impl/gpu_builder.h"  
+#  include "cuBQL/impl/sm_builder.h"  
+#  include "cuBQL/impl/sah_builder.h"  
+#  include "cuBQL/impl/elh_builder.h"  
+#  include "cuBQL/impl/morton.h"  
+#  include "cuBQL/impl/wide_gpu_builder.h"  
+# endif
 #endif
 
 
