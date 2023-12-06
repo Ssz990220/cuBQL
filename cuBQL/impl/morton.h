@@ -474,7 +474,7 @@ namespace cuBQL {
                                     cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
         CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
-
+        
         numNodesDone = numNodesAlloced;
         numNodesAlloced = h_buildState->numNodesAlloced;
       }
