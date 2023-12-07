@@ -114,7 +114,7 @@ namespace cuBQL {
        mask:
        0000.0000:1000.0010:0000.1000:0010.0000:1000.0010:0000.1000:0010.0000:1000.0010
        move by 2
-       hex    00:       82:       04:       20:       82:       04:       20:       82
+       hex    00:       82:       08:       20:       82:       08:       20:       82
 
        stage -2
        ___u.____:____.tsrq:____.____:ponm.____:____.lkji:____.____:hgfe.____:____.dcba:
@@ -159,8 +159,8 @@ namespace cuBQL {
       x = shiftBits(x,0x00f00000f00000f0ull,8); 
       //hex    00:       0c:       00:       c0:       0c:       00:       c0:       0c
       x = shiftBits(x,0x000c00c00c00c00cull,4); 
-      //hex    00:       82:       04:       20:       82:       04:       20:       82
-      x = shiftBits(x,0x0082042082042082ull,2);
+      //hex    00:       82:       08:       20:       82:       08:       20:       82
+      x = shiftBits(x,0x0082082082082082ull,2);
       return x;
     }
     
@@ -260,7 +260,7 @@ namespace cuBQL {
     {
       if (threadIdx.x != 0) return;
       
-      buildState->numNodesAlloced = 1;
+      buildState->numNodesAlloced = 2;
       TempNode n0, n1;
       n0.open.begin = 0;
       n0.open.end   = numValidPrims;
@@ -462,7 +462,11 @@ namespace cuBQL {
       initNodes<<<32,1,0,s>>>(d_buildState,nodes,numValidPrims);
 
       /* 3.2 extract nodes until no more (temp-)nodes get created */
-      int numNodesAlloced = 1;
+      int numNodesAlloced = 1; /*!< device actually things it's two,
+                                  but we intentionally use 1 here to
+                                  make first round start with right
+                                  could of _valid_ nodes*/
+      
       int numNodesDone    = 0;
       while (numNodesDone < numNodesAlloced) {
         int numNodesStillToDo = numNodesAlloced - numNodesDone;

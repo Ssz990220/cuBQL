@@ -336,6 +336,16 @@ namespace cuBQL {
     }                                                           \
   }
 
+#define CUBQL_CUDA_SYNC_CHECK_STREAM(s)                                 \
+  {                                                                     \
+    cudaError_t rc = cudaStreamSynchronize(s);                          \
+    if (rc != cudaSuccess) {                                            \
+      fprintf(stderr, "error (%s: line %d): %s\n",                      \
+              __FILE__, __LINE__, cudaGetErrorString(rc));              \
+      CUBQL_RAISE("fatal cuda error");                                  \
+    }                                                                   \
+  }
+
 
 
 #define CUBQL_CUDA_CHECK_NOTHROW( call )                                \

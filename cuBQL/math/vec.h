@@ -371,5 +371,18 @@ namespace cuBQL {
     o << ")";
     return o;
   }
+
+
+
+  template<typename /* scalar type */T, int /*! dimensoins */D>
+  inline __cubql_both bool operator==(const vec_t_data<T,D> &a,
+                                      const vec_t_data<T,D> &b)
+  {
+    #pragma unroll
+    for (int i=0;i<D;i++)
+      if (a[i] != b[i]) return false;
+    return true;
+  }
+                                     
 }
 
