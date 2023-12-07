@@ -70,9 +70,9 @@ namespace cuBQL {
     enum { numDims = _numDims };
     using vec_t = cuBQL::vec_t<scalar_t,numDims>;
     using box_t = cuBQL::box_t<scalar_t,numDims>;
-    
+
     struct CUBQL_ALIGN(16) Node {
-      enum { count_bits = 16, offset_bits = 64-count_bits, maxLeafSize=((1<<count_bits)-1) };
+      enum { count_bits = 16, offset_bits = 64-count_bits };
       
       box_t    bounds;
       /*! For inner nodes, this points into the nodes[] array, with
@@ -94,6 +94,8 @@ namespace cuBQL {
       
     };
 
+    enum { maxLeafSize=((1<<Node::count_bits)-1) };
+    
     using node_t       = Node;
     node_t   *nodes    = 0;
     uint32_t  numNodes = 0;
