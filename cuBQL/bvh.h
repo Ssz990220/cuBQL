@@ -72,6 +72,8 @@ namespace cuBQL {
     using box_t = cuBQL::box_t<scalar_t,numDims>;
     
     struct CUBQL_ALIGN(16) Node {
+      enum { count_bits = 16, offset_bits = 64-count_bits, maxLeafSize=((1<<count_bits)-1) };
+      
       box_t    bounds;
       /*! For inner nodes, this points into the nodes[] array, with
           left child at nodes.offset+0, and right chlid at
@@ -80,18 +82,20 @@ namespace cuBQL {
           next one primIDs[offset+1], etc. */
       union {
         struct {
-          uint64_t offset : 48;
+          uint64_t offset : count_bits;
           /* number of primitives in this leaf, if a leaf; 0 for inner
              nodes. */
-          uint64_t count  : 16;
+          uint64_t count  : offset_bits;
         };
         // the same as a single int64, so we can read/write with a
         // single op
         uint64_t offsetAndCountBits;
       };
+      
     };
 
-    Node     *nodes    = 0;
+    using node_t       = Node;
+    node_t   *nodes    = 0;
     uint32_t  numNodes = 0;
     uint32_t *primIDs  = 0;
     uint32_t  numPrims = 0;
