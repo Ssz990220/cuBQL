@@ -74,10 +74,11 @@ namespace cuBQL {
       __syncthreads();
       // ------------------------------------------------------------------
       int tid = threadIdx.x + blockIdx.x*blockDim.x;
-      
-      box_t prim = prims[tid];
-      if (!prim.empty()) 
-        atomic_grow(l_centBounds,prim.center());
+      if (tid < numPrims) {
+        box_t prim = prims[tid];
+        if (!prim.empty()) 
+          atomic_grow(l_centBounds,prim.center());
+      }
       
       // ------------------------------------------------------------------
       __syncthreads();

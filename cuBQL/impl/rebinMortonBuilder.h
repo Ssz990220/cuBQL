@@ -82,10 +82,12 @@ namespace cuBQL {
       __syncthreads();
       // ------------------------------------------------------------------
       int tid = threadIdx.x + blockIdx.x*blockDim.x;
-      
-      box_t prim = prims[tid];
-      if (!prim.empty()) 
-        atomic_grow(l_centBounds,prim.center());
+
+      if (tid < numPrims) {
+        box_t prim = prims[tid];
+        if (!prim.empty()) 
+          atomic_grow(l_centBounds,prim.center());
+      }
       
       // ------------------------------------------------------------------
       __syncthreads();
@@ -108,13 +110,6 @@ namespace cuBQL {
       
       box3f centBounds = buildState->a_centBounds.make_box();
       buildState->centBounds = centBounds;
-      // printf("ROOT domain (%f %f %f)(%f %f %f)\n",
-      //        centBounds.lower.x,
-      //        centBounds.lower.y,
-      //        centBounds.lower.z,
-      //        centBounds.upper.x,
-      //        centBounds.upper.y,
-      //        centBounds.upper.z);
       /* from above: coefficients of `scale*(x-bias)` in the 10-bit
         fixed-point quantization operation that does
         `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
@@ -424,8 +419,6 @@ namespace cuBQL {
                                const uint32_t *keys)
     {
 
-      if (leafThreshold < 1) printf("INVALID THRESHOLD!?\n");
-      
       __shared__ int l_allocOffset;
       
       if (threadIdx.x == 0)
@@ -445,8 +438,6 @@ namespace cuBQL {
         node = nodes[nodeID];
         const uint64_t subtree_begin = node.open.begin;
         const uint64_t subtree_end   = node.open.end;
-        if (node.common.open && subtree_end < subtree_begin)
-          printf("INVALID NODE RANGE %li %li!?\n",subtree_begin,subtree_end);
         const uint64_t subtree_size  = subtree_end - subtree_begin;
         if (!node.common.open) {
           // node wasn't even open - this should only ever happen if
@@ -459,8 +450,6 @@ namespace cuBQL {
           // we WANT to make a leaf
           node.finished.offset = subtree_begin;
           node.finished.count  = subtree_size;
-          if (subtree_size == 0)
-            printf("node %i INVALID SUBTREE SIZE OF ZERO!?\n",nodeID);
           node.finished.open   = false;
         } else if (smallEnoughToLeaveBroadPhase(subtree_size)) {
           // we're small enough to leave broad phase - leave this
@@ -492,9 +481,6 @@ namespace cuBQL {
         TempNode c0, c1;
         const uint64_t subtree_begin = node.open.begin;
         const uint64_t subtree_end   = node.open.end;
-        if (split <= subtree_begin || split >= subtree_end) {
-          printf("invalid split %li %li %li\n",split,subtree_begin,subtree_end);
-        }
         c0.open.begin = subtree_begin;
         c0.open.end   = split;
         c0.open.open  = true;
@@ -579,14 +565,12 @@ namespace cuBQL {
           // in thread phase we have do to that here and now.
           box3f domain;
           domain.clear();
-          // printf("rebinning thread range %li %li\n",
-          //        subtree_begin,subtree_end);
           for (int i=subtree_begin;i<subtree_end;i++)
             domain.grow(boxes[primIDs[i]].center());
           if (!(domain.lower == domain.upper)) {
             for (int i=subtree_begin;i<subtree_end;i++)
               keys[i] = computeMortonCode(boxes[primIDs[i]].center(),domain);
-          } else if (subtree_size < maxAllowedLeafSize) {
+          } else if (0 && subtree_size < maxAllowedLeafSize) {
             // make a leaf, no matter what user desired
             node.finished.offset = subtree_begin;
             node.finished.count  = subtree_size;
@@ -596,15 +580,10 @@ namespace cuBQL {
               keys[i] = i-subtree_begin;
           }
           if (node.common.open) {
-            // printf("bubble sort\n");
             bubbleSort(keys,primIDs,subtree_begin,subtree_end);
             
-            // printf("keys after %x %x\n",keys[subtree_begin],keys[subtree_end-1]);
-            
             if (!findSplit(split,keys,subtree_begin,subtree_end)) {
-              printf("[%i] ugh - we couldn't split even AFTER rebinning - forcing this into a leaf, not sure that even makes sense!\n",tid);
-              for (int i=subtree_begin;i<subtree_end;i++) {
-              }
+              // ugh - we generated new keys and STILL can't find a split!?
               node.finished.offset = subtree_begin;
               node.finished.count  = subtree_size;
               node.finished.open   = false;
@@ -870,14 +849,14 @@ namespace cuBQL {
       uint32_t primID = primIDs_inMortonOrder[node.open.begin + localID];
       box3f box  = boxes[primID];
       box3f domain = rebinDomains[rangeID].centBounds.make_box();
-      uint32_t newMorton = computeMortonCode(box.center(),domain);
+      uint32_t newMorton
+        = (domain.lower == domain.upper)
+        ? localID
+        : computeMortonCode(box.center(),domain);
       RebinKey newKey;
-      newKey.morton = newMorton;
+      newKey.morton  = newMorton;
       newKey.rangeID = rangeID;
-      // uint64_t newKey
-      //   = (uint64_t(rangeID) << 32)
-      //   | newMorton;
-      newKeys[tid] = newKey;//.lo32_morton_hi32_rangeID = newKey;
+      newKeys[tid]   = newKey;
       newValues[tid] = primID;
     }
     
@@ -945,26 +924,6 @@ namespace cuBQL {
       _FREE(d_tempMem,s,memResource);
     }                      
 
-    __global__
-    void printRanges(TempNode *nodes,
-                     uint32_t *d_primKeys_sorted,
-                     RebinRange *rebinRanges_sorted,
-                     int numBroadPhaseRebinJobs)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= numBroadPhaseRebinJobs)
-        return;
-      RebinRange range = rebinRanges_sorted[tid];
-      TempNode node = nodes[range.nodeID];
-      int begin = node.open.begin;
-      int end   = node.open.end;
-      uint32_t firstKey = d_primKeys_sorted[begin];
-      uint32_t lastKey = d_primKeys_sorted[end-1];
-      printf("range %i covers %i %i keys first %x last %x\n",
-             tid,begin,end,firstKey,lastKey);
-             
-    }
-    
     // executed once for each alloced node; job is to find all those
     // nodes that need rebinning, which are all those that are
     // alloced, still open at the end of broad-phase node generation,
@@ -986,36 +945,6 @@ namespace cuBQL {
       int rangeBegin = atomicAdd(&buildState->numBroadPhaseRebinPrims,node.open.size());
       rebinRanges[rangeID].beginOfRebinPrimRange = rangeBegin;
       rebinRanges[rangeID].nodeID = tid;
-    }
-
-    void checkAllPrimsAreThere(uint32_t *d_primIDs, int N)
-    {
-      std::vector<int> primIDs(N);
-      cudaMemcpy(primIDs.data(),d_primIDs,N*sizeof(int),cudaMemcpyDefault);
-      CUBQL_CUDA_SYNC_CHECK();
-      std::sort(primIDs.begin(),primIDs.end());
-      for (int i=0;i<N;i++) {
-        if (primIDs[i] != i) {
-          PRINT(i); PRINT(primIDs[i]);
-        }
-      }
-      std::cout << "ALL PRIMS ACCOUNTED FOR" << std::endl;
-    }
-
-    __global__
-    void printDomains(RebinDomain *rebinDomains,int N)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= N) return;
-      box3f box = rebinDomains[tid].centBounds.make_box();
-      printf("domain %i (%f %f %f)(%f %f %f)\n",
-             tid,
-             box.lower.x,
-             box.lower.y,
-             box.lower.z,
-             box.upper.x,
-             box.upper.y,
-             box.upper.z);
     }
 
     void build(bvh_t             &bvh,
@@ -1136,18 +1065,13 @@ namespace cuBQL {
       int numNodesAlloced = 1;
       int numNodesDone    = 0;
       while (true) {
-        std::cout << "starting new phase, done = " << numNodesDone
-                  << " alloced " << numNodesAlloced << std::endl;
         while (numNodesDone < numNodesAlloced) {
-          std::cout << "----------- one round of createnodes, done = " << numNodesDone
-                    << " alloced " << numNodesAlloced << std::endl;
           int numNodesStillToDo = numNodesAlloced - numNodesDone;
           broadPhaseCreateNodes
             <<<divRoundUp(numNodesStillToDo,1024),1024,0,s>>>
             (d_buildState,makeLeafThreshold,
              nodes,numNodesDone,numNodesAlloced,
              d_primKeys_sorted);
-          CUBQL_CUDA_SYNC_CHECK_STREAM(s);
           CUBQL_CUDA_CALL(MemcpyAsync(h_buildState,d_buildState,sizeof(*h_buildState),
                                       cudaMemcpyDeviceToHost,s));
           CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
@@ -1162,18 +1086,10 @@ namespace cuBQL {
         // restart the process): check how many there are.
         int numBroadPhaseRebinJobs  = h_buildState->numBroadPhaseRebinJobs;
         int numBroadPhaseRebinPrims = h_buildState->numBroadPhaseRebinPrims;
-        std::cout << "=======================================================" << std::endl;
-        PING;
-        PRINT(numBroadPhaseRebinJobs);
-        PRINT(numBroadPhaseRebinPrims);
-        std::cout << "=======================================================" << std::endl;
         if (numBroadPhaseRebinJobs == 0)
           // no huge rebins - done.
           break;
 
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s)
-        
         // 3.4: alloc descriptors and centroids for those rebin jobs
         RebinRange  *rebinRanges_unsorted    = 0;
         RebinRange  *rebinRanges_sorted    = 0;
@@ -1201,29 +1117,6 @@ namespace cuBQL {
         rebinClearDomains<<<divRoundUp(numBroadPhaseRebinJobs,1024),1024,0,s>>>
           (rebinDomains,numBroadPhaseRebinJobs);
 
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s);
-
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s);
-        std::vector<RebinRange> hostRanges(numBroadPhaseRebinJobs);
-        cudaMemcpy(hostRanges.data(),rebinRanges_sorted,
-                   hostRanges.size()*sizeof(hostRanges[0]),
-                   cudaMemcpyDefault);
-        std::vector<TempNode> hostNodes(numNodesAlloced);
-        cudaMemcpy(hostNodes.data(),nodes,
-                   hostNodes.size()*sizeof(hostNodes[0]),
-                   cudaMemcpyDefault);
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s);
-        // for (int rangeID=0;rangeID<numBroadPhaseRebinJobs;rangeID++) {
-        //   std::cout << "range " << rangeID
-        //             << " begin " << hostRanges[rangeID].beginOfRebinPrimRange
-        //             << " subtree size " << hostNodes[hostRanges[rangeID].nodeID].open.size() 
-        //             << std::endl;
-        // }
-                             
-        
         // 3.7 fill out rebin domains - every logical rebin prim will
         // first figure out which rebin job it is (from which it can
         // compute its global prim ID), then read that global prim id,
@@ -1235,13 +1128,6 @@ namespace cuBQL {
            // prims:
            numBroadPhaseRebinPrims);
 
-        // printDomains<<<divRoundUp(numBroadPhaseRebinJobs,1024),1024,0,s>>>
-        //   (rebinDomains,numBroadPhaseRebinJobs);
-
-        
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s)
-        
         // 3.8 allocate rebin key/value arrays, and fill them with new
         // keys and correponding (global) primIDs
         RebinKey  *rebinKeys_unsorted    = 0;
@@ -1258,9 +1144,6 @@ namespace cuBQL {
         // aaand: no longer need the domains now
         _FREE(rebinDomains,s,memResource);
 
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s)
-        
         // 3.9 re-sort new array
         RebinKey  *rebinKeys_sorted    = 0;
         uint32_t  *rebinPrimIDs_sorted = 0;
@@ -1285,27 +1168,12 @@ namespace cuBQL {
            rebinRanges_sorted,
            // prims:
            rebinKeys_sorted,rebinPrimIDs_sorted,numBroadPhaseRebinPrims);
+        
         // free temp memories
-
-        // PING;
-        // CUBQL_CUDA_SYNC_CHECK_STREAM(s);
-        // checkAllPrimsAreThere(d_primIDs_inMortonOrder,numValidPrims);
-        
-        // printRanges<<<divRoundUp(numBroadPhaseRebinJobs,128),128,0,s>>>
-        //   (nodes,d_primKeys_sorted,
-        //    rebinRanges_sorted,numBroadPhaseRebinJobs);
-
-        
         _FREE(rebinKeys_sorted,s,memResource);
         _FREE(rebinPrimIDs_sorted,s,memResource);
         _FREE(rebinRanges_sorted,s,memResource);
 
-
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s);
-        std::cout << "done with broad rebinning..." << std::endl;
-        CUBQL_CUDA_SYNC_CHECK();
-          
         // re-set broad phase counters for next iteration (in case any
         // of our restarted broad-phase subtrees will trigger any
         // additional rebinning later on)
@@ -1316,20 +1184,6 @@ namespace cuBQL {
 
         // and re-start the block creation process by resetting 'numDone' to 0
         numNodesDone = 0;
-        // {
-        //   broadPhaseCreateNodes_restart
-        //     <<<divRoundUp(numNodesAlloced,1024),1024,0,s>>>
-        //     (d_buildState,makeLeafThreshold,
-        //      nodes,numNodesAlloced,
-        //      d_primKeys_sorted);
-        //   CUBQL_CUDA_CALL(MemcpyAsync(h_buildState,d_buildState,sizeof(*h_buildState),
-        //                               cudaMemcpyDeviceToHost,s));
-        //   CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
-        //   CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
-          
-        //   numNodesDone    = numNodesAlloced;
-        //   numNodesAlloced = h_buildState->numNodesAlloced;
-        // }
       }
 
       // ##################################################################
@@ -1346,7 +1200,6 @@ namespace cuBQL {
 #else
       TODO;
 #endif
-      std::cout << "END of BROAD PHASE" << std::endl << std::flush;
       // ##################################################################
       // END OF BLOCK PHASE
       //
@@ -1357,17 +1210,11 @@ namespace cuBQL {
       numNodesDone = 0;
       while (numNodesDone < numNodesAlloced) {
         int numNodesStillToDo = numNodesAlloced - numNodesDone;
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s);
-        PRINT(numNodesDone);
-        PRINT(numNodesAlloced);
         threadPhaseCreateNodes
           <<<divRoundUp(numNodesStillToDo,1024),1024,0,s>>>
           (d_buildState,boxes,makeLeafThreshold,buildConfig.maxAllowedLeafSize,
            nodes,numNodesDone,numNodesAlloced,
            d_primKeys_sorted,d_primIDs_inMortonOrder);
-        PING;
-        CUBQL_CUDA_SYNC_CHECK_STREAM(s);
         CUBQL_CUDA_CALL(MemcpyAsync(h_buildState,d_buildState,sizeof(*h_buildState),
                                     cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
@@ -1376,8 +1223,6 @@ namespace cuBQL {
         numNodesDone    = numNodesAlloced;
         numNodesAlloced = h_buildState->numNodesAlloced;
       }
-
-      std::cout << "END of THREAD PHASE" << std::endl << std::flush;
 
 
       
