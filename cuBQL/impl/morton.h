@@ -346,6 +346,10 @@ namespace cuBQL {
       TempNode tempNode = tempNodes[tid];
       node.offset = tempNode.finished.offset;
       node.count = tempNode.finished.count;
+
+      if (tid == 1)
+        node.offsetAndCountBits = 0;
+      
       finalNodes[tid].offsetAndCountBits = node.offsetAndCountBits;
     }
     

@@ -82,10 +82,10 @@ namespace cuBQL {
           next one primIDs[offset+1], etc. */
       union {
         struct {
-          uint64_t offset : count_bits;
+          uint64_t offset : offset_bits;
           /* number of primitives in this leaf, if a leaf; 0 for inner
              nodes. */
-          uint64_t count  : offset_bits;
+          uint64_t count  : count_bits;
         };
         // the same as a single int64, so we can read/write with a
         // single op
