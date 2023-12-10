@@ -132,6 +132,18 @@ A few notes:
   link to the cmake `cuBQL_impl` target, which does contain
   instantiations of the builder.
 
+# Dependencies
+
+To use `cuBQL`, you need:
+
+- CUDA, version 12 and up. In theory some versions of CUDA 11 should work too, but 
+  using 12.2 and upwards is highly recommended.
+- cmake
+
+Under linux, these can be installed (all except CUDA) via:
+
+	sudo apt install cmake cmake-curses-gui build-essential
+
 # Building
 
 This library can be used/built in two ways: either standalone (with
