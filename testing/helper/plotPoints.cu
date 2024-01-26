@@ -41,7 +41,8 @@ int main(int ac, char **av)
   
   typename PointGenerator<float,2>::SP gen
     = PointGenerator<float,2>::createFromString(generatorString);
-  CUDAArray<vec2f> d_points = gen->generate(dataCount,0);
+  CUDAArray<vec2f> d_points;
+  gen->generate(d_points,dataCount,0);
   
   std::vector<vec2f> points = d_points.download();
   box2f bounds;

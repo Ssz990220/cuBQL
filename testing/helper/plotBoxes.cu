@@ -41,7 +41,8 @@ int main(int ac, char **av)
   
   typename BoxGenerator<float,2>::SP gen
     = BoxGenerator<float,2>::createFromString(generatorString);
-  CUDAArray<box2f> d_boxes = gen->generate(dataCount,0);
+  CUDAArray<box2f> d_boxes;
+  gen->generate(d_boxes,dataCount,0);
   
   std::vector<box2f> boxes = d_boxes.download();
   box2f bounds;

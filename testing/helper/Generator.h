@@ -39,7 +39,8 @@ namespace cuBQL {
       static SP createAndParse(const char *&curr);
       virtual void parse(const char *&currentParsePos);
     
-      virtual CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) = 0;
+      virtual void generate(CUDAArray<vec_t<T,D>> &points,
+                            int numRequested, int seed) = 0;
     };
   
     template<typename T, int D>
@@ -52,7 +53,8 @@ namespace cuBQL {
       static SP createAndParse(const char *&curr);
       virtual void parse(const char *&currentParsePos);
     
-      virtual CUDAArray<box_t<T,D>> generate(int numRequested, int seed) = 0;
+      virtual void generate(CUDAArray<box_t<T,D>> &boxes,
+                            int numRequested, int seed) = 0;
     };
 
 
@@ -63,13 +65,15 @@ namespace cuBQL {
     template<typename T, int D>
     struct UniformPointGenerator : public PointGenerator<T, D>
     {
-      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<vec_t<T,D>> &points,
+                    int numRequested, int seed) override;
     };
 
     template<typename T, int D>
     struct UniformBoxGenerator : public BoxGenerator<T, D>
     {
-      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<box_t<T,D>> &boxes,
+                    int numRequested, int seed) override;
     };
   
     /*! re-maps points from the 'default domain' to the domain specified
@@ -93,7 +97,8 @@ namespace cuBQL {
     {
       RemapPointGenerator();
     
-      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<vec_t<T,D>> &points,
+                    int numRequested, int seed) override;
     
       virtual void parse(const char *&currentParsePos);
 
@@ -105,7 +110,8 @@ namespace cuBQL {
     {
       RemapBoxGenerator();
     
-      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<box_t<T,D>> &boxes,
+                    int numRequested, int seed) override;
     
       virtual void parse(const char *&currentParsePos);
 
@@ -119,14 +125,16 @@ namespace cuBQL {
     template<typename T, int D>
     struct ClusteredPointGenerator : public PointGenerator<T, D>
     {
-      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<vec_t<T,D>> &points,
+                    int numRequested, int seed) override;
     };
   
     template<typename T, int D>
     struct ClusteredBoxGenerator : public BoxGenerator<T, D>
     {
       void parse(const char *&currentParsePos) override;
-      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<box_t<T,D>> &boxes,
+                    int numRequested, int seed) override;
       
       struct {
         float mean = -1.f, sigma = 0.f, scale = 1.f;
@@ -142,7 +150,8 @@ namespace cuBQL {
     template<typename T, int D>
     struct NRooksPointGenerator : public PointGenerator<T, D>
     {
-      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<vec_t<T,D>> &points,
+                    int numRequested, int seed) override;
     };
 
     // ==================================================================
@@ -152,7 +161,8 @@ namespace cuBQL {
     template<typename T, int D>
     struct NRooksBoxGenerator : public BoxGenerator<T, D>
     {
-      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<box_t<T,D>> &boxes,
+                    int numRequested, int seed) override;
       void parse(const char *&currentParsePos) override;
       struct {
         float mean = -1.f, sigma = 0.f, scale = 1.f;
@@ -178,7 +188,8 @@ namespace cuBQL {
     template<typename T, int D>
     struct TrianglesBoxGenerator : public BoxGenerator<T, D>
     {
-      CUDAArray<box_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<box_t<T,D>> &boxes,
+                    int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
@@ -199,7 +210,8 @@ namespace cuBQL {
     template<typename T, int D>
     struct TrianglesPointGenerator : public PointGenerator<T, D>
     {
-      CUDAArray<vec_t<T,D>> generate(int numRequested, int seed) override;
+      void generate(CUDAArray<vec_t<T,D>> &points,
+                    int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
@@ -212,7 +224,8 @@ namespace cuBQL {
       randomly picking between two input distributions */
     template<typename T, int D>
     struct MixtureBoxGenerator : public BoxGenerator<T,D> {
-      virtual CUDAArray<box_t<T,D>> generate(int numRequested, int seed);
+      void generate(CUDAArray<box_t<T,D>> &boxes,
+                    int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
@@ -225,7 +238,8 @@ namespace cuBQL {
       randomly picking between two input distributions */
     template<typename T, int D>
     struct MixturePointGenerator : public PointGenerator<T,D> {
-      virtual CUDAArray<vec_t<T,D>> generate(int numRequested, int seed);
+      void generate(CUDAArray<vec_t<T,D>> &points,
+                    int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     

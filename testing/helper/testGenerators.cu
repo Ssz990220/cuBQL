@@ -21,11 +21,15 @@ using namespace cuBQL::test_rig;
 int main(int ac, char **av)
 {
   CUDAArray<vec_t<float,3>> points;
-  
-  UniformPointGenerator<float,3> uni3f;
-  points = uni3f.generate(1024,0x12345);
 
+  std::cout << "generating 1K of uniform random float3 points" << std::endl;
+  UniformPointGenerator<float,3> uni3f;
+  uni3f.generate(points,1024,0x12345);
+  std::cout << "all good" << std::endl;
+
+  std::cout << "generating 1K of clustered float3 points" << std::endl;
   ClusteredPointGenerator<float,3> cluster3f;
-  points = cluster3f.generate(1024,0x12345);
+  cluster3f.generate(points,1024,0x12345);
+  std::cout << "all good" << std::endl;
   
 }

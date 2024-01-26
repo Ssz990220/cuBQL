@@ -228,8 +228,8 @@ namespace cuBQL {
       // std::vector<point_t> h_dataPoints;
       // std::vector<point_t> h_queryPoints;
 
-      CUDAArray<point_t> queryPoints
-        = queryGenerator->generate(testConfig.queryCount,0x23423498);
+      CUDAArray<point_t> queryPoints;
+      queryGenerator->generate(queryPoints,testConfig.queryCount,0x23423498);
       if (testConfig.dumpTestData) {
         std::vector<point_t> h_queries = queryPoints.download();
         saveData(h_queries,"query_points");
@@ -240,14 +240,14 @@ namespace cuBQL {
 #if USE_BOXES
       typename BoxGenerator<float,D>::SP dataGenerator
         = BoxGenerator<float,D>::createFromString(testConfig.dataGen);
-      CUDAArray<box_t> data
-        = dataGenerator->generate(testConfig.dataCount,0x1345);
+      CUDAArray<box_t> data;
+      dataGenerator->generate(data,testConfig.dataCount,0x1345);
       auto &boxes = data;
 #else
       typename PointGenerator<float,D>::SP dataGenerator
         = PointGenerator<float,D>::createFromString(testConfig.dataGen);
-      CUDAArray<point_t> data
-        = dataGenerator->generate(testConfig.dataCount,0x1345);
+      CUDAArray<point_t> data;
+      dataGenerator->generate(data,testConfig.dataCount,0x1345);
 
       if (testConfig.dumpTestData) {
         std::vector<point_t> h_data = data.download();

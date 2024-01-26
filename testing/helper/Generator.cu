@@ -227,16 +227,15 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    CUDAArray<vec_t<T,D>> UniformPointGenerator<T,D>::generate(int count, int seed)
+    void UniformPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &res,
+                                              int count, int seed)
     {
       if (count <= 0)
         throw std::runtime_error("UniformPointGenerator<T,D>::generate(): invalid count...");
-      CUDAArray<vec_t<T,D>> res;
       res.resize(count);
       int bs = 1024;
       int nb = divRoundUp(int(count),bs);
       uniformPointGenerator<T,D><<<nb,bs>>>(res.data(),count,seed);
-      return res;
     }
 
     // ------------------------------------------------------------------
@@ -266,17 +265,16 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    CUDAArray<box_t<T,D>> UniformBoxGenerator<T,D>::generate(int count, int seed)
+    void UniformBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &res,
+                                            int count, int seed)
     {
       if (count <= 0)
         throw std::runtime_error("UniformBoxGenerator<T,D>::generate(): invalid count...");
-      CUDAArray<box_t<T,D>> res;
       res.resize(count);
       int bs = 1024;
       int nb = divRoundUp(int(count),bs);
       float size = 0.5f / powf((float)count,float(1.f/D));
       uniformBoxGenerator<T,D><<<nb,bs>>>(res.data(),count,seed,size);
-      return res;
     }
 
     // ==================================================================
@@ -312,17 +310,16 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    CUDAArray<vec_t<T,D>> RemapPointGenerator<T,D>::generate(int count, int seed)
+    void RemapPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &pts,
+                                            int count, int seed)
     {
       if (!source)
         throw std::runtime_error("RemapPointGenerator: no source defined");
-      CUDAArray<vec_t<T,D>> pts = source->generate(count,seed);
+      source->generate(pts,count,seed);
 
       int bs = 128;
       int nb = divRoundUp(count,bs);
       remapPointsKernel<<<nb,bs>>>(pts.get(),count,lower,upper);
-    
-      return pts;
     }
 
     template<typename T, int D>
@@ -385,17 +382,16 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    CUDAArray<box_t<T,D>> RemapBoxGenerator<T,D>::generate(int count, int seed)
+    void RemapBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &boxes,
+                                          int count, int seed)
     {
       if (!source)
         throw std::runtime_error("RemapBoxGenerator: no source defined");
-      CUDAArray<box_t<T,D>> boxes = source->generate(count,seed);
+      source->generate(boxes,count,seed);
 
       int bs = 128;
       int nb = divRoundUp(count,bs);
       remapBoxsKernel<<<nb,bs>>>(boxes.get(),count,lower,upper);
-    
-      return boxes;
     }
 
     template<typename T, int D>
@@ -426,14 +422,15 @@ namespace cuBQL {
     // ==================================================================
 
     template<typename T, int D>
-    CUDAArray<vec_t<T,D>> ClusteredPointGenerator<T,D>::generate(int count, int seed)
+    void ClusteredPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &res,
+                                                int count, int seed)
     {
       std::default_random_engine rng;
       rng.seed(seed);
       std::uniform_real_distribution<double> uniform(0.f,1.f);
 
       int numClusters = int(1+powf((float)count,(D-1.f)/D));
-        // = int(1+powf(count/50.f);
+      // = int(1+powf(count/50.f);
       // = int(1+sqrtf(count));
       // = this->numClusters
       // ? this->numClusters
@@ -457,9 +454,7 @@ namespace cuBQL {
         points.push_back(pt);
       }
     
-      CUDAArray<vec_t<T,D>> res;
       res.upload(points);
-      return res;
     }
   
     template<typename T, int D>
@@ -496,7 +491,8 @@ namespace cuBQL {
     }
     
     template<typename T, int D>
-    CUDAArray<box_t<T,D>> ClusteredBoxGenerator<T,D>::generate(int count, int seed)
+    void ClusteredBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &res,
+                                              int count, int seed)
     {
       std::default_random_engine rng;
       rng.seed(seed);
@@ -558,7 +554,7 @@ namespace cuBQL {
           for (int d=0;d<D;d++)
             halfSize[d]
               = T(uniformSize.min
-              + (uniformSize.max-uniformSize.min) * uniform(rng));
+                  + (uniformSize.max-uniformSize.min) * uniform(rng));
         }
         box_t<float,D> box;
         box.lower = center - halfSize;
@@ -566,9 +562,7 @@ namespace cuBQL {
         boxes.push_back(box);
       }
 
-      CUDAArray<box_t<T,D>> res;
       res.upload(boxes);
-      return res;
     }
   
 
@@ -580,7 +574,8 @@ namespace cuBQL {
     // that clusters "field"
     // ==================================================================
     template<typename T, int D>
-    CUDAArray<vec_t<T,D>> NRooksPointGenerator<T,D>::generate(int count, int seed)
+    void NRooksPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &res,
+                                             int count, int seed)
     {
       int numClusters = (int)(1+powf((float)count,0.5f*(D-1.f)/D));
       LCG<8> rng(seed,290374);
@@ -603,9 +598,8 @@ namespace cuBQL {
           points[i][d] = clusterLower[clusterID][d] + (1.f/numClusters)*rng();
       }
     
-      CUDAArray<vec_t<T,D>> res(count);
+      res.resize(count);
       res.upload(points);
-      return res;
     }
 
     template<typename T, int D>
@@ -642,7 +636,8 @@ namespace cuBQL {
     }
   
     template<typename T, int D>
-    CUDAArray<box_t<T,D>> NRooksBoxGenerator<T,D>::generate(int count, int seed)
+    void NRooksBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &res,
+                                           int count, int seed)
     {
       int numClusters = (int)(1+powf((float)count,0.5f*(D-1.f)/D));
       LCG<8> lcg(seed,290374);
@@ -713,7 +708,7 @@ namespace cuBQL {
           for (int d=0;d<D;d++)
             halfSize[d]
               = T(uniformSize.min
-              + (uniformSize.max-uniformSize.min) * uniform(reng));
+                  + (uniformSize.max-uniformSize.min) * uniform(reng));
         }
         box_t<float,D> box;
         box.lower = center - halfSize;
@@ -721,31 +716,27 @@ namespace cuBQL {
         boxes.push_back(box);
       }
     
-      CUDAArray<box_t<T,D>> res;
       res.upload(boxes);
-      return res;
     }
 
 
     // ==================================================================
     template<typename T, int D>
-    CUDAArray<box_t<T,D>>
-    TrianglesBoxGenerator<T,D>::generate(int numRequested, int seed)
+    void TrianglesBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &d_boxes,
+                                              int numRequested, int seed)
     {
       throw std::runtime_error("can generate boxes from triangles only "
                                "for T=float and D=3");
     }
 
     template<>
-    CUDAArray<box_t<float,3>>
-    TrianglesBoxGenerator<float,3>::generate(int numRequested, int seed)
+    void TrianglesBoxGenerator<float,3>::generate(CUDAArray<box_t<float,3>> &d_boxes,
+                                                  int numRequested, int seed)
     {
       std::vector<box3f> boxes;
       for (auto tri : triangles)
         boxes.push_back(make_box<float,3>(tri.a).grow(tri.b).grow(tri.c));
-      CUDAArray<box_t<float,3>> d_boxes;
       d_boxes.upload(boxes);
-      return d_boxes;
     }
     
     template<typename T, int D>
@@ -772,16 +763,18 @@ namespace cuBQL {
 
     // ==================================================================
     template<typename T, int D>
-    CUDAArray<vec_t<T,D>>
-    TrianglesPointGenerator<T,D>::generate(int numRequested, int seed)
+    void 
+    TrianglesPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &d_points,
+                                           int numRequested, int seed)
     {
       throw std::runtime_error("can generate sample points from triangles only "
                                "for T=float and D=3");
     }
 
     template<>
-    CUDAArray<vec_t<float,3>>
-    TrianglesPointGenerator<float,3>::generate(int numRequested, int seed)
+    void
+    TrianglesPointGenerator<float,3>::generate(CUDAArray<vec_t<float,3>> &d_points,
+                                               int numRequested, int seed)
     {
       float sumAreas = 0.f;
       std::vector<float> areas;
@@ -796,9 +789,7 @@ namespace cuBQL {
       std::vector<vec3f> points = sample(triangles,numRequested,seed);
       assert(points.size() == numRequested);
       
-      CUDAArray<vec3f> d_points;
       d_points.upload(points);
-      return d_points;
     }
     
     template<typename T, int D>
@@ -842,9 +833,9 @@ namespace cuBQL {
       int inCount = (use_a ? aCount : bCount);
       
       int which
-                           = (inCount == outCount)
-                           ? tid
-                           : (rng.ui32() & inCount);
+        = (inCount == outCount)
+        ? tid
+        : (rng.ui32() & inCount);
       mine = in[which];
     }
     
@@ -852,16 +843,17 @@ namespace cuBQL {
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
     template<typename T, int D>
-    CUDAArray<box_t<T,D>> MixtureBoxGenerator<T,D>::generate(int numRequested, int seed)
+    void MixtureBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &boxes,
+                                            int numRequested, int seed)
     {
       assert(gen_a);
       assert(gen_b);
-      CUDAArray<box_t<T,D>>  boxes_a
-        = gen_a->generate(numRequested,3*seed+0);
-      CUDAArray<box_t<T,D>>  boxes_b
-        = gen_b->generate(numRequested,3*seed+1);
+      CUDAArray<box_t<T,D>>  boxes_a;
+      gen_a->generate(boxes_a,numRequested,3*seed+0);
+      CUDAArray<box_t<T,D>>  boxes_b;
+      gen_b->generate(boxes_b,numRequested,3*seed+1);
 
-      CUDAArray<box_t<T,D>>  boxes(numRequested);
+      boxes.resize(numRequested);
       
       int bs = 128;
       int nb = divRoundUp(numRequested,bs);
@@ -870,7 +862,6 @@ namespace cuBQL {
                            3*seed+2,
                            boxes_a.data(),(int)boxes_a.size(),
                            boxes_b.data(),(int)boxes_b.size());
-      return boxes;
     }
     
     template<typename T, int D>
@@ -909,9 +900,9 @@ namespace cuBQL {
       int inCount = (use_a ? aCount : bCount);
       
       int which
-                           = (inCount == outCount)
-                           ? tid
-                           : (rng.ui32() & inCount);
+        = (inCount == outCount)
+        ? tid
+        : (rng.ui32() & inCount);
       mine = in[which];
     }
     
@@ -919,16 +910,17 @@ namespace cuBQL {
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
     template<typename T, int D>
-    CUDAArray<vec_t<T,D>> MixturePointGenerator<T,D>::generate(int numRequested, int seed)
+    void MixturePointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &points,
+                                              int numRequested, int seed)
     {
       assert(gen_a);
       assert(gen_b);
-      CUDAArray<vec_t<T,D>>  points_a
-        = gen_a->generate(numRequested,3*seed+0);
-      CUDAArray<vec_t<T,D>>  points_b
-        = gen_b->generate(numRequested,3*seed+1);
+      CUDAArray<vec_t<T,D>>  points_a;
+      gen_a->generate(points_a,numRequested,3*seed+0);
+      CUDAArray<vec_t<T,D>>  points_b;
+      gen_b->generate(points_b,numRequested,3*seed+1);
 
-      CUDAArray<vec_t<T,D>>  points(numRequested);
+      points.resize(numRequested);
       
       int bs = 128;
       int nb = divRoundUp(numRequested,bs);
@@ -937,7 +929,6 @@ namespace cuBQL {
                            3*seed+2,
                            points_a.data(), (int)points_a.size(),
                            points_b.data(), (int)points_b.size());
-      return points;
     }
     
     template<typename T, int D>
