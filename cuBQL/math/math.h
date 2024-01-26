@@ -35,5 +35,10 @@ namespace cuBQL {
 
   /*! square of a value */
   inline __cubql_both float sqr(float f) { return f*f; }
+  
+  /*! unary functors on scalar types, so we can lift them to vector types later on */
+  inline __cubql_both float  rcp(float f)     { return 1.f/f; }
+  inline __cubql_both double rcp(double d)    { return 1./d; }
+  
 }
 

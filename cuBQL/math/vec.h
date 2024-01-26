@@ -91,7 +91,7 @@ namespace cuBQL {
     }
 
     template<typename OT>
-    explicit vec_t(const vec_t_data<OT,D> &o)
+    explicit __cubql_both vec_t(const vec_t_data<OT,D> &o)
     {
       CUBQL_PRAGMA_UNROLL
         for (int i=0;i<D;i++) (*this)[i] = (T)o[i];
@@ -124,7 +124,7 @@ namespace cuBQL {
     { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
 
     template<typename OT>
-    explicit vec_t(const vec_t_data<OT,3> &o)
+    explicit __cubql_both vec_t(const vec_t_data<OT,3> &o)
     { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
     
     inline __cubql_both vec_t &operator=(cuda_t o)
@@ -245,6 +245,20 @@ namespace cuBQL {
   CUBQL_OPERATOR(operator*,*)
   CUBQL_OPERATOR(operator/,/)
 #undef CUBQL_OPERATOR
+
+#define CUBQL_UNARY(op)                                 \
+  template<typename T, int D>                           \
+  inline __cubql_both                                   \
+  vec_t<T,D> rcp(vec_t<T,D> a)                          \
+  {                                                     \
+    vec_t<T,D> r;                                       \
+    CUBQL_PRAGMA_UNROLL                                 \
+      for (int i=0;i<D;i++) r[i] = op(a[i]);            \
+    return r;                                           \
+  }
+
+  CUBQL_UNARY(rcp)
+#undef CUBQL_FUNCTOR
   
 #define CUBQL_BINARY(op)                                \
   template<typename T, int D>                           \
@@ -357,5 +371,18 @@ namespace cuBQL {
     o << ")";
     return o;
   }
+
+
+
+  template<typename /* scalar type */T, int /*! dimensoins */D>
+  inline __cubql_both bool operator==(const vec_t_data<T,D> &a,
+                                      const vec_t_data<T,D> &b)
+  {
+    #pragma unroll
+    for (int i=0;i<D;i++)
+      if (a[i] != b[i]) return false;
+    return true;
+  }
+                                     
 }
 

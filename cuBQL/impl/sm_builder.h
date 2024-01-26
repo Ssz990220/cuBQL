@@ -282,10 +282,15 @@ namespace cuBQL {
       int numNodes;
 
       // ------------------------------------------------------------------      
+      cudaEvent_t stateDownloadedEvent;
+      CUBQL_CUDA_CALL(EventCreate(&stateDownloadedEvent));
+      
+
       while (true) {
         CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
                                     sizeof(numNodes),cudaMemcpyDeviceToHost,s));
-        CUBQL_CUDA_CALL(StreamSynchronize(s));
+        CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
+        CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
         if (numNodes == numDone)
           break;
 
@@ -295,12 +300,12 @@ namespace cuBQL {
            buildConfig);
 
         numDone = numNodes;
+
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
-
-        CUBQL_CUDA_CALL(StreamSynchronize(s));
       }
+      CUBQL_CUDA_CALL(EventDestroy(stateDownloadedEvent));
       // ==================================================================
       // sort {item,nodeID} list
       // ==================================================================
@@ -319,7 +324,6 @@ namespace cuBQL {
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(d_temp_storage,s,memResource);
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
@@ -337,7 +341,6 @@ namespace cuBQL {
       _ALLOC(bvh.nodes,numNodes,s,memResource);
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
-      CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(sortedPrimStates,s,memResource);
       _FREE(tempNodes,s,memResource);
       _FREE(nodeStates,s,memResource);
@@ -352,11 +355,12 @@ namespace cuBQL {
                int numNodes)
     {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= numNodes) return;
-      if (nodeID == 0)
+      if (nodeID == 1 || nodeID >= numNodes) return;
+      if (nodeID < 2)
         refitData[0] = 0;
       const auto &node = nodes[nodeID];
       if (node.count) return;
+
       refitData[node.offset+0] = nodeID << 1;
       refitData[node.offset+1] = nodeID << 1;
     }
@@ -368,8 +372,7 @@ namespace cuBQL {
                    const box_t<T,D> *boxes)
     {
       int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
-      if (nodeID >= bvh.numNodes) return;
-      if (nodeID == 1) return;
+      if (nodeID == 1 || nodeID >= bvh.numNodes) return;
       
       typename BinaryBVH<T,D>::Node *node = &bvh.nodes[nodeID];
       if (node->count == 0)
@@ -382,7 +385,7 @@ namespace cuBQL {
         bounds.lower = min(bounds.lower,primBox.lower);
         bounds.upper = max(bounds.upper,primBox.upper);
       }
-        
+
       int parentID = (refitData[nodeID] >> 1);
       while (true) {
         node->bounds = bounds;
@@ -394,7 +397,7 @@ namespace cuBQL {
         if ((refitBits & 1) == 0)
           // we're the first one - let other one do it
           break;
-        
+
         nodeID   = parentID;
         node     = &bvh.nodes[parentID];
         parentID = (refitBits >> 1);
@@ -412,15 +415,16 @@ namespace cuBQL {
                cudaStream_t       s=0,
                GpuMemoryResource &memResource=defaultGpuMemResource())
     {
-      uint32_t *refitData;
-      CUBQL_CUDA_CHECK(memResource.malloc((void**)&refitData,bvh.numNodes*sizeof(int),s));
+      uint32_t *refitData = 0;
+      memResource.malloc((void**)&refitData,bvh.numNodes*sizeof(int),s);
+      
       int numNodes = bvh.numNodes;
       refit_init<T,D><<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,refitData,bvh.numNodes);
       refit_run<<<divRoundUp(numNodes,32),32,0,s>>>
         (bvh,refitData,boxes);
-      CUBQL_CUDA_CALL(StreamSynchronize(s));
-      CUBQL_CUDA_CHECK(memResource.free((void*)refitData,s));
+      memResource.free((void*)refitData,s);
+      // we're not syncing here - let APP do that
     }
     
   } // ::cuBQL::gpuBuilder_impl

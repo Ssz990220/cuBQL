@@ -71,24 +71,33 @@ namespace cuBQL {
     using vec_t = cuBQL::vec_t<scalar_t,numDims>;
     using box_t = cuBQL::box_t<scalar_t,numDims>;
 
-    enum { countBits = 16 };
-    enum { offsetBits = 64-countBits };
-    enum { maxAllowedLeafSize = (1<<countBits)-1 };
-
     struct CUBQL_ALIGN(16) Node {
+      enum { count_bits = 16, offset_bits = 64-count_bits };
+      
       box_t    bounds;
       /*! For inner nodes, this points into the nodes[] array, with
           left child at nodes.offset+0, and right chlid at
           nodes.offset+1. For leaf nodes, this points into the
           primIDs[] array, which first prim beign primIDs[offset],
           next one primIDs[offset+1], etc. */
-      uint64_t offset : offsetBits;
-      /* number of primitives in this leaf, if a leaf; 0 for inner
-         nodes. */
-      uint64_t count  : countBits;
+      union {
+        struct {
+          uint64_t offset : offset_bits;
+          /* number of primitives in this leaf, if a leaf; 0 for inner
+             nodes. */
+          uint64_t count  : count_bits;
+        };
+        // the same as a single int64, so we can read/write with a
+        // single op
+        uint64_t offsetAndCountBits;
+      };
+      
     };
 
-    Node     *nodes    = 0;
+    enum { maxLeafSize=((1<<Node::count_bits)-1) };
+    
+    using node_t       = Node;
+    node_t   *nodes    = 0;
     uint32_t  numNodes = 0;
     uint32_t *primIDs  = 0;
     uint32_t  numPrims = 0;
@@ -154,6 +163,13 @@ namespace cuBQL {
      let's add a fall back for older cuda's, too */
 #if CUDART_VERSION >= 11020
   struct AsyncGpuMemoryResource final : GpuMemoryResource {
+    AsyncGpuMemoryResource()
+    {
+      cudaMemPool_t mempool;
+      cudaDeviceGetDefaultMemPool(&mempool, 0);
+      uint64_t threshold = UINT64_MAX;
+      cudaMemPoolSetAttribute(mempool, cudaMemPoolAttrReleaseThreshold, &threshold);
+    }
     cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) override {
       return cudaMallocAsync(ptr, size, s);
     }
@@ -212,6 +228,18 @@ namespace cuBQL {
                   cudaStream_t      s=0,
                   GpuMemoryResource& memResource=defaultGpuMemResource());
 
+
+  
+  // ------------------------------------------------------------------
+  /*! fast radix/morton builder for float3 data */
+  // ------------------------------------------------------------------
+  void mortonBuilder(BinaryBVH<float,3>   &bvh,
+                     const box_t<float,3> *boxes,
+                     int                   numPrims,
+                     BuildConfig           buildConfig,
+                     cudaStream_t          s=0,
+                     GpuMemoryResource    &memResource=defaultGpuMemResource());
+  
   // ------------------------------------------------------------------
   
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
@@ -237,18 +265,14 @@ namespace cuBQL {
 } // ::cuBQL
 
 #ifdef __CUDACC__
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/gpu_builder.h"  
-#endif
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/sah_builder.h"  
-#endif
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/elh_builder.h"  
-#endif
-#if CUBQL_GPU_BUILDER_IMPLEMENTATION
-# include "cuBQL/impl/wide_gpu_builder.h"  
-#endif
+# if CUBQL_GPU_BUILDER_IMPLEMENTATION
+#  include "cuBQL/impl/gpu_builder.h"  
+#  include "cuBQL/impl/sm_builder.h"  
+#  include "cuBQL/impl/sah_builder.h"  
+#  include "cuBQL/impl/elh_builder.h"  
+#  include "cuBQL/impl/morton.h"  
+#  include "cuBQL/impl/wide_gpu_builder.h"  
+# endif
 #endif
 
 

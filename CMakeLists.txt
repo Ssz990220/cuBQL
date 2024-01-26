@@ -32,15 +32,17 @@ else()
 endif()
 
 set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING "which arch to use for cubby" )
+
 if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
   # leave CMAKE_CUDA_ARCHITECTURES to whatever the may may or may not have set
 else()
   set(CMAKE_CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES})
 endif()
+
 if (NOT (DEFINED CMAKE_CUDA_ARCHITECTURES))
   # new cmake policy: make sure that CMAKE_CUDA_ARCHITECTURES is set
-  # to _something_, even if it's only "OFF"
-  set(CMAKE_CUDA_ARCHITECTURES OFF)
+  # to _something_, even if it's only "OFF". iw - seems to not apply on ubuntu 20.04!?
+  #  set(CMAKE_CUDA_ARCHITECTURES OFF)
 endif()
 
 

@@ -101,6 +101,8 @@ namespace cuBQL {
       this->upper = make<vec_t>(empty_box_upper_value<scalar_t>());
       return *this;
     }
+    inline __cubql_both void clear() { set_empty(); }
+    inline __cubql_both bool empty() const { return get_lower(0) > get_upper(0); }
 
     inline __cubql_both box_t &grow(cuda_vec_t other)
     {

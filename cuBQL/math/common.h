@@ -190,9 +190,6 @@ namespace cuBQL {
 
 namespace cuBQL {
 
-  inline __cubql_both float  rcp(float f)      { return 1.f/f; }
-  inline __cubql_both double rcp(double d)    { return 1./d; }
-  
   inline __cubql_both int32_t  divRoundUp(int32_t a, int32_t b) { return (a+b-1)/b; }
   inline __cubql_both uint32_t divRoundUp(uint32_t a, uint32_t b) { return (a+b-1)/b; }
   inline __cubql_both int64_t  divRoundUp(int64_t a, int64_t b) { return (a+b-1)/b; }
@@ -337,6 +334,16 @@ namespace cuBQL {
               __FILE__, __LINE__, cudaGetErrorString(rc));      \
       CUBQL_RAISE("fatal cuda error");                          \
     }                                                           \
+  }
+
+#define CUBQL_CUDA_SYNC_CHECK_STREAM(s)                                 \
+  {                                                                     \
+    cudaError_t rc = cudaStreamSynchronize(s);                          \
+    if (rc != cudaSuccess) {                                            \
+      fprintf(stderr, "error (%s: line %d): %s\n",                      \
+              __FILE__, __LINE__, cudaGetErrorString(rc));              \
+      CUBQL_RAISE("fatal cuda error");                                  \
+    }                                                                   \
   }
 
 
