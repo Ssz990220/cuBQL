@@ -70,7 +70,11 @@ namespace cuBQL {
     enum { numDims = _numDims };
     using vec_t = cuBQL::vec_t<scalar_t,numDims>;
     using box_t = cuBQL::box_t<scalar_t,numDims>;
-    
+
+    enum { countBits = 16 };
+    enum { offsetBits = 64-countBits };
+    enum { maxAllowedLeafSize = (1<<countBits)-1 };
+
     struct CUBQL_ALIGN(16) Node {
       box_t    bounds;
       /*! For inner nodes, this points into the nodes[] array, with
@@ -78,10 +82,10 @@ namespace cuBQL {
           nodes.offset+1. For leaf nodes, this points into the
           primIDs[] array, which first prim beign primIDs[offset],
           next one primIDs[offset+1], etc. */
-      uint64_t offset : 48;
+      uint64_t offset : offsetBits;
       /* number of primitives in this leaf, if a leaf; 0 for inner
          nodes. */
-      uint64_t count  : 16;
+      uint64_t count  : countBits;
     };
 
     Node     *nodes    = 0;
