@@ -24,6 +24,11 @@
 namespace cuBQL {
 
   template<typename T, int D>
+  struct is3f { enum { value = false }; };
+  template<>
+  struct is3f<float,3> { enum { value = true }; };
+  
+  template<typename T, int D>
   void gpuBuilder(BinaryBVH<T,D>    &bvh,
                   const box_t<T,D>  *boxes,
                   uint32_t           numBoxes,
@@ -38,10 +43,10 @@ namespace cuBQL {
         // unless explicitly specified, use default for spatial median
         // builder:
         buildConfig.makeLeafThreshold = 1;
-      if (D == 3) {
+      if (is3f<T,D>::value) {
         /* for D == 3 these typecasts won't do anything; for D != 3
            they'd be invalid, but won't ever happen */
-        sahBuilder_impl::sahBuilder((BinaryBVH<T,3>&)bvh,(const box_t<T,3> *)boxes,
+        sahBuilder_impl::sahBuilder((BinaryBVH<float,3>&)bvh,(const box_t<float,3> *)boxes,
                                     numBoxes,buildConfig,s,memResource);
       } else
         throw std::runtime_error("SAH builder not supported for this type of BVH");

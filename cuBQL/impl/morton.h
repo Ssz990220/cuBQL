@@ -20,15 +20,18 @@
 
 namespace cuBQL {
   namespace mortonBuilder_impl {
-    using box_t = cuBQL::box_t<float,3>;
-    using bvh_t = cuBQL::BinaryBVH<float,3>;
-    using atomic_box_t = gpuBuilder_impl::AtomicBox<box_t>;
     using gpuBuilder_impl::atomic_grow;
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
     
     /*! maintains high-level summary of the build process */
+    template<typename T, int D>
     struct CUBQL_ALIGN(16) BuildState {
+      using vec_t = cuBQL::vec_t<T,D>;//float,3>;
+      using box_t = cuBQL::box_t<T,D>;//float,3>;
+      using bvh_t = cuBQL::BinaryBVH<T,D>;//float,3>;
+      using atomic_box_t = gpuBuilder_impl::AtomicBox<box_t>;
+      
       /*! number of nodes alloced so far */
       int numNodesAlloced;
 
@@ -40,16 +43,17 @@ namespace cuBQL {
       /*! bounds of prim centers, relative to which we will computing
         morton codes */
       atomic_box_t a_centBounds;
-      box3f        centBounds;
+      box_t        centBounds;
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
           quantization operation that does
           `(x-centBoundsLower)/(centBoundsSize)*(1<<21)`. Ie, bias is
           centBoundsLower, and scale is `(1<<21)/(centBoundsSize)` */
-      vec3f CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+      vec_t CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
     };
 
+    template<typename T, int D>
     __global__
-    void clearBuildState(BuildState  *buildState,
+    void clearBuildState(BuildState<T,D> *buildState,
                          int          numPrims)
     {
       if (threadIdx.x != 0) return;
@@ -61,11 +65,15 @@ namespace cuBQL {
       buildState->numNodesAlloced = 0;
     }
     
+    template<typename T, int D>
     __global__
-    void fillBuildState(BuildState  *buildState,
-                        const box_t *prims,
+    void fillBuildState(BuildState<T,D>  *buildState,
+                        const typename BuildState<T,D>::box_t *prims,
                         int          numPrims)
     {
+      using atomic_box_t = typename BuildState<T,D>::atomic_box_t;
+      using box_t        = typename BuildState<T,D>::box_t;
+      
       __shared__ atomic_box_t l_centBounds;
       if (threadIdx.x == 0)
         l_centBounds.clear();
@@ -87,12 +95,21 @@ namespace cuBQL {
         atomic_grow(buildState->a_centBounds,l_centBounds);
     }
 
+    template<typename T, int D>
     __global__
-    void finishBuildState(BuildState  *buildState)
+    void finishBuildState(BuildState<T,D>  *buildState);
+    
+    template<>
+    __global__
+    void finishBuildState<float,3>(BuildState<float,3>  *buildState)
     {
+      using ctx_t = BuildState<float,3>;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      using box_t        = typename ctx_t::box_t;
+      
       if (threadIdx.x != 0) return;
       
-      box3f centBounds = buildState->a_centBounds.make_box();
+      box_t centBounds = buildState->a_centBounds.make_box();
       buildState->centBounds = centBounds;
       /* from above: coefficients of `scale*(x-bias)` in the 21-bit
         fixed-point quantization operation that does
@@ -177,13 +194,17 @@ namespace cuBQL {
         (bitInterleave21(mortonCell.x) << 0);
     }
     
+    template<typename T, int D>
     __global__
     void computeUnsortedKeysAndPrimIDs(uint64_t    *mortonCodes,
                                        uint32_t    *primIDs,
-                                       BuildState  *buildState,
-                                       const box_t *prims,
+                                       BuildState<T,D>  *buildState,
+                                       const typename BuildState<T,D>::box_t *prims,
                                        int numPrims)
     {
+      using atomic_box_t = typename BuildState<T,D>::atomic_box_t;
+      using box_t        = typename BuildState<T,D>::box_t;
+      
       int tid = threadIdx.x + blockIdx.x*blockDim.x;
       if (tid >= numPrims) return;
 
@@ -254,8 +275,9 @@ namespace cuBQL {
       return true;
     }
 
+    template<typename T, int D>
     __global__
-    void initNodes(BuildState *buildState,
+    void initNodes(BuildState<T,D> *buildState,
                    TempNode   *nodes,
                    int numValidPrims)
     {
@@ -270,13 +292,17 @@ namespace cuBQL {
       nodes[1] = n1;
     }
 
+    template<typename T, int D>
     __global__
-    void createNodes(BuildState *buildState,
+    void createNodes(BuildState<T,D> *buildState,
                      int leafThreshold,
                      TempNode *nodes,
                      int begin, int end,
                      const uint64_t *keys)
     {
+      using atomic_box_t = typename BuildState<T,D>::atomic_box_t;
+      using box_t        = typename BuildState<T,D>::box_t;
+      
       __shared__ int l_allocOffset;
       
       if (threadIdx.x == 0)
@@ -353,8 +379,9 @@ namespace cuBQL {
       finalNodes[tid].offsetAndCountBits = node.offsetAndCountBits;
     }
     
-    void build(bvh_t             &bvh,
-               const box_t       *boxes,
+    template<typename T, int D>
+    void build(bvh_t<T,D>        &bvh,
+               const typename BuildState<T,D>::box_t       *boxes,
                int                numPrims,
                BuildConfig        buildConfig,
                cudaStream_t       s,
@@ -372,7 +399,7 @@ namespace cuBQL {
       /* step 1.1, init build state; in particular, clear the shared
         centbounds we need to atomically grow centroid bounds in next
         step */
-      BuildState *d_buildState = 0;
+      BuildState<T,D> *d_buildState = 0;
       _ALLOC(d_buildState,1,s,memResource);
       clearBuildState<<<32,1,0,s>>>
         (d_buildState,numPrims);
@@ -386,7 +413,7 @@ namespace cuBQL {
       finishBuildState<<<32,1,0,s>>>
         (d_buildState);
 
-      static BuildState *h_buildState = 0;
+      static BuildState<T,D> *h_buildState = 0;
       if (!h_buildState)
         CUBQL_CUDA_CALL(MallocHost((void**)&h_buildState,
                                    sizeof(*h_buildState)));
@@ -520,8 +547,9 @@ namespace cuBQL {
     }
   }
 
-  void mortonBuilder(BinaryBVH<float,3>   &bvh,
-                     const box_t<float,3> *boxes,
+  template<typename T, int D>
+  void mortonBuilder(BinaryBVH<T,D>   &bvh,
+                     const box_t<T,D> *boxes,
                      int                   numPrims,
                      BuildConfig           buildConfig,
                      cudaStream_t          s,

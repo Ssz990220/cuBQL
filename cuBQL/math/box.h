@@ -29,6 +29,10 @@ namespace cuBQL {
 
   template<> inline __cubql_both float empty_box_lower_value<float>() { return +INFINITY; }
   template<> inline __cubql_both float empty_box_upper_value<float>() { return -INFINITY; }
+  template<> inline __cubql_both double empty_box_lower_value<double>() { return +INFINITY; }
+  template<> inline __cubql_both double empty_box_upper_value<double>() { return -INFINITY; }
+  template<> inline __cubql_both int empty_box_lower_value<int>() { return INT_MAX; }
+  template<> inline __cubql_both int empty_box_upper_value<int>() { return INT_MIN; }
   /*! @} */
   
   /*! data-only part of a axis-aligned bounding box, made up of a

@@ -22,15 +22,107 @@
 
 namespace cuBQL {
   namespace rebinMortonBuilder_impl {
-    using box_t = cuBQL::box_t<float,3>;
-    using bvh_t = cuBQL::BinaryBVH<float,3>;
-    using atomic_box_t = gpuBuilder_impl::AtomicBox<box_t>;
     using gpuBuilder_impl::atomic_grow;
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
+
+    template<typename T, int D> struct Quantizer;
+
+    template<int D> struct numMortonBits;
+    template<> struct numMortonBits<2> { enum { value = 15 }; };
+    template<> struct numMortonBits<3> { enum { value = 10 }; };
+    template<> struct numMortonBits<4> { enum { value =  7 }; };
+    
+    template<int D>
+    struct Quantizer<float,D> {
+      using vec_t = cuBQL::vec_t<float,D>;
+      using box_t = cuBQL::box_t<float,D>;
+      
+      inline __device__ void init(cuBQL::box_t<float,D> centBounds)
+      {
+        quantizeBias
+          = centBounds.lower;
+        quantizeScale
+          = vec_t(1<<numMortonBits<D>::value)
+          * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
+      }
+        
+      /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
+          quantization operation that does
+          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+    };
+
+    template<int D>
+    struct Quantizer<double,D> {
+      using vec_t = cuBQL::vec_t<double,D>;
+      using box_t = cuBQL::box_t<double,D>;
+      
+      inline __device__ cuBQL::vec_t<uint32_t,D> quantize(vec_t P) const
+      {
+        using vec_ui = cuBQL::vec_t<uint32_t,D>;
+
+        vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
+        cell = min(cell,vec_ui((1<<numMortonBits<D>::value)-1));
+        return cell;
+      }
+        
+      inline __device__ void init(cuBQL::box_t<double,D> centBounds)
+      {
+        quantizeBias
+          = centBounds.lower;
+        quantizeScale
+          = vec_t(1<<numMortonBits<D>::value)
+          * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
+      }
+        
+      /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
+          quantization operation that does
+          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+    };
+
+    template<int D>
+    struct Quantizer<int,D> {
+      using vec_t = cuBQL::vec_t<int,D>;
+      using box_t = cuBQL::box_t<int,D>;
+      
+      inline __device__ void init(cuBQL::box_t<int,D> centBounds)
+      {
+        quantizeBias = centBounds.lower;
+        int maxValue = reduce_max(centBounds.size());
+        shlBits = __clz(maxValue);
+      }
+
+      inline __device__ cuBQL::vec_t<uint32_t,D> quantize(vec_t P) const
+      {
+        cuBQL::vec_t<uint32_t,D> cell = cuBQL::vec_t<uint32_t,D>(P-quantizeBias);
+        // move all relevant bits to top
+        cell = cell << shlBits;
+        return cell >> (32-numMortonBits<D>::value);
+      }
+        
+      /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
+          quantization operation that does
+          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t quantizeBias;
+      int   shlBits;
+    };
+    
+
+
     
     /*! maintains high-level summary of the build process */
+    template<typename T, int D>
     struct CUBQL_ALIGN(16) BuildState {
+      using vec_t = cuBQL::vec_t<T,D>;
+      using box_t = cuBQL::box_t<T,D>;
+      using bvh_t = cuBQL::BinaryBVH<T,D>;
+      using atomic_box_t = gpuBuilder_impl::AtomicBox<box_t>;
+      
       /*! number of nodes alloced so far */
       int numNodesAlloced;
 
@@ -42,20 +134,22 @@ namespace cuBQL {
       /*! bounds of prim centers, relative to which we will computing
         morton codes */
       atomic_box_t a_centBounds;
-      box3f        centBounds;
+      box_t        centBounds;
 
       int numBroadPhaseRebinPrims;
       int numBroadPhaseRebinJobs;
       
-      /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec3f CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+      // /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
+      //     quantization operation that does
+      //     `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+      //     centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      // vec_t CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+      Quantizer<T,D> quantizer;
     };
 
+    template<typename T, int D>
     __global__
-    void clearBuildState(BuildState  *buildState,
+    void clearBuildState(BuildState<T,D>  *buildState,
                          int          numPrims)
     {
       if (threadIdx.x != 0) return;
@@ -69,11 +163,18 @@ namespace cuBQL {
       buildState->numBroadPhaseRebinJobs  = 0;
     }
     
+    template<typename T, int D>
     __global__
-    void fillBuildState(BuildState  *buildState,
-                        const box_t *prims,
+    void fillBuildState(BuildState<T,D>  *buildState,
+                        const typename BuildState<T,D>::box_t *prims,
                         int          numPrims)
     {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       __shared__ atomic_box_t l_centBounds;
       if (threadIdx.x == 0)
         l_centBounds.clear();
@@ -96,28 +197,34 @@ namespace cuBQL {
         atomic_grow(buildState->a_centBounds,l_centBounds);
     }
 
-        inline __device__
-    float reduce_max(vec3f v) { return max(max(v.x,v.y),v.z); }
-    inline __device__
-    float reduce_min(vec3f v) { return min(min(v.x,v.y),v.z); }
-    
-    
-
+    template<typename T, int D>
     __global__
-    void finishBuildState(BuildState  *buildState)
+    void finishBuildState(BuildState<T,D>  *buildState);
+
+    template<>
+    __global__
+    void finishBuildState(BuildState<float,3>  *buildState)
     {
+      using ctx_t = BuildState<float,3>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       if (threadIdx.x != 0) return;
       
-      box3f centBounds = buildState->a_centBounds.make_box();
+      box_t centBounds = buildState->a_centBounds.make_box();
       buildState->centBounds = centBounds;
       /* from above: coefficients of `scale*(x-bias)` in the 10-bit
         fixed-point quantization operation that does
         `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
         centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      buildState->quantizeBias
-        = centBounds.lower;
-      buildState->quantizeScale
-        = vec3f(1<<10)*rcp(max(vec3f(reduce_max(centBounds.size())),vec3f(1e-20f)));
+
+      buildState->quantizer.init(centBounds);
+      // buildState->quantizeBias
+      //   = centBounds.lower;
+      // buildState->quantizeScale
+      //   = vec3f(1<<10)*rcp(max(vec3f(reduce_max(centBounds.size())),vec3f(1e-20f)));
     }
 
 
@@ -196,14 +303,41 @@ namespace cuBQL {
       x = shiftBits(x,0x82082082,2);
       return x;
     }
-    
-    inline __device__
-    uint32_t computeMortonCode(vec3f P, vec3f quantizeBias, vec3f quantizeScale)
+
+    inline __device__ uint32_t interleaveBits(vec2ui bits)
     {
-      // quantizeScale = vec3f(reduce_min(quantizeScale));
-      P = (P - quantizeBias) * quantizeScale;
-      vec3i mortonCell = min(max(vec3i(0),vec3i(P)),vec3i((1<<10)-1));
-#if 1
+      printf("not implemented...\n");
+      return 0;
+    }
+    
+    inline __device__ uint32_t interleaveBits(vec4ui bits)
+    {
+      uint32_t ix = bits.x;
+      uint32_t iy = bits.y;
+      uint32_t iz = bits.z;
+      uint32_t iw = bits.w;
+      ix = ((ix & 0xF0) << 12) | (ix & ~0xF0);
+      ix = ((ix & 0b000000000011000000000000001100)<<6) | (ix & ~0b000000000011000000000000001100);
+      ix = ((ix & 0b000010000000100000001000000010)<<3) | (ix & ~0b000010000000100000001000000010);
+      
+      iy = ((iy & 0xF0) << 12) | (iy & ~0xF0);
+      iy = ((iy & 0b000000000011000000000000001100)<<6) | (iy & ~0b000000000011000000000000001100);
+      iy = ((iy & 0b000010000000100000001000000010)<<3) | (iy & ~0b000010000000100000001000000010);
+      
+      iz = ((iz & 0xF0) << 12) | (iz & ~0xF0);
+      iz = ((iz & 0b000000000011000000000000001100)<<6) | (iz & ~0b000000000011000000000000001100);
+      iz = ((iz & 0b000010000000100000001000000010)<<3) | (iz & ~0b000010000000100000001000000010);
+    
+      iw = ((iw & 0xF0) << 12) | (iw & ~0xF0);
+      iw = ((iw & 0b000000000011000000000000001100)<<6) | (iw & ~0b000000000011000000000000001100);
+      iw = ((iw & 0b000010000000100000001000000010)<<3) | (iw & ~0b000010000000100000001000000010);
+    
+      return (iw << 3) | (iz << 2) | (iy << 1) | ix;
+    }
+    
+    
+    inline __device__ uint32_t interleaveBits(vec3ui mortonCell)
+    {
       int ix = mortonCell.x;
       int iy = mortonCell.y;
       int iz = mortonCell.z;
@@ -224,22 +358,52 @@ namespace cuBQL {
       iz = ((iz & 0b000010000010000010000010000010) <<  2) | (iz & ~0b000010000010000010000010000010);
 
       return (iz << 2) | (iy << 1) | (ix);
+    }
+    
+    template<typename T, int D>
+    inline __device__
+    // uint32_t computeMortonCode(vec3f P, vec3f quantizeBias, vec3f quantizeScale)
+    uint32_t computeMortonCode(typename BuildState<T,D>::vec_t P,
+                               const Quantizer<T,D> quantizer)
+    {
+      return interleaveBits(quantizer.quantize(P));
+      // // // quantizeScale = vec3f(reduce_min(quantizeScale));
+      // // P = (P - quantizeBias) * quantizeScale;
+      // // vec3i mortonCell = min(max(vec3i(0),vec3i(P)),vec3i((1<<10)-1));
+      // vec3i mortonCell = quantizer.quantize(P);
+      // //min(max(vec3i(0),vec3i(P)),vec3i((1<<10)-1));
+      // int ix = mortonCell.x;
+      // int iy = mortonCell.y;
+      // int iz = mortonCell.z;
       
-#else
-      return
-        (bitInterleave10(mortonCell.z) << 2) |
-        (bitInterleave10(mortonCell.y) << 1) |
-        (bitInterleave10(mortonCell.x) << 0);
-#endif
+      // ix = ((ix & 0b000000000000000000001100000000) << 16) | (ix & ~0b000000000000000000001100000000);
+      // ix = ((ix & 0b000000000000000000000011110000) <<  8) | (ix & ~0b000000000000000000000011110000);
+      // ix = ((ix & 0b000000000000001100000000001100) <<  4) | (ix & ~0b000000000000001100000000001100);
+      // ix = ((ix & 0b000010000010000010000010000010) <<  2) | (ix & ~0b000010000010000010000010000010);
+      
+      // iy = ((iy & 0b000000000000000000001100000000) << 16) | (iy & ~0b000000000000000000001100000000);
+      // iy = ((iy & 0b000000000000000000000011110000) <<  8) | (iy & ~0b000000000000000000000011110000);
+      // iy = ((iy & 0b000000000000001100000000001100) <<  4) | (iy & ~0b000000000000001100000000001100);
+      // iy = ((iy & 0b000010000010000010000010000010) <<  2) | (iy & ~0b000010000010000010000010000010);
+      
+      // iz = ((iz & 0b000000000000000000001100000000) << 16) | (iz & ~0b000000000000000000001100000000);
+      // iz = ((iz & 0b000000000000000000000011110000) <<  8) | (iz & ~0b000000000000000000000011110000);
+      // iz = ((iz & 0b000000000000001100000000001100) <<  4) | (iz & ~0b000000000000001100000000001100);
+      // iz = ((iz & 0b000010000010000010000010000010) <<  2) | (iz & ~0b000010000010000010000010000010);
+
+      // return (iz << 2) | (iy << 1) | (ix);
     }
 
+    template<typename T, int D>
     inline __device__
-    uint32_t computeMortonCode(vec3f P, box3f domain)
+    uint32_t computeMortonCode(vec_t<T,D> P, box_t<T,D> domain)
     {
-      vec3f quantizeBias = domain.lower;
-      vec3f quantizeScale
-        = vec3f(1<<10)*rcp(max(vec3f(reduce_max(domain.size())),vec3f(1e-20f)));
-      return computeMortonCode(P,quantizeBias,quantizeScale);
+      Quantizer<T,D> quantizer;
+      quantizer.init(domain);
+      // vec3f quantizeBias = domain.lower;
+      // vec3f quantizeScale
+      //   = vec3f(1<<10)*rcp(max(vec3f(reduce_max(domain.size())),vec3f(1e-20f)));
+      return computeMortonCode(P,quantizer);//quantizeBias,quantizeScale);
       // P = (P - quantizeBias) * quantizeScale;
       // vec3i mortonCell = min(vec3i(P),vec3i((1<<10)-1));
       // return
@@ -259,13 +423,20 @@ namespace cuBQL {
     //     (bitInterleave21(mortonCell.x) << 0);
     // }
     
+    template<typename T, int D>
     __global__
     void computeUnsortedKeysAndPrimIDs(uint32_t    *mortonCodes,
                                        uint32_t    *primIDs,
-                                       BuildState  *buildState,
-                                       const box_t *prims,
+                                       BuildState<T,D>  *buildState,
+                                       const typename BuildState<T,D>::box_t *prims,
                                        int numPrims)
     {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       int tid = threadIdx.x + blockIdx.x*blockDim.x;
       if (tid >= numPrims) return;
 
@@ -279,9 +450,9 @@ namespace cuBQL {
 
       primIDs[tid] = primID;
       mortonCodes[tid]
-        = computeMortonCode(prim.center(),
-                            buildState->quantizeBias,
-                            buildState->quantizeScale);
+        = computeMortonCode(prim.center(),buildState->quantizer);
+                            // buildState->quantizeBias,
+                            // buildState->quantizeScale);
     }
 
     struct TempNode {
@@ -394,8 +565,9 @@ namespace cuBQL {
     { return smallEnoughToLeaveBroadPhase(node.open.size()); }
     
 
+    template<typename T, int D>
     __global__
-    void initNodes(BuildState *buildState,
+    void initNodes(BuildState<T,D> *buildState,
                    TempNode   *nodes,
                    int numValidPrims)
     {
@@ -411,8 +583,9 @@ namespace cuBQL {
       nodes[1] = n1;
     }
 
+    template<typename T, int D>
     __global__
-    void broadPhaseCreateNodes(BuildState *buildState,
+    void broadPhaseCreateNodes(BuildState<T,D> *buildState,
                                int leafThreshold,
                                TempNode *nodes,
                                int pass_begin, int pass_end,
@@ -519,9 +692,10 @@ namespace cuBQL {
         
     }
 
+    template<typename T, int D>
     __global__
-    void threadPhaseCreateNodes(BuildState *buildState,
-                                const box3f *boxes,
+    void threadPhaseCreateNodes(BuildState<T,D> *buildState,
+                                const box_t<T,D> *boxes,
                                 int leafThreshold,
                                 int maxAllowedLeafSize,
                                 TempNode *nodes,
@@ -529,6 +703,12 @@ namespace cuBQL {
                                 uint32_t *keys,
                                 uint32_t *primIDs)
     {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       __shared__ int l_allocOffset;
 
       if (threadIdx.x == 0)
@@ -563,7 +743,7 @@ namespace cuBQL {
         } else if (!findSplit(split,keys,subtree_begin,subtree_end)) {
           // we couldn't split, and need rebinning - but since we're
           // in thread phase we have do to that here and now.
-          box3f domain;
+          box_t domain;
           domain.clear();
           for (int i=subtree_begin;i<subtree_end;i++)
             domain.grow(boxes[primIDs[i]].center());
@@ -629,88 +809,89 @@ namespace cuBQL {
     }
     
 
-#if 0
-    __global__
-    void blockPhaseCreateNodes(BuildState *buildState,
-                               int leafThreshold,
-                               TempNode *nodes,
-                               int begin, int end,
-                               const uint64_t *keys)
-    {
-      __shared__ int l_allocOffset;
+// #if 0
+//     __global__
+//     void blockPhaseCreateNodes(BuildState *buildState,
+//                                int leafThreshold,
+//                                TempNode *nodes,
+//                                int begin, int end,
+//                                const uint64_t *keys)
+//     {
+//       __shared__ int l_allocOffset;
       
-      if (threadIdx.x == 0)
-        l_allocOffset = 0;
-      // ==================================================================
-      __syncthreads();
-      // ==================================================================
+//       if (threadIdx.x == 0)
+//         l_allocOffset = 0;
+//       // ==================================================================
+//       __syncthreads();
+//       // ==================================================================
       
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      int nodeID = begin + tid;
-      bool validNode = (nodeID < end);
-      int64_t split   = -1;
-      int childID = -1;
-      TempNode node;
+//       int tid = threadIdx.x+blockIdx.x*blockDim.x;
+//       int nodeID = begin + tid;
+//       bool validNode = (nodeID < end);
+//       int64_t split   = -1;
+//       int childID = -1;
+//       TempNode node;
       
-      if (validNode) {
-        node = nodes[nodeID];
-        int size = node.open.end - node.open.begin;
-        if (size <= leafThreshold) {
-          // we WANT to make a leaf
-          node.finished.offset = node.open.begin;
-          node.finished.count  = size;
-          node.finished.open   = false;
-        } else if (smallEnoughToLeaveBroadPhase(size)) {
-          // we WANT to make a leaf
-          node.finished.offset = node.open.begin;
-          node.finished.count  = size;
-          node.finished.open   = false;
-        } else if (!findSplit(split,keys,node.open.begin,node.open.end)) {
-          // we HAVE TO make a leaf because we couldn't split
-          node.finished.offset = node.open.begin;
-          node.finished.count  = size;
-          node.finished.open   = true;
-        } else {
-          // we COULD split - yay!
-          childID = atomicAdd(&l_allocOffset,2);
-        }
-      }
+//       if (validNode) {
+//         node = nodes[nodeID];
+//         int size = node.open.end - node.open.begin;
+//         if (size <= leafThreshold) {
+//           // we WANT to make a leaf
+//           node.finished.offset = node.open.begin;
+//           node.finished.count  = size;
+//           node.finished.open   = false;
+//         } else if (smallEnoughToLeaveBroadPhase(size)) {
+//           // we WANT to make a leaf
+//           node.finished.offset = node.open.begin;
+//           node.finished.count  = size;
+//           node.finished.open   = false;
+//         } else if (!findSplit(split,keys,node.open.begin,node.open.end)) {
+//           // we HAVE TO make a leaf because we couldn't split
+//           node.finished.offset = node.open.begin;
+//           node.finished.count  = size;
+//           node.finished.open   = true;
+//         } else {
+//           // we COULD split - yay!
+//           childID = atomicAdd(&l_allocOffset,2);
+//         }
+//       }
       
-      // ==================================================================
-      __syncthreads();
-      // ==================================================================
-      if (threadIdx.x == 0)
-        l_allocOffset = atomicAdd(&buildState->numNodesAlloced,l_allocOffset);
-      // ==================================================================
-      __syncthreads();
-      // ==================================================================
-      if (childID >= 0) {
-        childID += l_allocOffset;
-        TempNode c0, c1;
-        c0.open.begin = node.open.begin;
-        c0.open.end   = split;
-        c1.open.begin = split;
-        c1.open.end   = node.open.end;
-        // we COULD actually write those as a int4 if we really wanted
-        // to ...
-        nodes[childID+0]     = c0;
-        nodes[childID+1]     = c1;
-        node.finished.offset = childID;
-        node.finished.count  = 0;
-      }
-      if (validNode)
-        nodes[nodeID] = node;
-    }
-#endif
+//       // ==================================================================
+//       __syncthreads();
+//       // ==================================================================
+//       if (threadIdx.x == 0)
+//         l_allocOffset = atomicAdd(&buildState->numNodesAlloced,l_allocOffset);
+//       // ==================================================================
+//       __syncthreads();
+//       // ==================================================================
+//       if (childID >= 0) {
+//         childID += l_allocOffset;
+//         TempNode c0, c1;
+//         c0.open.begin = node.open.begin;
+//         c0.open.end   = split;
+//         c1.open.begin = split;
+//         c1.open.end   = node.open.end;
+//         // we COULD actually write those as a int4 if we really wanted
+//         // to ...
+//         nodes[childID+0]     = c0;
+//         nodes[childID+1]     = c1;
+//         node.finished.offset = childID;
+//         node.finished.count  = 0;
+//       }
+//       if (validNode)
+//         nodes[nodeID] = node;
+//     }
+// #endif
     
+    template<typename T, int D>
     __global__
-    void writeFinalNodes(bvh3f::Node *finalNodes,
+    void writeFinalNodes(typename BinaryBVH<T,D>::Node *finalNodes,
                          const TempNode *__restrict__ tempNodes,
                          int numNodes)
     {
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= numNodes) return;
-      bvh3f::Node node;
+      typename BinaryBVH<T,D>::Node node;
       TempNode tempNode = tempNodes[tid];
       node.offset = tempNode.finished.offset;
       node.count = tempNode.finished.count;
@@ -727,12 +908,22 @@ namespace cuBQL {
         uint64_t bits;
       };
     };
+    
+    template<typename T, int D>
     struct RebinDomain {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       atomic_box_t centBounds;
     };
 
+    template<typename T, int D>
     __global__
-    void rebinClearDomains(RebinDomain *rebinDomains, int numBroadPhaseRebinJobs)
+    void rebinClearDomains(RebinDomain<T,D> *rebinDomains,
+                           int numBroadPhaseRebinJobs)
     {
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= numBroadPhaseRebinJobs) return;
@@ -762,19 +953,26 @@ namespace cuBQL {
     // first figure out which rebin job it is (from which it can
     // compute its global prim ID), then read that global prim id,
     // read its box, and extend its jobs rebin domain
+    template<typename T, int D>
     __global__
-    void rebinGrowDomains(BuildState *buildState,
+    void rebinGrowDomains(BuildState<T,D> *buildState,
                           TempNode *nodes,
                           // original inputs:
-                          const box3f *boxes,
+                          const box_t<T,D> *boxes,
                           const uint32_t *primIDs_inMortonOrder,
                           // the jobs that those rebin prims are in
                           RebinRange  *rebinRanges_sorted,
-                          RebinDomain *rebinDomains,
+                          RebinDomain<T,D> *rebinDomains,
                           int numBroadPhaseRebinJobs,
                           // how many prims we even have to write:
                           int numBroadPhaseRebinPrims)
     {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= numBroadPhaseRebinPrims) return;
 
@@ -784,7 +982,7 @@ namespace cuBQL {
       int        localID = tid - range.beginOfRebinPrimRange;
       TempNode   node    = nodes[range.nodeID];
       int primID = primIDs_inMortonOrder[node.open.begin + localID];
-      box3f box  = boxes[primID];
+      box_t box  = boxes[primID];
       atomic_grow(rebinDomains[rangeID].centBounds,box.center());
     }
 
@@ -798,8 +996,9 @@ namespace cuBQL {
       };
     };
 
+    template<typename T, int D>
     __global__
-    void rebinWriteBackNewKeysAndPrimIDs(BuildState *buildState,
+    void rebinWriteBackNewKeysAndPrimIDs(BuildState<T,D> *buildState,
                                          TempNode *nodes,
                                          uint32_t *primKeys_sorted,
                                          uint32_t *primIDs_inMortonOrder,
@@ -822,15 +1021,16 @@ namespace cuBQL {
       primIDs_inMortonOrder[globalID]  = rebinValue;
     }
     
+    template<typename T, int D>
     __global__
-    void rebinCreateNewKeysAndPrimIDs(BuildState *buildState,
+    void rebinCreateNewKeysAndPrimIDs(BuildState<T,D> *buildState,
                                       TempNode *nodes,
                                       // original inputs:
-                                      const box3f *boxes,
+                                      const typename BuildState<T,D>::box_t *boxes,
                                       const uint32_t *primIDs_inMortonOrder,
                                       // the jobs that those rebin prims are in
                                       RebinRange  *rebinRanges_sorted,
-                                      RebinDomain *rebinDomains,
+                                      RebinDomain<T,D> *rebinDomains,
                                       int numBroadPhaseRebinJobs,
                                       // arrays we need to fill:
                                       RebinKey  *newKeys,
@@ -838,6 +1038,12 @@ namespace cuBQL {
                                       // how many prims we even have to write:
                                       int numBroadPhaseRebinPrims)
     {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
+      
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       if (tid >= numBroadPhaseRebinPrims) return;
 
@@ -847,8 +1053,8 @@ namespace cuBQL {
       int        localID = tid - range.beginOfRebinPrimRange;
       TempNode   node    = nodes[range.nodeID];
       uint32_t primID = primIDs_inMortonOrder[node.open.begin + localID];
-      box3f box  = boxes[primID];
-      box3f domain = rebinDomains[rangeID].centBounds.make_box();
+      box_t box  = boxes[primID];
+      box_t domain = rebinDomains[rangeID].centBounds.make_box();
       uint32_t newMorton
         = (domain.lower == domain.upper)
         ? localID
@@ -928,8 +1134,9 @@ namespace cuBQL {
     // nodes that need rebinning, which are all those that are
     // alloced, still open at the end of broad-phase node generation,
     // and not small enought to leave broad phase
+    template<typename T, int D>
     __global__
-    void rebinFindRanges(BuildState *buildState,
+    void rebinFindRanges(BuildState<T,D> *buildState,
                          RebinRange *rebinRanges,
                          TempNode   *nodes,
                          int         numNodes)
@@ -947,13 +1154,19 @@ namespace cuBQL {
       rebinRanges[rangeID].nodeID = tid;
     }
 
-    void build(bvh_t             &bvh,
-               const box_t       *boxes,
+    template<typename T, int D>
+    void build(BinaryBVH<T,D>    &bvh,
+               const box_t<T,D>  *boxes,
                int                numPrims,
                BuildConfig        buildConfig,
                cudaStream_t       s,
                GpuMemoryResource &memResource)
     {
+      using ctx_t = BuildState<T,D>;
+      using vec_t = typename ctx_t::vec_t;
+      using box_t = typename ctx_t::box_t;
+      using bvh_t = typename ctx_t::bvh_t;
+      using atomic_box_t = typename ctx_t::atomic_box_t;
       const int makeLeafThreshold
         = (buildConfig.makeLeafThreshold > 0)
         ? min(buildConfig.makeLeafThreshold,buildConfig.maxAllowedLeafSize)
@@ -966,7 +1179,7 @@ namespace cuBQL {
       /* step 1.1, init build state; in particular, clear the shared
         centbounds we need to atomically grow centroid bounds in next
         step */
-      BuildState *d_buildState = 0;
+      BuildState<T,D> *d_buildState = 0;
       _ALLOC(d_buildState,1,s,memResource);
       clearBuildState<<<32,1,0,s>>>
         (d_buildState,numPrims);
@@ -980,7 +1193,7 @@ namespace cuBQL {
       finishBuildState<<<32,1,0,s>>>
         (d_buildState);
 
-      static BuildState *h_buildState = 0;
+      static BuildState<T,D> *h_buildState = 0;
       if (!h_buildState)
         CUBQL_CUDA_CALL(MallocHost((void**)&h_buildState,
                                    sizeof(*h_buildState)));
@@ -1093,7 +1306,7 @@ namespace cuBQL {
         // 3.4: alloc descriptors and centroids for those rebin jobs
         RebinRange  *rebinRanges_unsorted    = 0;
         RebinRange  *rebinRanges_sorted    = 0;
-        RebinDomain *rebinDomains = 0;
+        RebinDomain<T,D> *rebinDomains = 0;
         
         _ALLOC(rebinRanges_unsorted,numBroadPhaseRebinJobs,s,memResource);
         _ALLOC(rebinRanges_sorted,numBroadPhaseRebinJobs,s,memResource);
@@ -1244,7 +1457,7 @@ namespace cuBQL {
          have */
       bvh.numNodes = numNodesAlloced;
       _ALLOC(bvh.nodes,numNodesAlloced,s,memResource);
-      writeFinalNodes<<<divRoundUp(numNodesAlloced,1024),1024,0,s>>>
+      writeFinalNodes<T,D><<<divRoundUp(numNodesAlloced,1024),1024,0,s>>>
         (bvh.nodes,nodes,numNodesAlloced);
       
       /* 4.4 cleanup - free temp nodes, free build state, and release event */
@@ -1258,13 +1471,14 @@ namespace cuBQL {
       gpuBuilder_impl::refit(bvh,boxes,s,memResource);
     }
   }
-
-  void rebinMortonBuilder(BinaryBVH<float,3>   &bvh,
-                     const box_t<float,3> *boxes,
+  
+  template<typename T, int D>
+  void rebinMortonBuilder(BinaryBVH<T,D>   &bvh,
+                     const box_t<T,D> *boxes,
                      int                   numPrims,
                      BuildConfig           buildConfig,
                      cudaStream_t          s,
                      GpuMemoryResource    &memResource)
-  { rebinMortonBuilder_impl::build(bvh,boxes,numPrims,buildConfig,s,memResource); }
+  { rebinMortonBuilder_impl::build<T,D>(bvh,boxes,numPrims,buildConfig,s,memResource); }
 }
 

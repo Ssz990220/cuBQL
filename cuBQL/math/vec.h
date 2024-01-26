@@ -47,6 +47,13 @@ namespace cuBQL {
   template<typename T, int D> struct cuda_eq_t { using type = invalid_t; };
   template<> struct cuda_eq_t<float,2> { using type = float2; };
   template<> struct cuda_eq_t<float,3> { using type = float3; };
+  template<> struct cuda_eq_t<float,4> { using type = float4; };
+  template<> struct cuda_eq_t<int,2> { using type = int2; };
+  template<> struct cuda_eq_t<int,3> { using type = int3; };
+  template<> struct cuda_eq_t<int,4> { using type = int4; };
+  template<> struct cuda_eq_t<double,2> { using type = double2; };
+  template<> struct cuda_eq_t<double,3> { using type = double3; };
+  template<> struct cuda_eq_t<double,4> { using type = double4; };
 
   template<typename T>
   struct vec_t_data<T,2> {
@@ -65,6 +72,15 @@ namespace cuBQL {
     /*! auto-cast to equivalent cuda type */
     inline __cubql_both operator cuda_t() { cuda_t t; t.x = x; t.y = y; return t; }
     T x, y, z;
+  };
+  template<typename T>
+  struct vec_t_data<T,4> {
+    using cuda_t = typename cuda_eq_t<T,4>::type;
+    inline __cubql_both T  operator[](int i) const { return (i>=2)?(i==2?z:w):(i?y:x); }
+    inline __cubql_both T &operator[](int i)       { return (i>=2)?(i==2?z:w):(i?y:x); }
+    /*! auto-cast to equivalent cuda type */
+    inline __cubql_both operator cuda_t() { cuda_t t; t.x = x; t.y = y; return t; }
+    T x, y, z, w;
   };
   
   template<typename T, int D>
@@ -138,6 +154,10 @@ namespace cuBQL {
   using vec2i = vec_t<int,2>;
   using vec3i = vec_t<int,3>;
   using vec4i = vec_t<int,4>;
+  
+  using vec2ui = vec_t<uint32_t,2>;
+  using vec3ui = vec_t<uint32_t,3>;
+  using vec4ui = vec_t<uint32_t,4>;
   
   template<typename T>
   inline __cubql_both vec_t<T,3> cross(vec_t<T,3> a, vec_t<T,3> b)
@@ -384,5 +404,33 @@ namespace cuBQL {
     return true;
   }
                                      
+
+    template<typename T>
+    inline __device__
+    T reduce_max(vec_t<T,2> v) { return max(v.x,v.y); }
+    
+    template<typename T>
+    inline __device__
+    T reduce_min(vec_t<T,2> v) { return min(v.x,v.y); }
+    
+
+    template<typename T>
+    inline __device__
+    T reduce_max(vec_t<T,3> v) { return max(max(v.x,v.y),v.z); }
+    
+    template<typename T>
+    inline __device__
+    T reduce_min(vec_t<T,3> v) { return min(min(v.x,v.y),v.z); }
+    
+
+    template<typename T>
+    inline __device__
+    T reduce_max(vec_t<T,4> v) { return max(max(v.x,v.y),max(v.z,v.w)); }
+    
+    template<typename T>
+    inline __device__
+    T reduce_min(vec_t<T,4> v) { return min(min(v.x,v.y),min(v.z,v.w)); }
+    
+
 }
 

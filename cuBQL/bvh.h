@@ -233,8 +233,9 @@ namespace cuBQL {
   // ------------------------------------------------------------------
   /*! fast radix/morton builder for float3 data */
   // ------------------------------------------------------------------
-  void mortonBuilder(BinaryBVH<float,3>   &bvh,
-                     const box_t<float,3> *boxes,
+  template<typename T, int D>
+  void mortonBuilder(BinaryBVH<T,D>   &bvh,
+                     const box_t<T,D> *boxes,
                      int                   numPrims,
                      BuildConfig           buildConfig,
                      cudaStream_t          s=0,
