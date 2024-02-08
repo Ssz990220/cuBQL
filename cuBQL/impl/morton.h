@@ -45,7 +45,8 @@ namespace cuBQL {
           quantization operation that does
           `(x-centBoundsLower)/(centBoundsSize)*(1<<21)`. Ie, bias is
           centBoundsLower, and scale is `(1<<21)/(centBoundsSize)` */
-      vec3f CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+      vec3f CUBQL_ALIGN(16) quantizeBias;
+      vec3f CUBQL_ALIGN(16) quantizeScale;
     };
 
     __global__
