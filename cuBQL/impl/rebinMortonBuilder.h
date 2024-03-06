@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cuBQL/impl/sm_builder.h"
+#include "cuBQL/impl/morton.h"
 
 #define NO_BLOCK_PHASE 1
 
@@ -45,6 +46,15 @@ namespace cuBQL {
         quantizeScale
           = vec_t(1<<numMortonBits<D>::value)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
+      }
+        
+      inline __device__ cuBQL::vec_t<uint32_t,D> quantize(vec_t P) const
+      {
+        using vec_ui = cuBQL::vec_t<uint32_t,D>;
+
+        vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
+        cell = min(cell,vec_ui((1<<numMortonBits<D>::value)-1));
+        return cell;
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
@@ -198,11 +208,11 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    __global__
+    inline __global__
     void finishBuildState(BuildState<T,D>  *buildState);
 
     template<>
-    __global__
+    inline __global__
     void finishBuildState(BuildState<float,3>  *buildState)
     {
       using ctx_t = BuildState<float,3>;
@@ -1155,6 +1165,7 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
+    inline 
     void build(BinaryBVH<T,D>    &bvh,
                const box_t<T,D>  *boxes,
                int                numPrims,
