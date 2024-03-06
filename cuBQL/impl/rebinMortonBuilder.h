@@ -17,7 +17,6 @@
 #pragma once
 
 #include "cuBQL/impl/sm_builder.h"
-#include "cuBQL/impl/morton.h"
 
 #define NO_BLOCK_PHASE 1
 
@@ -144,7 +143,7 @@ namespace cuBQL {
       /*! bounds of prim centers, relative to which we will computing
         morton codes */
       atomic_box_t a_centBounds;
-      box_t        centBounds;
+      // box_t        centBounds;
 
       int numBroadPhaseRebinPrims;
       int numBroadPhaseRebinJobs;
@@ -208,11 +207,11 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    inline __global__
+    __global__
     void finishBuildState(BuildState<T,D>  *buildState);
 
     template<>
-    inline __global__
+    __global__
     void finishBuildState(BuildState<float,3>  *buildState)
     {
       using ctx_t = BuildState<float,3>;
@@ -224,17 +223,8 @@ namespace cuBQL {
       if (threadIdx.x != 0) return;
       
       box_t centBounds = buildState->a_centBounds.make_box();
-      buildState->centBounds = centBounds;
-      /* from above: coefficients of `scale*(x-bias)` in the 10-bit
-        fixed-point quantization operation that does
-        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-
+      // buildState->centBounds = centBounds;
       buildState->quantizer.init(centBounds);
-      // buildState->quantizeBias
-      //   = centBounds.lower;
-      // buildState->quantizeScale
-      //   = vec3f(1<<10)*rcp(max(vec3f(reduce_max(centBounds.size())),vec3f(1e-20f)));
     }
 
 
@@ -818,83 +808,8 @@ namespace cuBQL {
         nodes[nodeID] = node;
     }
     
-
-// #if 0
-//     __global__
-//     void blockPhaseCreateNodes(BuildState *buildState,
-//                                int leafThreshold,
-//                                TempNode *nodes,
-//                                int begin, int end,
-//                                const uint64_t *keys)
-//     {
-//       __shared__ int l_allocOffset;
-      
-//       if (threadIdx.x == 0)
-//         l_allocOffset = 0;
-//       // ==================================================================
-//       __syncthreads();
-//       // ==================================================================
-      
-//       int tid = threadIdx.x+blockIdx.x*blockDim.x;
-//       int nodeID = begin + tid;
-//       bool validNode = (nodeID < end);
-//       int64_t split   = -1;
-//       int childID = -1;
-//       TempNode node;
-      
-//       if (validNode) {
-//         node = nodes[nodeID];
-//         int size = node.open.end - node.open.begin;
-//         if (size <= leafThreshold) {
-//           // we WANT to make a leaf
-//           node.finished.offset = node.open.begin;
-//           node.finished.count  = size;
-//           node.finished.open   = false;
-//         } else if (smallEnoughToLeaveBroadPhase(size)) {
-//           // we WANT to make a leaf
-//           node.finished.offset = node.open.begin;
-//           node.finished.count  = size;
-//           node.finished.open   = false;
-//         } else if (!findSplit(split,keys,node.open.begin,node.open.end)) {
-//           // we HAVE TO make a leaf because we couldn't split
-//           node.finished.offset = node.open.begin;
-//           node.finished.count  = size;
-//           node.finished.open   = true;
-//         } else {
-//           // we COULD split - yay!
-//           childID = atomicAdd(&l_allocOffset,2);
-//         }
-//       }
-      
-//       // ==================================================================
-//       __syncthreads();
-//       // ==================================================================
-//       if (threadIdx.x == 0)
-//         l_allocOffset = atomicAdd(&buildState->numNodesAlloced,l_allocOffset);
-//       // ==================================================================
-//       __syncthreads();
-//       // ==================================================================
-//       if (childID >= 0) {
-//         childID += l_allocOffset;
-//         TempNode c0, c1;
-//         c0.open.begin = node.open.begin;
-//         c0.open.end   = split;
-//         c1.open.begin = split;
-//         c1.open.end   = node.open.end;
-//         // we COULD actually write those as a int4 if we really wanted
-//         // to ...
-//         nodes[childID+0]     = c0;
-//         nodes[childID+1]     = c1;
-//         node.finished.offset = childID;
-//         node.finished.count  = 0;
-//       }
-//       if (validNode)
-//         nodes[nodeID] = node;
-//     }
-// #endif
-    
     template<typename T, int D>
-    __global__
+    inline __global__
     void writeFinalNodes(typename BinaryBVH<T,D>::Node *finalNodes,
                          const TempNode *__restrict__ tempNodes,
                          int numNodes)
