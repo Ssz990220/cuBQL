@@ -61,7 +61,8 @@ namespace cuBQL {
           quantization operation that does
           `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
           centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec_t CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+      vec_t CUBQL_ALIGN(16) quantizeBias;
+      vec_t CUBQL_ALIGN(16) quantizeScale;
     };
 
     template<int D>
@@ -91,7 +92,8 @@ namespace cuBQL {
           quantization operation that does
           `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
           centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec_t CUBQL_ALIGN(16) quantizeBias, CUBQL_ALIGN(16) quantizeScale;
+      vec_t CUBQL_ALIGN(16) quantizeBias;
+      vec_t CUBQL_ALIGN(16) quantizeScale;
     };
 
     template<int D>
