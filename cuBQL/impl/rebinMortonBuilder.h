@@ -479,7 +479,7 @@ namespace cuBQL {
         struct {
           uint64_t unused0:32;
           uint64_t unused1:31;
-          uint32_t open:1;
+          uint64_t open:1;
         } common;
         // force alignment to 8-byte values, so compiler can
         // read/write more efficiently
@@ -604,7 +604,7 @@ namespace cuBQL {
       
       int tid = threadIdx.x+blockIdx.x*blockDim.x;
       int nodeID = pass_begin + tid;
-      bool validNode = nodeID != 1 && (nodeID < pass_end);
+      bool validNode = (nodeID != 1) && (nodeID < pass_end);
       int64_t split   = -1;
       int childID = -1;
       TempNode node;
@@ -613,7 +613,7 @@ namespace cuBQL {
         node = nodes[nodeID];
         const uint64_t subtree_begin = node.open.begin;
         const uint64_t subtree_end   = node.open.end;
-        const uint64_t subtree_size  = subtree_end - subtree_begin;
+        const int subtree_size  = int(subtree_end - subtree_begin);
         if (!node.common.open) {
           // node wasn't even open - this should only ever happen if
           // we've entered a new phase, or re-started after
@@ -636,7 +636,7 @@ namespace cuBQL {
           // track that we need to find this later on
           validNode = false;
           atomicAdd(&buildState->numBroadPhaseRebinJobs,1);
-          atomicAdd(&buildState->numBroadPhaseRebinPrims,subtree_size);
+          atomicAdd(&buildState->numBroadPhaseRebinPrims,(int)subtree_size);
         } else {
           // we COULD split - yay!
           childID = atomicAdd(&l_allocOffset,2);
@@ -1360,7 +1360,6 @@ namespace cuBQL {
                                     cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
         CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
-        
         numNodesDone    = numNodesAlloced;
         numNodesAlloced = h_buildState->numNodesAlloced;
       }

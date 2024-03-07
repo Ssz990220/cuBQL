@@ -103,6 +103,8 @@ target_sources(cuBQL_interface INTERFACE
   cuBQL/impl/sm_builder.h
   cuBQL/impl/sah_builder.h
   cuBQL/impl/gpu_builder.h
+  cuBQL/impl/morton.h
+  cuBQL/impl/rebinMortonBuilder.h
   cuBQL/impl/wide_gpu_builder.h
   )
 target_include_directories(cuBQL_interface INTERFACE

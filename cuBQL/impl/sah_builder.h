@@ -248,7 +248,6 @@ namespace cuBQL {
       int   splitBin;
       if (in.count > buildConfig.makeLeafThreshold) {
         evaluateSAH(splitDim,splitBin,sah);
-        // printf("evaluated sah, result is dim %i bin %i\n",splitDim,splitBin);
       }
       if (splitDim < 0) {
         nodeState   = DONE_NODE;
@@ -258,7 +257,6 @@ namespace cuBQL {
         // with their position ion the leaf list; this value is
         // greater than any prim position.
         done.offset = (uint32_t)-1;
-        // printf("#ss node %i making leaf, count %i\n",nodeID,in.count);
       } else {
         nodeState = OPEN_NODE;
         
