@@ -18,11 +18,19 @@
 
 #include "cuBQL/math/math.h"
 #include <type_traits>
+#include <climits>
 
 #ifdef _MSC_VER
 # define CUBQL_PRAGMA_UNROLL /* nothing */
 #else
 # define CUBQL_PRAGMA_UNROLL _Pragma("unroll")
+#endif
+
+#ifdef __CUDACC__
+# define __cubql_device__ __device__
+# define __cubql_both__ __device__ __host__
+#else
+# define __cubql_both__
 #endif
 
 namespace cuBQL {
@@ -43,7 +51,22 @@ namespace cuBQL {
     a vec3f=vec_t<float,3> has a equivalent cuda built-in type of
     float3. to also allow vec_t's that do not have a cuda
     equivalent, let's also create a 'invalid_t' to be used by
-    default */ 
+    default */
+
+#ifndef __CUDACC__
+  struct float2 { float x, y; };
+  struct float3 { float x, y, z; };
+  struct CUBQL_ALIGN(16) float4 { float x, y, z, w; };
+
+  struct int2 { int x, y; };
+  struct int3 { int x, y, z; };
+  struct CUBQL_ALIGN(16) int4 { int x, y, z, w; };
+
+  struct double2 { double x, y; };
+  struct double3 { double x, y, z; };
+  struct CUBQL_ALIGN(16) double4 { double x, y, z, w; };
+#endif
+  
   template<typename T, int D> struct cuda_eq_t { using type = invalid_t; };
   template<> struct cuda_eq_t<float,2> { using type = float2; };
   template<> struct cuda_eq_t<float,3> { using type = float3; };
@@ -316,15 +339,15 @@ namespace cuBQL {
     used for culling it will, if anything, under-estiamte the
     distance to a subtree (and thus, still traverse it) rather than
     wrongly skipping it*/
-  template<typename T> inline __device__ float fSqrLength(T v);
-  template<> inline __device__ float fSqrLength<float>(float v)
+  template<typename T> inline __cubql_both__ float fSqrLength(T v);
+  template<> inline __cubql_both__ float fSqrLength<float>(float v)
   { return v*v; }
 
 #ifdef __CUDA_ARCH__
-  template<> inline __device__ float fSqrLength<int>(int _v)
+  template<> inline __cubql_both__ float fSqrLength<int>(int _v)
   { float v = __int2float_rz(_v); return v*v; }
 #else
-  template<> inline __device__ float fSqrLength<int>(int _v);
+  template<> inline __cubql_both__ float fSqrLength<int>(int _v);
 #endif
 
   /*! accurate square-length of a vector; due to the 'square' involved
@@ -406,29 +429,29 @@ namespace cuBQL {
                                      
 
     template<typename T>
-    inline __device__
+    inline __cubql_both__
     T reduce_max(vec_t<T,2> v) { return max(v.x,v.y); }
     
     template<typename T>
-    inline __device__
+    inline __cubql_both__
     T reduce_min(vec_t<T,2> v) { return min(v.x,v.y); }
     
 
     template<typename T>
-    inline __device__
+    inline __cubql_both__
     T reduce_max(vec_t<T,3> v) { return max(max(v.x,v.y),v.z); }
     
     template<typename T>
-    inline __device__
+    inline __cubql_both__
     T reduce_min(vec_t<T,3> v) { return min(min(v.x,v.y),v.z); }
     
 
     template<typename T>
-    inline __device__
+    inline __cubql_both__
     T reduce_max(vec_t<T,4> v) { return max(max(v.x,v.y),max(v.z,v.w)); }
     
     template<typename T>
-    inline __device__
+    inline __cubql_both__
     T reduce_min(vec_t<T,4> v) { return min(min(v.x,v.y),min(v.z,v.w)); }
     
 
