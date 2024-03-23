@@ -75,23 +75,26 @@ namespace cuBQL {
       enum { count_bits = 16, offset_bits = 64-count_bits };
       
       box_t    bounds;
+
+      struct Admin {
       /*! For inner nodes, this points into the nodes[] array, with
-          left child at nodes.offset+0, and right chlid at
-          nodes.offset+1. For leaf nodes, this points into the
-          primIDs[] array, which first prim beign primIDs[offset],
-          next one primIDs[offset+1], etc. */
-      union {
-        struct {
-          uint64_t offset : offset_bits;
-          /* number of primitives in this leaf, if a leaf; 0 for inner
-             nodes. */
-          uint64_t count  : count_bits;
+        left child at nodes.offset+0, and right chlid at
+        nodes.offset+1. For leaf nodes, this points into the
+        primIDs[] array, which first prim beign primIDs[offset],
+        next one primIDs[offset+1], etc. */
+        union {
+          struct {
+            uint64_t offset : offset_bits;
+            /* number of primitives in this leaf, if a leaf; 0 for inner
+               nodes. */
+            uint64_t count  : count_bits;
+          };
+          // the same as a single int64, so we can read/write with a
+          // single op
+          uint64_t offsetAndCountBits;
         };
-        // the same as a single int64, so we can read/write with a
-        // single op
-        uint64_t offsetAndCountBits;
       };
-      
+      Admin admin;
     };
 
     enum { maxLeafSize=((1<<Node::count_bits)-1) };

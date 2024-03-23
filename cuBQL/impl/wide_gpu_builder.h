@@ -54,18 +54,18 @@ namespace cuBQL {
       }
 
       auto &node = bvh.nodes[tid];
-      if (node.count > 0)
+      if (node.admin.count > 0)
         // leaf node
         return;
     
       // _could_ write this as a int4 ... we know it'll have to be
       // 128-bit aligned
-      d_infos[node.offset+0].isWideRoot = 0;
-      d_infos[node.offset+0].parent = tid;
-      d_infos[node.offset+0].binaryRoot = -1;
-      d_infos[node.offset+1].isWideRoot = 0;
-      d_infos[node.offset+1].parent = tid;
-      d_infos[node.offset+1].binaryRoot = -1;
+      d_infos[node.admin.offset+0].isWideRoot = 0;
+      d_infos[node.admin.offset+0].parent = tid;
+      d_infos[node.admin.offset+0].binaryRoot = -1;
+      d_infos[node.admin.offset+1].isWideRoot = 0;
+      d_infos[node.admin.offset+1].parent = tid;
+      d_infos[node.admin.offset+1].binaryRoot = -1;
     }
 
     template<typename T, int D, int N>
@@ -91,7 +91,7 @@ namespace cuBQL {
 
       const bool isWideNodeRoot
         =  /* inner node: */
-        (bvh.nodes[tid].count == 0)
+        (bvh.nodes[tid].admin.count == 0)
         && /* on right level*/
         ((depth % (log_of<N>::value)) == 0)
 
@@ -130,20 +130,20 @@ namespace cuBQL {
       while (stackPtr > nodeStack) {
         int nodeID = *--stackPtr;
         auto &node = binary.nodes[nodeID];
-        if ((node.count > 0) ||
+        if ((node.admin.count > 0) ||
             ((nodeID != binaryRoot) && d_infos[nodeID].isWideRoot)) {
           target.children[numWritten].bounds = node.bounds;
-          if (node.count) {
-            target.children[numWritten].offset = node.offset;
+          if (node.admin.count) {
+            target.children[numWritten].offset = node.admin.offset;
           } else {
             target.children[numWritten].offset = d_infos[nodeID].wideNodeID;
           }
-          target.children[numWritten].count  = node.count;
+          target.children[numWritten].count  = node.admin.count;
           target.children[numWritten].valid  = 1;
           numWritten++;
         } else {
-          *stackPtr++ = node.offset+0;
-          *stackPtr++ = node.offset+1;
+          *stackPtr++ = node.admin.offset+0;
+          *stackPtr++ = node.admin.offset+1;
         }
       }
       while (numWritten < N) {

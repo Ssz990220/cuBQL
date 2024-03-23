@@ -463,13 +463,13 @@ namespace cuBQL {
       if (tid >= numNodes) return;
       bvh3f::Node node;
       TempNode tempNode = tempNodes[tid];
-      node.offset = tempNode.finished.offset;
-      node.count = tempNode.finished.count;
+      node.admin.offset = tempNode.finished.offset;
+      node.admin.count  = tempNode.finished.count;
 
       if (tid == 1)
-        node.offsetAndCountBits = 0;
+        node.admin.offsetAndCountBits = 0;
       
-      finalNodes[tid].offsetAndCountBits = node.offsetAndCountBits;
+      finalNodes[tid].admin.offsetAndCountBits = node.admin.offsetAndCountBits;
     }
     
     template<typename T, int D>

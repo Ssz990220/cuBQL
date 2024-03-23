@@ -412,8 +412,8 @@ namespace cuBQL {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= numNodes) return;
 
-      finalNodes[nodeID].offset = tempNodes[nodeID].doneNode.offset;
-      finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
+      finalNodes[nodeID].admin.offset = tempNodes[nodeID].doneNode.offset;
+      finalNodes[nodeID].admin.count  = tempNodes[nodeID].doneNode.count;
     }
 
     template<typename T, int D>

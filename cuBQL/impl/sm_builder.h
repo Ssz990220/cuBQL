@@ -245,8 +245,8 @@ namespace cuBQL {
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= numNodes) return;
 
-      finalNodes[nodeID].offset = tempNodes[nodeID].doneNode.offset;
-      finalNodes[nodeID].count  = tempNodes[nodeID].doneNode.count;
+      finalNodes[nodeID].admin.offset = tempNodes[nodeID].doneNode.offset;
+      finalNodes[nodeID].admin.count  = tempNodes[nodeID].doneNode.count;
     }
 
     
@@ -359,10 +359,10 @@ namespace cuBQL {
       if (nodeID < 2)
         refitData[0] = 0;
       const auto &node = nodes[nodeID];
-      if (node.count) return;
+      if (node.admin.count) return;
 
-      refitData[node.offset+0] = nodeID << 1;
-      refitData[node.offset+1] = nodeID << 1;
+      refitData[node.admin.offset+0] = nodeID << 1;
+      refitData[node.admin.offset+1] = nodeID << 1;
     }
     
     template<typename T, int D>
@@ -375,13 +375,13 @@ namespace cuBQL {
       if (nodeID == 1 || nodeID >= bvh.numNodes) return;
       
       typename BinaryBVH<T,D>::Node *node = &bvh.nodes[nodeID];
-      if (node->count == 0)
+      if (node->admin.count == 0)
         // this is a inner node - exit
         return;
 
       box_t<T,D> bounds; bounds.set_empty();
-      for (int i=0;i<node->count;i++) {
-        const box_t<T,D> primBox = boxes[bvh.primIDs[node->offset+i]];
+      for (int i=0;i<node->admin.count;i++) {
+        const box_t<T,D> primBox = boxes[bvh.primIDs[node->admin.offset+i]];
         bounds.lower = min(bounds.lower,primBox.lower);
         bounds.upper = max(bounds.upper,primBox.upper);
       }
@@ -402,8 +402,8 @@ namespace cuBQL {
         node     = &bvh.nodes[parentID];
         parentID = (refitBits >> 1);
         
-        typename BinaryBVH<T,D>::Node l = bvh.nodes[node->offset+0];
-        typename BinaryBVH<T,D>::Node r = bvh.nodes[node->offset+1];
+        typename BinaryBVH<T,D>::Node l = bvh.nodes[node->admin.offset+0];
+        typename BinaryBVH<T,D>::Node r = bvh.nodes[node->admin.offset+1];
         bounds.lower = min(l.bounds.lower,r.bounds.lower);
         bounds.upper = max(l.bounds.upper,r.bounds.upper);
       }

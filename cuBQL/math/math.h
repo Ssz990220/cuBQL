@@ -25,6 +25,9 @@ namespace cuBQL {
   // the c-stdlib ones that use doubles.
   using ::min;
   using ::max;
+#else
+  using std::min;
+  using std::max;
 #endif
   
   template<int N> struct log_of;
@@ -39,6 +42,12 @@ namespace cuBQL {
   /*! unary functors on scalar types, so we can lift them to vector types later on */
   inline __cubql_both float  rcp(float f)     { return 1.f/f; }
   inline __cubql_both double rcp(double d)    { return 1./d; }
-  
+
+  template<typename T>
+  inline __cubql_both T clamp(T t, T lo=T(0), T hi=T(1))
+  { return min(max(t,lo),hi); }
+
+  inline __cubql_both float saturate(float f) { return clamp(f,0.f,1.f); }
+  inline __cubql_both double saturate(double f) { return clamp(f,0.,1.); }
 }
 
