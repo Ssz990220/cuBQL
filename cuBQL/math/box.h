@@ -136,6 +136,15 @@ namespace cuBQL {
     inline __cubql_both scalar_t get_lower(int i) const { return this->lower[i]; }
     /*! for convenience's sake, get_upper(i) := upper[i] */
     inline __cubql_both scalar_t get_upper(int i) const { return this->upper[i]; }
+
+    inline __cubql_both cuBQL::vec_t<float,D> lerp(cuBQL::vec_t<float,D> f) const
+    { return
+        (cuBQL::vec_t<float,D>(1.f) - f)*cuBQL::vec_t<float,D>(lower)
+        +
+        f                               *cuBQL::vec_t<float,D>(upper);
+    }
+    
+    inline __cubql_both cuBQL::vec_t<double,D> lerp(cuBQL::vec_t<double,D> f) const;
   };
 
   using box2f = box_t<float,2>;
@@ -180,6 +189,8 @@ namespace cuBQL {
   template<typename T, int D> inline __cubql_both
   box_t<T,D> make_box(vec_t<T,D> v) { return box_t<T,D>(v); }
   
+
+
   
 }
 

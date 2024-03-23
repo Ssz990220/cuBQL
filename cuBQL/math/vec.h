@@ -26,15 +26,13 @@
 # define CUBQL_PRAGMA_UNROLL _Pragma("unroll")
 #endif
 
-#ifdef __CUDACC__
-# define __cubql_device__ __device__
-# define __cubql_both__ __device__ __host__
-#else
-# define __cubql_both__
-#endif
-
 namespace cuBQL {
 
+#ifndef __CUDACC__
+  using std::min;
+  using std::max;
+#endif
+  
   template<typename /* scalar type */T, int /*! dimensoins */D>
   struct vec_t_data {
     inline __cubql_both T  operator[](int i) const { return v[i]; }
@@ -339,15 +337,15 @@ namespace cuBQL {
     used for culling it will, if anything, under-estiamte the
     distance to a subtree (and thus, still traverse it) rather than
     wrongly skipping it*/
-  template<typename T> inline __cubql_both__ float fSqrLength(T v);
-  template<> inline __cubql_both__ float fSqrLength<float>(float v)
+  template<typename T> inline __cubql_both float fSqrLength(T v);
+  template<> inline __cubql_both float fSqrLength<float>(float v)
   { return v*v; }
 
 #ifdef __CUDA_ARCH__
-  template<> inline __cubql_both__ float fSqrLength<int>(int _v)
+  template<> inline __cubql_both float fSqrLength<int>(int _v)
   { float v = __int2float_rz(_v); return v*v; }
 #else
-  template<> inline __cubql_both__ float fSqrLength<int>(int _v);
+  template<> inline __cubql_both float fSqrLength<int>(int _v);
 #endif
 
   /*! accurate square-length of a vector; due to the 'square' involved
@@ -429,29 +427,29 @@ namespace cuBQL {
                                      
 
     template<typename T>
-    inline __cubql_both__
+    inline __cubql_both
     T reduce_max(vec_t<T,2> v) { return max(v.x,v.y); }
     
     template<typename T>
-    inline __cubql_both__
+    inline __cubql_both
     T reduce_min(vec_t<T,2> v) { return min(v.x,v.y); }
     
 
     template<typename T>
-    inline __cubql_both__
+    inline __cubql_both
     T reduce_max(vec_t<T,3> v) { return max(max(v.x,v.y),v.z); }
     
     template<typename T>
-    inline __cubql_both__
+    inline __cubql_both
     T reduce_min(vec_t<T,3> v) { return min(min(v.x,v.y),v.z); }
     
 
     template<typename T>
-    inline __cubql_both__
+    inline __cubql_both
     T reduce_max(vec_t<T,4> v) { return max(max(v.x,v.y),max(v.z,v.w)); }
     
     template<typename T>
-    inline __cubql_both__
+    inline __cubql_both
     T reduce_min(vec_t<T,4> v) { return min(min(v.x,v.y),min(v.z,v.w)); }
     
 
