@@ -19,6 +19,7 @@
 #include "cuBQL/math/math.h"
 #include <type_traits>
 #include <climits>
+#include "constants.h"
 
 #ifdef _MSC_VER
 # define CUBQL_PRAGMA_UNROLL /* nothing */
@@ -116,6 +117,7 @@ namespace cuBQL {
       CUBQL_PRAGMA_UNROLL
         for (int i=0;i<D;i++) (*this)[i] = t;
     }
+    inline __cubql_both vec_t(T a, T b) { this->x = a; this->y = b; }
     inline __cubql_both vec_t(const vec_t_data<T,D> &o)
     {
       CUBQL_PRAGMA_UNROLL
@@ -179,15 +181,18 @@ namespace cuBQL {
   using vec2ui = vec_t<uint32_t,2>;
   using vec3ui = vec_t<uint32_t,3>;
   using vec4ui = vec_t<uint32_t,4>;
+
+  template<typename T, int D>
+  inline __cubql_both
+  vec_t<T,D> madd(vec_t<T,D> a, vec_t<T,D> b, vec_t<T,D> c)
+  { return a * b + c; }
   
   template<typename T>
   inline __cubql_both vec_t<T,3> cross(vec_t<T,3> a, vec_t<T,3> b)
   {
-    vec_t<T,3> v;
-    v.x = a.y*b.z;
-    v.y = a.z*b.x;
-    v.z = a.x*b.y;
-    return v;
+    return vec_t<T,3>(a.y*b.z-b.y*a.z,
+                      a.z*b.x-b.z*a.x,
+                      a.x*b.y-b.x*a.y);
   }
 
   /*! traits for a vec_t */
@@ -229,6 +234,16 @@ namespace cuBQL {
     return r;
   }
 
+  template<typename T, int D>
+  inline __cubql_both
+  vec_t<T,D> operator-(vec_t<T,D> v)
+  { return vec_t<T,D>(0)-v; }
+  
+  template<typename T, int D>
+  inline __cubql_both
+  vec_t<T,D> operator+(vec_t<T,D> v)
+  { return v; }
+  
 #define CUBQL_OPERATOR(long_op, op)                                     \
   /* vec:vec */                                                         \
   template<typename T, int D>                                           \
@@ -287,15 +302,15 @@ namespace cuBQL {
   CUBQL_OPERATOR(operator/,/)
 #undef CUBQL_OPERATOR
 
-#define CUBQL_UNARY(op)                                 \
-  template<typename T, int D>                           \
-  inline __cubql_both                                   \
-  vec_t<T,D> rcp(vec_t<T,D> a)                          \
-  {                                                     \
-    vec_t<T,D> r;                                       \
-    CUBQL_PRAGMA_UNROLL                                 \
-      for (int i=0;i<D;i++) r[i] = op(a[i]);            \
-    return r;                                           \
+#define CUBQL_UNARY(op)                         \
+  template<typename T, int D>                   \
+  inline __cubql_both                           \
+  vec_t<T,D> rcp(vec_t<T,D> a)                  \
+  {                                             \
+    vec_t<T,D> r;                               \
+    CUBQL_PRAGMA_UNROLL                         \
+      for (int i=0;i<D;i++) r[i] = op(a[i]);    \
+    return r;                                   \
   }
 
   CUBQL_UNARY(rcp)
@@ -419,39 +434,48 @@ namespace cuBQL {
   inline __cubql_both bool operator==(const vec_t_data<T,D> &a,
                                       const vec_t_data<T,D> &b)
   {
-    #pragma unroll
+#pragma unroll
     for (int i=0;i<D;i++)
       if (a[i] != b[i]) return false;
     return true;
   }
-                                     
+  template<typename /* scalar type */T, int /*! dimensoins */D>
+  inline __cubql_both bool operator!=(const vec_t_data<T,D> &a,
+                                      const vec_t_data<T,D> &b)
+  {
+    return !(a == b);
+  }
+  
 
-    template<typename T>
-    inline __cubql_both
-    T reduce_max(vec_t<T,2> v) { return max(v.x,v.y); }
+  template<typename T>
+  inline __cubql_both
+  T reduce_max(vec_t<T,2> v) { return max(v.x,v.y); }
     
-    template<typename T>
-    inline __cubql_both
-    T reduce_min(vec_t<T,2> v) { return min(v.x,v.y); }
-    
-
-    template<typename T>
-    inline __cubql_both
-    T reduce_max(vec_t<T,3> v) { return max(max(v.x,v.y),v.z); }
-    
-    template<typename T>
-    inline __cubql_both
-    T reduce_min(vec_t<T,3> v) { return min(min(v.x,v.y),v.z); }
+  template<typename T>
+  inline __cubql_both
+  T reduce_min(vec_t<T,2> v) { return min(v.x,v.y); }
     
 
-    template<typename T>
-    inline __cubql_both
-    T reduce_max(vec_t<T,4> v) { return max(max(v.x,v.y),max(v.z,v.w)); }
+  template<typename T>
+  inline __cubql_both
+  T reduce_max(vec_t<T,3> v) { return max(max(v.x,v.y),v.z); }
     
-    template<typename T>
-    inline __cubql_both
-    T reduce_min(vec_t<T,4> v) { return min(min(v.x,v.y),min(v.z,v.w)); }
+  template<typename T>
+  inline __cubql_both
+  T reduce_min(vec_t<T,3> v) { return min(min(v.x,v.y),v.z); }
     
 
+  template<typename T>
+  inline __cubql_both
+  T reduce_max(vec_t<T,4> v) { return max(max(v.x,v.y),max(v.z,v.w)); }
+    
+  template<typename T>
+  inline __cubql_both
+  T reduce_min(vec_t<T,4> v) { return min(min(v.x,v.y),min(v.z,v.w)); }
+    
+
+  template<typename T, int N>
+  inline __cubql_both
+  vec_t<T,N> normalize(vec_t<T,N> v) { return v * (T(1)/sqrt(dot(v,v))); }
 }
 
