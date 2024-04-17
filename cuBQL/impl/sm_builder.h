@@ -21,6 +21,8 @@
 namespace cuBQL {
   namespace gpuBuilder_impl {
 
+#define CUBQL_PROFILE 0
+
     struct PrimState {
       union {
         /* careful with this order - this is intentionally chosen such
@@ -285,25 +287,52 @@ namespace cuBQL {
       cudaEvent_t stateDownloadedEvent;
       CUBQL_CUDA_CALL(EventCreate(&stateDownloadedEvent));
       
-
+      
+#if CUBQL_PROFILE
+      double t0, t1, t2;
+      int pass = 0;
+#endif
       while (true) {
+#if CUBQL_PROFILE
+        ++ pass;
+#endif
         CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
                                     sizeof(numNodes),cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
         CUBQL_CUDA_CALL(EventSynchronize(stateDownloadedEvent));
         if (numNodes == numDone)
           break;
-
+#if CUBQL_PROFILE
+        // -------------------------------------------------------
+        CUBQL_CUDA_SYNC_CHECK();
+        t0 = getCurrentTime();
+        // -------------------------------------------------------
+#endif
         selectSplits<<<divRoundUp(numNodes,1024),1024,0,s>>>
           (buildState,
            nodeStates,tempNodes,numNodes,
            buildConfig);
 
+#if CUBQL_PROFILE
+        // -------------------------------------------------------
+        CUBQL_CUDA_SYNC_CHECK();
+        t1 = getCurrentTime();
+        // -------------------------------------------------------
+#endif        
         numDone = numNodes;
-
+        
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
+        
+#if CUBQL_PROFILE
+        // -------------------------------------------------------
+        CUBQL_CUDA_SYNC_CHECK();
+        t2 = getCurrentTime();
+        // -------------------------------------------------------
+        printf("select[%2i] = %s\n",pass,prettyDouble(t1-t0).c_str());
+        printf("prims [%2i] = %s\n",pass,prettyDouble(t2-t1).c_str());
+#endif
       }
       CUBQL_CUDA_CALL(EventDestroy(stateDownloadedEvent));
       // ==================================================================
@@ -314,6 +343,12 @@ namespace cuBQL {
       uint8_t   *d_temp_storage     = NULL;
       size_t     temp_storage_bytes = 0;
       PrimState *sortedPrimStates   = 0;
+#if CUBQL_PROFILE
+      // -------------------------------------------------------
+      CUBQL_CUDA_SYNC_CHECK();
+      t0 = getCurrentTime();
+      // -------------------------------------------------------
+#endif
       _ALLOC(sortedPrimStates,numPrims,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
@@ -325,6 +360,12 @@ namespace cuBQL {
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
       _FREE(d_temp_storage,s,memResource);
+#if CUBQL_PROFILE
+      // -------------------------------------------------------
+      CUBQL_CUDA_SYNC_CHECK();
+      t1 = getCurrentTime();
+      // -------------------------------------------------------
+#endif
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
@@ -341,6 +382,14 @@ namespace cuBQL {
       _ALLOC(bvh.nodes,numNodes,s,memResource);
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
+#if CUBQL_PROFILE
+      // -------------------------------------------------------
+      CUBQL_CUDA_SYNC_CHECK();
+      t2 = getCurrentTime();
+      // -------------------------------------------------------
+      printf("sortPrims = %s\n",pass,prettyDouble(t1-t0).c_str());
+      printf("writeAll  = %s\n",pass,prettyDouble(t2-t1).c_str());
+#endif
       _FREE(sortedPrimStates,s,memResource);
       _FREE(tempNodes,s,memResource);
       _FREE(nodeStates,s,memResource);

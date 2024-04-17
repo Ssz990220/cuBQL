@@ -820,9 +820,9 @@ namespace cuBQL {
       if (tid >= numNodes) return;
       typename BinaryBVH<T,D>::Node node;
       TempNode tempNode = tempNodes[tid];
-      node.offset = tempNode.finished.offset;
-      node.count = tempNode.finished.count;
-      finalNodes[tid].offsetAndCountBits = node.offsetAndCountBits;
+      node.admin.offset = tempNode.finished.offset;
+      node.admin.count  = tempNode.finished.count;
+      finalNodes[tid].admin.offsetAndCountBits = node.admin.offsetAndCountBits;
     }
 
     struct RebinRange {
