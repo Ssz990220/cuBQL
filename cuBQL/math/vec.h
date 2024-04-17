@@ -80,6 +80,7 @@ namespace cuBQL {
   template<typename T>
   struct vec_t_data<T,2> {
     using cuda_t = typename cuda_eq_t<T,2>::type;
+    inline __cubql_both T         get(int i) const { return i?y:x; }
     inline __cubql_both T  operator[](int i) const { return i?y:x; }
     inline __cubql_both T &operator[](int i)       { return i?y:x; }
     /*! auto-cast to equivalent cuda type */
@@ -89,6 +90,7 @@ namespace cuBQL {
   template<typename T>
   struct vec_t_data<T,3> {
     using cuda_t = typename cuda_eq_t<T,3>::type;
+    inline __cubql_both T         get(int i) const { return (i==2)?z:(i?y:x); }
     inline __cubql_both T  operator[](int i) const { return (i==2)?z:(i?y:x); }
     inline __cubql_both T &operator[](int i)       { return (i==2)?z:(i?y:x); }
     /*! auto-cast to equivalent cuda type */
@@ -98,6 +100,7 @@ namespace cuBQL {
   template<typename T>
   struct vec_t_data<T,4> {
     using cuda_t = typename cuda_eq_t<T,4>::type;
+    inline __cubql_both T         get(int i) const { return (i>=2)?(i==2?z:w):(i?y:x); }
     inline __cubql_both T  operator[](int i) const { return (i>=2)?(i==2?z:w):(i?y:x); }
     inline __cubql_both T &operator[](int i)       { return (i>=2)?(i==2?z:w):(i?y:x); }
     /*! auto-cast to equivalent cuda type */

@@ -21,8 +21,50 @@
 namespace cuBQL {
   namespace gpuBuilder_impl {
 
-#define CUBQL_PROFILE 0
+    //#define CUBQL_PROFILE 1
 
+#if CUBQL_PROFILE
+    struct Profile {
+      void setName(std::string name, int sub=-1)
+      {
+        if (sub >= 0) {
+          char suff[1000];
+          sprintf(suff,"[%2i]",sub);
+          this->name = name+suff;
+        } else
+          this->name = name;
+      }
+      ~Profile() { ping(); }
+      
+      void start() {
+        t0 = getCurrentTime();
+      }
+      void sync_start() {
+        CUBQL_CUDA_SYNC_CHECK();
+        start();
+      }
+      void sync_stop() {
+        CUBQL_CUDA_SYNC_CHECK();
+        stop();
+      }
+      void stop(bool do_ping = false) {
+        double t1 = getCurrentTime();
+        t_sum += (t1-t0);
+        count ++;
+        if (do_ping) ping();
+      }
+      void ping()
+      {
+        if (count)
+          std::cout << "#PROF " << name << " = " << prettyDouble(t_sum / count) << std::endl;
+      }
+      double t0 = 0.;
+      double t_sum = 0.;
+      int count = 0;
+      std::string name = "";
+    };
+#endif
+    
     struct PrimState {
       union {
         /* careful with this order - this is intentionally chosen such
@@ -110,6 +152,97 @@ namespace cuBQL {
                       uint32_t       numNodes,
                       BuildConfig    buildConfig)
     {
+#if 1
+      __shared__ int l_newNodeOfs;
+      if (threadIdx.x == 0)
+        l_newNodeOfs = 0;
+      __syncthreads();
+
+      int *t_nodeOffsetToWrite = 0;
+      int  t_localOffsetToAdd = 0;
+
+      while (true) {
+        const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
+        if (nodeID >= numNodes)
+          break;
+        
+        NodeState &nodeState = nodeStates[nodeID];
+        if (nodeState == DONE_NODE)
+          // this node was already closed before
+          break;
+        
+        if (nodeState == OPEN_NODE) {
+          // this node was open in the last pass, can close it.
+          nodeState   = DONE_NODE;
+          int offset  = nodes[nodeID].openNode.offset;
+          auto &done  = nodes[nodeID].doneNode;
+          done.count  = 0;
+          done.offset = offset;
+          break;
+        }
+        
+        auto in = nodes[nodeID].openBranch;
+        if (in.count <= buildConfig.makeLeafThreshold) {
+          auto &done  = nodes[nodeID].doneNode;
+          done.count  = in.count;
+          // set this to max-value, so the prims can later do atomicMin
+          // with their position ion the leaf list; this value is
+          // greater than any prim position.
+          done.offset = (uint32_t)-1;
+          nodeState   = DONE_NODE;
+        } else {
+          float widestWidth = 0.f;
+          int   widestDim   = -1;
+          float widestLo, widestHi, widestCtr;
+#pragma unroll
+          for (int d=0;d<D;d++) {
+            float lo = in.centBounds.get_lower(d);
+            float hi = in.centBounds.get_upper(d);
+            float width = hi - lo;
+            if (width <= widestWidth)
+              continue;
+            float ctr = 0.5f*(hi+lo);
+            
+            widestWidth = width;
+            widestDim   = d;
+            widestLo = lo;
+            widestHi = hi;
+            widestCtr = ctr;
+          }
+          
+          auto &open = nodes[nodeID].openNode;
+          if (widestDim >= 0) {
+            open.pos = widestCtr;
+          }
+          open.dim
+            = (widestDim < 0 || widestCtr == widestLo || widestCtr == widestHi)
+            ? -1
+            : widestDim;
+          
+          // this will be epensive - could make this faster by block-reducing
+          // open.offset = atomicAdd(&buildState->numNodes,2);
+          t_nodeOffsetToWrite = (int*)&open.offset;
+          t_localOffsetToAdd = atomicAdd(&l_newNodeOfs,2);
+          nodeState = OPEN_NODE;
+        }
+        break;
+      }
+      __syncthreads();
+      if (threadIdx.x == 0 && l_newNodeOfs > 0)
+        l_newNodeOfs = atomicAdd(&buildState->numNodes,l_newNodeOfs);
+      __syncthreads();
+      if (t_nodeOffsetToWrite) {
+        int openOffset = *t_nodeOffsetToWrite = l_newNodeOfs + t_localOffsetToAdd;
+#pragma unroll
+          for (int side=0;side<2;side++) {
+            const int childID = openOffset+side;
+            auto &child = nodes[childID].openBranch;
+            child.centBounds.set_empty();
+            child.count         = 0;
+            nodeStates[childID] = OPEN_BRANCH;
+          }
+      }
+#else
       const int nodeID = threadIdx.x+blockIdx.x*blockDim.x;
       if (nodeID >= numNodes) return;
 
@@ -140,23 +273,31 @@ namespace cuBQL {
       } else {
         float widestWidth = 0.f;
         int   widestDim   = -1;
+        float widestLo, widestHi, widestCtr;
 #pragma unroll
         for (int d=0;d<D;d++) {
-          float width = in.centBounds.get_upper(d) - in.centBounds.get_lower(d);
+          float lo = in.centBounds.get_lower(d);
+          float hi = in.centBounds.get_upper(d);
+          float width = hi - lo;
           if (width <= widestWidth)
             continue;
+          float ctr = 0.5f*(hi+lo);
+          
           widestWidth = width;
           widestDim   = d;
+          widestLo = lo;
+          widestHi = hi;
+          widestCtr = ctr;
         }
       
         auto &open = nodes[nodeID].openNode;
         if (widestDim >= 0) {
-          open.pos = in.centBounds.get_center(widestDim);
-          if (open.pos == in.centBounds.get_lower(widestDim) ||
-              open.pos == in.centBounds.get_upper(widestDim))
-            widestDim = -1;
+          open.pos = widestCtr;
         }
-        open.dim = widestDim;
+        open.dim
+          = (widestDim < 0 || widestCtr == widestLo || widestCtr == widestHi)
+          ? -1
+          : widestDim;
         
         // this will be epensive - could make this faster by block-reducing
         open.offset = atomicAdd(&buildState->numNodes,2);
@@ -170,8 +311,81 @@ namespace cuBQL {
         }
         nodeState = OPEN_NODE;
       }
+#endif
     }
 
+    template<typename T, int D>
+    __global__
+    void updatePrims_shm(NodeState         *nodeStates,
+                         TempNode<T,D>     *nodes,
+                         PrimState         *primStates,
+                         const box_t<T,D>  *primBoxes,
+                         int numPrims,
+                         int nodeBegin,
+                         int numPasses=8)
+    {
+      enum { numShm = 1024 };
+      __shared__ AtomicBox<box_t<T,D>> l_boxes[numShm];
+      __shared__ int l_count[numShm];
+      for (int i=threadIdx.x;i<numShm;i+=blockDim.x) {
+        l_boxes[i].set_empty();
+        l_count[i] = 0;
+      }
+      
+      __syncthreads();
+      for (int pass=0;pass<numPasses;pass++) {
+        while (true) {
+          const int primID = threadIdx.x+pass*blockDim.x
+            + numPasses*blockIdx.x*blockDim.x;
+          if (primID >= numPrims)
+            break; 
+        
+          const auto me = primStates[primID];
+          if (me.done)
+            break;
+        
+          const auto ns = nodeStates[me.nodeID];
+          if (ns == DONE_NODE) {
+            // node became a leaf, we're done.
+            primStates[primID].done = true;
+            break;
+          }
+        
+          const auto split = nodes[me.nodeID].openNode;
+          const box_t<T,D> primBox = primBoxes[me.primID];
+          int side = 0;
+          if (split.dim == -1) {
+            // could block-reduce this, but will likely not happen often, anyway
+            side = (atomicAdd(&nodes[me.nodeID].openNode.tieBreaker,1) & 1);
+          } else {
+            const float center = 0.5f*(primBox.get_lower(split.dim)+
+                                       primBox.get_upper(split.dim));
+            side = (center >= split.pos);
+          }
+          int newNodeID = split.offset+side;
+          auto &myBranch = nodes[newNodeID].openBranch;
+          if (newNodeID-nodeBegin < numShm) {
+            atomic_grow(l_boxes[newNodeID-nodeBegin],primBox.center());
+            atomicAdd(&l_count[newNodeID-nodeBegin],1);
+          }
+          else {
+            atomic_grow(myBranch.centBounds,primBox.center());
+            atomicAdd(&myBranch.count,1);
+          }
+          primStates[primID].nodeID = newNodeID;
+          break;
+        }
+      }
+      __syncthreads();
+      for (int i=threadIdx.x;i<numShm;i+=blockDim.x) { 
+        if (l_count[i] > 0) {
+          atomicAdd(&nodes[nodeBegin+i].openBranch.count,l_count[i]);
+          atomic_grow(nodes[nodeBegin+i].openBranch.centBounds,
+                      l_boxes[i]);
+        }
+      }
+    }
+    
     template<typename T, int D>
     __global__
     void updatePrims(NodeState       *nodeStates,
@@ -183,16 +397,16 @@ namespace cuBQL {
       const int primID = threadIdx.x+blockIdx.x*blockDim.x;
       if (primID >= numPrims) return;
 
-      auto &me = primStates[primID];
+      const auto me = primStates[primID];
       if (me.done) return;
       
-      auto ns = nodeStates[me.nodeID];
+      const auto ns = nodeStates[me.nodeID];
       if (ns == DONE_NODE) {
         // node became a leaf, we're done.
-        me.done = true;
+        primStates[primID].done = true;
         return;
       }
-
+      
       auto &split = nodes[me.nodeID].openNode;
       const box_t<T,D> primBox = primBoxes[me.primID];
       int side = 0;
@@ -208,7 +422,7 @@ namespace cuBQL {
       auto &myBranch = nodes[newNodeID].openBranch;
       atomicAdd(&myBranch.count,1);
       atomic_grow(myBranch.centBounds,primBox.center());
-      me.nodeID = newNodeID;
+      primStates[primID].nodeID = newNodeID;
     }
     
     /* given a sorted list of {nodeID,primID} pairs, this kernel does
@@ -289,13 +503,23 @@ namespace cuBQL {
       
       
 #if CUBQL_PROFILE
-      double t0, t1, t2;
       int pass = 0;
+      static Profile t_writeNodes;
+      static Profile t_writePrims;
+      static Profile t_sortPrims;
+      static Profile t_nodePass[100];
+      static Profile t_primPass[100];
+      if (t_writeNodes.name == "") {
+        t_writeNodes.setName("writeNodes");
+        t_writePrims.setName("writePrims");
+        t_sortPrims.setName("sortPrims");
+        for (int i=0;i<100;i++) {
+          t_nodePass[i].setName("nodePass",i);
+          t_primPass[i].setName("primPass",i);
+        }
+      }
 #endif
       while (true) {
-#if CUBQL_PROFILE
-        ++ pass;
-#endif
         CUBQL_CUDA_CALL(MemcpyAsync(&numNodes,&buildState->numNodes,
                                     sizeof(numNodes),cudaMemcpyDeviceToHost,s));
         CUBQL_CUDA_CALL(EventRecord(stateDownloadedEvent,s));
@@ -303,35 +527,31 @@ namespace cuBQL {
         if (numNodes == numDone)
           break;
 #if CUBQL_PROFILE
-        // -------------------------------------------------------
-        CUBQL_CUDA_SYNC_CHECK();
-        t0 = getCurrentTime();
-        // -------------------------------------------------------
+        t_nodePass[pass].sync_start();
 #endif
         selectSplits<<<divRoundUp(numNodes,1024),1024,0,s>>>
           (buildState,
            nodeStates,tempNodes,numNodes,
            buildConfig);
-
 #if CUBQL_PROFILE
-        // -------------------------------------------------------
-        CUBQL_CUDA_SYNC_CHECK();
-        t1 = getCurrentTime();
-        // -------------------------------------------------------
+        t_nodePass[pass].sync_stop();
+        t_primPass[pass].sync_start();
 #endif        
         numDone = numNodes;
-        
+
+#if 1
+        updatePrims_shm<<<divRoundUp(numPrims,1024),1024,0,s>>>
+          (nodeStates,tempNodes,
+           primStates,boxes,numPrims,numDone);
+#else
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
+#endif
         
 #if CUBQL_PROFILE
-        // -------------------------------------------------------
-        CUBQL_CUDA_SYNC_CHECK();
-        t2 = getCurrentTime();
-        // -------------------------------------------------------
-        printf("select[%2i] = %s\n",pass,prettyDouble(t1-t0).c_str());
-        printf("prims [%2i] = %s\n",pass,prettyDouble(t2-t1).c_str());
+        t_primPass[pass].sync_stop();
+        ++ pass;
 #endif
       }
       CUBQL_CUDA_CALL(EventDestroy(stateDownloadedEvent));
@@ -344,10 +564,7 @@ namespace cuBQL {
       size_t     temp_storage_bytes = 0;
       PrimState *sortedPrimStates   = 0;
 #if CUBQL_PROFILE
-      // -------------------------------------------------------
-      CUBQL_CUDA_SYNC_CHECK();
-      t0 = getCurrentTime();
-      // -------------------------------------------------------
+      t_sortPrims.sync_start();
 #endif
       _ALLOC(sortedPrimStates,numPrims,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
@@ -361,10 +578,8 @@ namespace cuBQL {
                                      numPrims,32,64,s);
       _FREE(d_temp_storage,s,memResource);
 #if CUBQL_PROFILE
-      // -------------------------------------------------------
-      CUBQL_CUDA_SYNC_CHECK();
-      t1 = getCurrentTime();
-      // -------------------------------------------------------
+      t_sortPrims.sync_stop();
+      t_writePrims.sync_start();
 #endif
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
@@ -374,6 +589,10 @@ namespace cuBQL {
       _ALLOC(bvh.primIDs,numPrims,s,memResource);
       writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
+#if CUBQL_PROFILE
+      t_writePrims.sync_stop();
+      t_writeNodes.sync_start();
+#endif
 
       // ==================================================================
       // allocate and write final nodes
@@ -383,12 +602,7 @@ namespace cuBQL {
       writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
 #if CUBQL_PROFILE
-      // -------------------------------------------------------
-      CUBQL_CUDA_SYNC_CHECK();
-      t2 = getCurrentTime();
-      // -------------------------------------------------------
-      printf("sortPrims = %s\n",pass,prettyDouble(t1-t0).c_str());
-      printf("writeAll  = %s\n",pass,prettyDouble(t2-t1).c_str());
+      t_writeNodes.sync_stop();
 #endif
       _FREE(sortedPrimStates,s,memResource);
       _FREE(tempNodes,s,memResource);

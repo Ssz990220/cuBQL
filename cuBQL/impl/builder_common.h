@@ -34,15 +34,26 @@ namespace cuBQL {
     typedef enum : int8_t { OPEN_BRANCH, OPEN_NODE, DONE_NODE } NodeState;
     
     template<typename box_t>
-    struct AtomicBox {
+    struct CUBQL_ALIGN(8) AtomicBox {
+      inline __device__ bool is_empty() const { return lower[0] > upper[0]; }
       inline __device__ void  set_empty();
       // set_empty, in owl::common-style naming
       inline __device__ void  clear() { set_empty(); }
       inline __device__ float get_center(int dim) const;
       inline __device__ box_t make_box() const;
 
-      inline __device__ float get_lower(int dim) const { return decode(lower[dim]); }
-      inline __device__ float get_upper(int dim) const { return decode(upper[dim]); }
+      inline __device__ float get_lower(int dim) const {
+        if (box_t::numDims==3) {
+          return decode(dim?((dim>1)?lower[2]:lower[1]):lower[0]);
+        } else
+          return decode(lower[dim]);
+      }
+      inline __device__ float get_upper(int dim) const {
+        if (box_t::numDims==3)
+          return decode(dim?((dim>1)?upper[2]:upper[1]):upper[0]);
+        else
+          return decode(upper[dim]);
+      }
 
       int32_t lower[box_t::numDims];
       int32_t upper[box_t::numDims];
@@ -54,7 +65,8 @@ namespace cuBQL {
     template<typename box_t>
     inline __device__ float AtomicBox<box_t>::get_center(int dim) const
     {
-      return 0.5f*(decode(lower[dim])+decode(upper[dim]));
+      return 0.5f*(get_lower(dim)+get_upper(dim));
+      // return 0.5f*(decode(lower[dim])+decode(upper[dim]));
     }
 
     template<typename box_t>
@@ -102,10 +114,12 @@ namespace cuBQL {
 #pragma unroll
       for (int d=0;d<box_t::numDims;d++) {
         const int32_t enc = AtomicBox<box_t>::encode(other[d]);//get(other,d));
-        if (enc < abox.lower[d]) atomicMin(&abox.lower[d],enc);
-        if (enc > abox.upper[d]) atomicMax(&abox.upper[d],enc);
+        if (enc < abox.lower[d])
+          atomicMin(&abox.lower[d],enc);
+        if (enc > abox.upper[d])
+          atomicMax(&abox.upper[d],enc);
       }
-    }
+    } 
     
     template<typename box_t>
     inline __device__ void atomic_grow(AtomicBox<box_t> &abox, const box_t &other)

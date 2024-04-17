@@ -55,7 +55,7 @@ namespace cuBQL {
       be treated as a "empty box" (e.g., for a bvh that might indicate
       a primitive that we want to ignore from the build) */
   template<typename T, int D>
-  struct box_t : public box_t_pod<T,D> {
+  struct CUBQL_ALIGN(8) box_t : public box_t_pod<T,D> {
     enum { numDims = D };
     using scalar_t = T;
     using vec_t = cuBQL::vec_t<T,D>;
@@ -133,9 +133,11 @@ namespace cuBQL {
     { return (this->lower+this->upper); }
 
     /*! for convenience's sake, get_lower(i) := lower[i] */
-    inline __cubql_both scalar_t get_lower(int i) const { return this->lower[i]; }
+    inline __cubql_both T get_lower(int i) const { return lower.get(i); }
+    // inline __cubql_both scalar_t get_lower(int i) const { return this->lower[i]; }
     /*! for convenience's sake, get_upper(i) := upper[i] */
-    inline __cubql_both scalar_t get_upper(int i) const { return this->upper[i]; }
+    inline __cubql_both T get_upper(int i) const { return upper.get(i); };
+    // inline __cubql_both scalar_t get_upper(int i) const { return this->upper[i]; }
 
     inline __cubql_both cuBQL::vec_t<float,D> lerp(cuBQL::vec_t<float,D> f) const
     { return
