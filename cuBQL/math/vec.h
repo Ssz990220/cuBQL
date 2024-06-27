@@ -480,5 +480,36 @@ namespace cuBQL {
   template<typename T, int N>
   inline __cubql_both
   vec_t<T,N> normalize(vec_t<T,N> v) { return v * (T(1)/sqrt(dot(v,v))); }
+
+
+  // ------------------------------------------------------------------
+  /*! @{ returns if _any_ component of vector a is lower than its
+      corresponding component in vector b */
+  template<typename T, int D>
+  inline __cubql_both
+  bool any_less_than(const vec_t<T,D> &a, const vec_t<T,D> &b)
+  {
+    for (int i=0;i<D;i++) if (a[i] < b[i]) return true;
+    return false;
+  }
+  
+  template<typename T>
+  inline __cubql_both
+  bool any_less_than(const vec_t<T,2> &a, const vec_t<T,2> &b)
+  { return a.x < b.x | a.y < b.y; }
+
+  template<typename T>
+  inline __cubql_both
+  bool any_less_than(const vec_t<T,3> &a, const vec_t<T,3> &b)
+  { return a.x < b.x | a.y < b.y | a.z < b.z; }
+  
+  template<typename T>
+  inline __cubql_both
+  bool any_less_than(const vec_t<T,4> &a, const vec_t<T,4> &b)
+  { return a.x < b.x | a.y < b.y | a.z < b.z | a.w < b.w; }
+  
+  /*! @} */
+  // ------------------------------------------------------------------
+  
 }
 

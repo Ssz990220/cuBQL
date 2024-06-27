@@ -79,12 +79,12 @@ namespace cuBQL {
     inline __cubql_both box_t(const box_t_pod<T,D> &ob);
 
     /*! create a box containing a single point */
-    inline __cubql_both explicit box_t(const vec_t_data<T,D> &v) { lower = upper = v; }
+    inline __cubql_both box_t(const vec_t_data<T,D> &v) { lower = upper = v; }
 
     /*! create a box from two points. note this will NOT make sure
         that a<b; if this is an empty box it will just create an empty
         box! */
-    inline __cubql_both explicit box_t(const vec_t_data<T,D> &a, const vec_t_data<T,D> &b)
+    inline __cubql_both box_t(const vec_t_data<T,D> &a, const vec_t_data<T,D> &b)
     {
       lower = vec_t(a);
       upper = vec_t(b);
@@ -138,7 +138,7 @@ namespace cuBQL {
     /*! for convenience's sake, get_upper(i) := upper[i] */
     inline __cubql_both T get_upper(int i) const { return upper.get(i); };
     // inline __cubql_both scalar_t get_upper(int i) const { return this->upper[i]; }
-
+    
     inline __cubql_both cuBQL::vec_t<float,D> lerp(cuBQL::vec_t<float,D> f) const
     { return
         (cuBQL::vec_t<float,D>(1.f) - f)*cuBQL::vec_t<float,D>(lower)
@@ -147,6 +147,7 @@ namespace cuBQL {
     }
     
     inline __cubql_both cuBQL::vec_t<double,D> lerp(cuBQL::vec_t<double,D> f) const;
+    inline __cubql_both bool overlaps(const box_t<T,D> &otherBox) const;
   };
 
   using box2f = box_t<float,2>;
@@ -162,6 +163,11 @@ namespace cuBQL {
     return sx*sy + sx*sz + sy*sz;
   }
 
+  template<typename T, int D> inline __cubql_both
+  bool box_t<T,D>::overlaps(const box_t<T,D> &other) const
+  {
+    return !(any_less_than(this->upper,other.lower) || any_less_than(other.upper,this->lower));
+  }
   
   template<typename T, int D> inline __cubql_both
   typename dot_result_t<T>::type sqrDistance(box_t<T,D> box, vec_t<T,D> point)
