@@ -25,28 +25,28 @@ namespace cuBQL {
 #define CUBQL_CONTINUE_TRAVERSAL  0
   
   /*! This query finds all primitives within a given fixed (ie, never
-      changing) axis-aligned cartesian box, and calls the provided
-      callback-lambda for each such prim. The provided lambda can do
-      with the provided prim as it pleases, and is to report either
-      CUBQL_TERMINATE_TRAVERSAL (in which case traversal will
-      immediately terminate), or CUBQL_CONTINUE_TRAVERSAL (in which
-      case traversal will continue to the next respective primitmive
-      within the box, if such exists. 
+    changing) axis-aligned cartesian box, and calls the provided
+    callback-lambda for each such prim. The provided lambda can do
+    with the provided prim as it pleases, and is to report either
+    CUBQL_TERMINATE_TRAVERSAL (in which case traversal will
+    immediately terminate), or CUBQL_CONTINUE_TRAVERSAL (in which
+    case traversal will continue to the next respective primitmive
+    within the box, if such exists. 
     
-      for this "for each prim' variant, the lambda should have a signature of
-      [](int primID)->int
+    for this "for each prim' variant, the lambda should have a signature of
+    [](int primID)->int
   */
   template<typename T, int D>
   inline __device__
   void fixedBoxQuery_forEachPrim(const BinaryBVH<T,D>,
                                  const box3f queryBox,
-                                 nvstd::function<int(uint32_t)> lambdaToCallOnEachPrim);
+                                 const nvstd::function<int(uint32_t)> &lambdaToCallOnEachPrim);
   
   template<typename T, int D>
   inline __device__
   void fixedBoxQuery_forEachLeaf(const BinaryBVH<T,D>,
                                  const box3f queryBox,
-                                 nvstd::function<int(const uint32_t *, size_t)> lambdaToCallOnEachPrim);
+                                 const nvstd::function<int(const uint32_t *, size_t)> &lambdaToCallOnEachPrim);
   
 
 
@@ -59,7 +59,7 @@ namespace cuBQL {
   inline __device__
   void fixedBoxQuery_forEachLeaf(const BinaryBVH<T,D> bvh,
                                  const box3f queryBox,
-                                 nvstd::function<int(const uint32_t *, size_t)> lambdaToCallOnEachLeaf)
+                                 const nvstd::function<int(const uint32_t *, size_t)> &lambdaToCallOnEachLeaf)
   {
     struct StackEntry {
       uint32_t idx;
@@ -127,15 +127,16 @@ namespace cuBQL {
   inline __device__
   void fixedBoxQuery_forEachPrim(const BinaryBVH<T,D> bvh,
                                  const box3f queryBox,
-                                 nvstd::function<int(uint32_t)> lambdaToCallOnEachPrim)
+                                 const nvstd::function<int(uint32_t)> &lambdaToCallOnEachPrim)
   {
-    auto leafCode = [lambdaToCallOnEachPrim](const uint32_t *primIDs, size_t numPrims) -> int
+    auto leafCode = [&lambdaToCallOnEachPrim](const uint32_t *primIDs, size_t numPrims) -> int
     {
       for (int i=0;i<(int)numPrims;i++)
         if (lambdaToCallOnEachPrim(primIDs[i]) == CUBQL_TERMINATE_TRAVERSAL)
           return CUBQL_TERMINATE_TRAVERSAL;
       return CUBQL_CONTINUE_TRAVERSAL;
     };
-    
+    fixedBoxQuery_forEachLeaf(bvh,queryBox,leafCode);
   }
-}
+  
+} // ::cubql
