@@ -32,7 +32,7 @@ namespace cuBQL {
     return dot(v,v);
   }
 
-#if 0
+#if 1
   
   /*! performs a 'shrinking radius (leaf-)query', which iterate
       through all bvh leaves that overlap a given query ball that is
