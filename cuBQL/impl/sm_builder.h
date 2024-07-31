@@ -324,7 +324,7 @@ namespace cuBQL {
                          int nodeBegin,
                          int numPasses=8)
     {
-      enum { numShm = 1024 };
+      enum { numShm = 512 };
       __shared__ AtomicBox<box_t<T,D>> l_boxes[numShm];
       __shared__ int l_count[numShm];
       for (int i=threadIdx.x;i<numShm;i+=blockDim.x) {
@@ -539,15 +539,17 @@ namespace cuBQL {
 #endif        
         numDone = numNodes;
 
-#if 1
-        updatePrims_shm<<<divRoundUp(numPrims,1024),1024,0,s>>>
-          (nodeStates,tempNodes,
-           primStates,boxes,numPrims,numDone);
-#else
+// #if 1
+        if (sizeof(T)*D <= sizeof(float3)) {
+          updatePrims_shm<<<divRoundUp(numPrims,512),512,0,s>>>
+            (nodeStates,tempNodes,
+             primStates,boxes,numPrims,numDone);
+        } else 
+// #else
         updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
-#endif
+// #endif
         
 #if CUBQL_PROFILE
         t_primPass[pass].sync_stop();

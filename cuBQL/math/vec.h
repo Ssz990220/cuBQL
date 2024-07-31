@@ -145,6 +145,8 @@ namespace cuBQL {
         for (int i=0;i<numDims;i++) (*this)[i] = (&v.x)[i]; 
       return *this;
     }
+    
+    inline __cubql_both T         get(int i) const { return (*this)[i]; }
   };
 
   template<typename T>

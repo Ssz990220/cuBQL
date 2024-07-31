@@ -32,10 +32,10 @@ namespace cuBQL {
 
       auto node = bvh.nodes[nodeID];
       float area = surfaceArea(node.bounds) / surfaceArea(bvh.nodes[0].bounds);
-      if (node.count == 0)
+      if (node.admin.count == 0)
         nodeCosts[nodeID] = area;
       else 
-        nodeCosts[nodeID] = area * node.count;
+        nodeCosts[nodeID] = area * node.admin.count;
     }
     
     // template<typename T, int D>

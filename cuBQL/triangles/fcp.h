@@ -159,8 +159,8 @@ namespace cuBQL {
       int count  = 0;
       while (true) {
         while (true) {
-          offset = bvh.nodes[nodeID].offset;
-          count  = bvh.nodes[nodeID].count;
+          offset = bvh.nodes[nodeID].admin.offset;
+          count  = bvh.nodes[nodeID].admin.count;
           if (count>0)
             // leaf
             break;

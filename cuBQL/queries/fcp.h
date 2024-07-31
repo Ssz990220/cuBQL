@@ -58,8 +58,8 @@ namespace cuBQL {
 #endif
     while (true) {
       while (true) {
-        offset = bvh.nodes[nodeID].offset;
-        count  = bvh.nodes[nodeID].count;
+        offset = bvh.nodes[nodeID].admin.offset;
+        count  = bvh.nodes[nodeID].admin.count;
 #if DO_STATS
         numNodes++;
 #endif
