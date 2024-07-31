@@ -103,28 +103,32 @@ void runQueries(float       *results,
   vec3f queryPoint = bbox.lower + relQueryPoint * bbox.size();
   cuBQL::triangles::FCPResult result;
   result.clear(INFINITY);
+
   cuBQL::triangles::fcp(result,queryPoint,
                         trianglesBVH,triangles,vertices);
-  results[tid] = 10.f*sqrtf(result.sqrDistance);
+  results[tid] = //10.f*
+    sqrtf(result.sqrDistance);
   
   if (firstTime && ((tid % 10000000) == 13))
-    printf("for reference: closest triangle to point (%f %f %f) is triangle %i, connecting %i:(%f %f %f), %i:(%f %f %f), and  %i:(%f %f %f); at distance %f\n",
+    printf("for reference: closest triangle to point (%f %f %f) is triangle %i"
+           // " (with vertices %i:(%f %f %f), %i:(%f %f %f), and  %i:(%f %f %f))"
+           "; at distance %.8f\n",
            queryPoint.x,
            queryPoint.y,
            queryPoint.z,
            result.primID,
-           triangles[result.primID].x,
-           vertices[triangles[result.primID].x].x,
-           vertices[triangles[result.primID].x].y,
-           vertices[triangles[result.primID].x].z,
-           triangles[result.primID].y,
-           vertices[triangles[result.primID].y].x,
-           vertices[triangles[result.primID].y].y,
-           vertices[triangles[result.primID].y].z,
-           triangles[result.primID].z,
-           vertices[triangles[result.primID].z].x,
-           vertices[triangles[result.primID].z].y,
-           vertices[triangles[result.primID].z].z,
+           // triangles[result.primID].x,
+           // vertices[triangles[result.primID].x].x,
+           // vertices[triangles[result.primID].x].y,
+           // vertices[triangles[result.primID].x].z,
+           // triangles[result.primID].y,
+           // vertices[triangles[result.primID].y].x,
+           // vertices[triangles[result.primID].y].y,
+           // vertices[triangles[result.primID].y].z,
+           // triangles[result.primID].z,
+           // vertices[triangles[result.primID].z].x,
+           // vertices[triangles[result.primID].z].y,
+           // vertices[triangles[result.primID].z].z,
            result.sqrDistance);
 }
 
@@ -189,7 +193,7 @@ int main(int ac, const char **av)
   
   // allocate memory for results:
   float *sqrDist = allocManaged<float>(numQueries);
-  runQueries<<<divRoundUp(numQueries,1024),1024>>>
+  runQueries<<<divRoundUp(numQueries,128),128>>>
     (sqrDist,gridDim,trianglesBVH,indices,vertices,true);
   CUBQL_CUDA_SYNC_CHECK();
   

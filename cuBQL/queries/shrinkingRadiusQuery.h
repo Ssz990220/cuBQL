@@ -32,8 +32,6 @@ namespace cuBQL {
     return dot(v,v);
   }
 
-#if 1
-  
   /*! performs a 'shrinking radius (leaf-)query', which iterate
       through all bvh leaves that overlap a given query ball that is
       centered around a fixed point in space, and whose radius may by
@@ -116,7 +114,7 @@ namespace cuBQL {
         bool  bothInRange = (farChildDist < sqrCullDist);
         if (bothInRange) {
           if (stackPtr >= traversalStack+stackSize) {
-            printf("stack overflow\n");
+            // printf("stack overflow\n");
             return;
           }
           *stackPtr++ = StackEntry{ farID, farChildDist }; }
@@ -194,10 +192,10 @@ namespace cuBQL {
       };
     shrinkingRadiusQuery_forEachLeaf(bvh,queryPoint,sqrMaxSearchRadius,leafCode,dbg);
   }
-  
-  
-#else
-  
+
+
+
+
   /*! performs a 'shrinking radius (leaf-)query', which iterate
       through all bvh leaves that overlap a given query ball that is
       centered around a fixed point in space, and whose radius may by
@@ -211,8 +209,9 @@ namespace cuBQL {
       user-provided callback returns a radius larger than what the
       query ball has already been shrunk to the existing smaller value
       will be used. */
+  template<typename Lambda>
   inline __cubql_both
-  void shrinkingRadiusQuery_forEachLeaf
+  void shrinkingRadiusQuery_forEachLeaf_dbg
   (bvh3f bvh,
    vec3f queryPoint,
    float sqrMaxSearchRadius,
@@ -220,7 +219,8 @@ namespace cuBQL {
      primitives. if this lamdba does find a new, better result than
      whatever the query had before this lambda MUST return the SQUARE
      of the new culling radius */
-   const nvstd::function<float(const uint32_t*,uint64_t)> &lambdaToExecuteForEachCandidateLeaf,
+   // nvstd::function<float(const uint32_t*,uint64_t)> lambdaToExecuteForEachCandidateLeaf,
+   const Lambda &lambdaToExecuteForEachCandidateLeaf,
    bool dbg = false)
   {
     float sqrCullDist = sqrMaxSearchRadius;
@@ -278,7 +278,7 @@ namespace cuBQL {
         bool  bothInRange = (farChildDist < sqrCullDist);
         if (bothInRange) {
           if (stackPtr >= traversalStack+stackSize) {
-            printf("stack overflow\n");
+            // printf("stack overflow\n");
             return;
           }
           *stackPtr++ = StackEntry{ farID, farChildDist }; }
@@ -288,7 +288,7 @@ namespace cuBQL {
         // we're at a valid leaf: call the lambda and see if that gave
         // us a enw, closer cull radius
         float leafResult
-          = lambdaToExecuteForEachCandidateLeaf(bvh.primIDs+node.offset,node.count);
+          = lambdaToExecuteForEachCandidateLeaf(bvh.primIDs+node.offset,node.count,dbg);
         if (leafResult < 0.f) return;
         sqrCullDist = min(sqrCullDist,leafResult);
       }
@@ -324,8 +324,9 @@ namespace cuBQL {
       user-provided callback returns a radius larger than what the
       query ball has already been shrunk to the existing smaller value
       will be used. */
+  template<typename Lambda>
   inline __cubql_both
-  void shrinkingRadiusQuery_forEachPrim
+  void shrinkingRadiusQuery_forEachPrim_dbg
   (/* the bvh we're querying into */
    bvh3f bvh,
    /*! the center of out query ball */
@@ -337,27 +338,24 @@ namespace cuBQL {
      that may contain any primitmives. if this lamdba does find a new,
      better result than whatever the query had before this lambda MUST
      return the SQUARE of the new culling radius */
-   // const Lambda &lambdaToExecuteForEachCandidate,
-   const nvstd::function<float(uint32_t)> &lambdaToExecuteForEachCandidate,
+   const Lambda &lambdaToExecuteForEachCandidate,
+   // nvstd::function<float(uint32_t)> lambdaToExecuteForEachCandidate,
    bool dbg = false)
   {
     auto leafCode
-      = [&lambdaToExecuteForEachCandidate](const uint32_t *leafPrims,
-                                           size_t numPrims)->float
+      = [lambdaToExecuteForEachCandidate](const uint32_t *leafPrims,
+                                          size_t numPrims, bool dbg)->float
       {
         float leafResult = INFINITY;
         for (int i=0;i<numPrims;i++) {
           float primResult
-            = lambdaToExecuteForEachCandidate(leafPrims[i]);
+            = lambdaToExecuteForEachCandidate(leafPrims[i], dbg);
           leafResult = min(leafResult,primResult);
         }
         return leafResult;
       };
-    shrinkingRadiusQuery_forEachLeaf(bvh,queryPoint,sqrMaxSearchRadius,leafCode,dbg);
+    shrinkingRadiusQuery_forEachLeaf_dbg(bvh,queryPoint,sqrMaxSearchRadius,leafCode,dbg);
   }
-  
-  
-#endif
   
 }
  

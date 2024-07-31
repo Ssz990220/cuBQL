@@ -99,6 +99,18 @@ namespace cuBQL {
     { lower = min(lower,v); upper = max(upper,v); return *this; }
     inline __cubql_both box_t &grow(const box_t &other)
     { lower = min(lower,other.lower); upper = max(upper,other.upper); return *this; }
+
+    /*! "extend" an existing box such that it also encompasses v; this
+        is the same as 'grow()', but with naming that is compatible to
+        the owl project */
+    inline __cubql_both box_t &extend(const vec_t &v)
+    { lower = min(lower,v); upper = max(upper,v); return *this; }
+
+    /*! "extend" an existing box such that it also encompasses this
+        other box; this is the same as 'grow()', but with naming that
+        is compatible to the owl project */
+    inline __cubql_both box_t &extend(const box_t &other)
+    { lower = min(lower,other.lower); upper = max(upper,other.upper); return *this; }
     inline __cubql_both box_t &set_empty()
     {
       this->lower = make<vec_t>(empty_box_lower_value<scalar_t>());

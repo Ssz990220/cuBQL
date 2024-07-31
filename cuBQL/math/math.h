@@ -49,5 +49,8 @@ namespace cuBQL {
 
   inline __cubql_both float saturate(float f) { return clamp(f,0.f,1.f); }
   inline __cubql_both double saturate(double f) { return clamp(f,0.,1.); }
+
+  // inline __cubql_both float sqrt(float f) { return ::sqrtf(f); }
+  // inline __cubql_both double sqrt(double d) { return ::sqrt(d); }
 }
 

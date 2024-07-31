@@ -46,7 +46,7 @@ namespace cuBQL {
   ////////////////////////////////////////////////////////////////////////////////
 
   template<typename L>
-  struct OWL_INTERFACE AffineSpaceT
+  struct AffineSpaceT
     {
       L l;           /*< linear part of affine space */
       VectorT p;     /*< affine part of affine space */
@@ -57,24 +57,24 @@ namespace cuBQL {
 
       // inline AffineSpaceT           ( ) = default;
       // #ifdef __CUDA_ARCH__
-      inline __both__
+      inline __cubql_both
       AffineSpaceT           ( )
       : l(OneTy()),
       p(ZeroTy())
       {}
       // #else
-      //        inline __both__ AffineSpaceT           ( ) : l(one), p(zero) {}
+      //        inline __cubql_both AffineSpaceT           ( ) : l(one), p(zero) {}
       // #endif
 
-      inline// __both__
+      inline// __cubql_both
       AffineSpaceT           ( const AffineSpaceT& other ) = default;
-      inline __both__ AffineSpaceT           ( const L           & other ) { l = other  ; p = VectorT(ZeroTy()); }
-      inline __both__ AffineSpaceT& operator=( const AffineSpaceT& other ) { l = other.l; p = other.p; return *this; }
+      inline __cubql_both AffineSpaceT           ( const L           & other ) { l = other  ; p = VectorT(ZeroTy()); }
+      inline __cubql_both AffineSpaceT& operator=( const AffineSpaceT& other ) { l = other.l; p = other.p; return *this; }
 
-      inline __both__ AffineSpaceT( const VectorT& vx, const VectorT& vy, const VectorT& vz, const VectorT& p ) : l(vx,vy,vz), p(p) {}
-      inline __both__ AffineSpaceT( const L& l, const VectorT& p ) : l(l), p(p) {}
+      inline __cubql_both AffineSpaceT( const VectorT& vx, const VectorT& vy, const VectorT& vz, const VectorT& p ) : l(vx,vy,vz), p(p) {}
+      inline __cubql_both AffineSpaceT( const L& l, const VectorT& p ) : l(l), p(p) {}
 
-      template<typename L1> inline __both__ AffineSpaceT( const AffineSpaceT<L1>& s ) : l(s.l), p(s.p) {}
+      template<typename L1> inline __cubql_both AffineSpaceT( const AffineSpaceT<L1>& s ) : l(s.l), p(s.p) {}
 
       ////////////////////////////////////////////////////////////////////////////////
       // Constants
@@ -115,7 +115,7 @@ namespace cuBQL {
   template<typename L> inline AffineSpaceT<L> operator -( const AffineSpaceT<L>& a ) { return AffineSpaceT<L>(-a.l,-a.p); }
   template<typename L> inline AffineSpaceT<L> operator +( const AffineSpaceT<L>& a ) { return AffineSpaceT<L>(+a.l,+a.p); }
   template<typename L>
-  inline __both__
+  inline __cubql_both
   AffineSpaceT<L> rcp( const AffineSpaceT<L>& a ) {
     L il = rcp(a.l);
     return AffineSpaceT<L>(il,-(il*a.p));
@@ -128,8 +128,8 @@ namespace cuBQL {
   template<typename L> inline AffineSpaceT<L> operator +( const AffineSpaceT<L>& a, const AffineSpaceT<L>& b ) { return AffineSpaceT<L>(a.l+b.l,a.p+b.p); }
   template<typename L> inline AffineSpaceT<L> operator -( const AffineSpaceT<L>& a, const AffineSpaceT<L>& b ) { return AffineSpaceT<L>(a.l-b.l,a.p-b.p); }
 
-  template<typename L> inline __both__ AffineSpaceT<L> operator *( const ScalarT        & a, const AffineSpaceT<L>& b ) { return AffineSpaceT<L>(a*b.l,a*b.p); }
-  template<typename L> inline __both__ AffineSpaceT<L> operator *( const AffineSpaceT<L>& a, const AffineSpaceT<L>& b ) { return AffineSpaceT<L>(a.l*b.l,a.l*b.p+a.p); }
+  template<typename L> inline __cubql_both AffineSpaceT<L> operator *( const ScalarT        & a, const AffineSpaceT<L>& b ) { return AffineSpaceT<L>(a*b.l,a*b.p); }
+  template<typename L> inline __cubql_both AffineSpaceT<L> operator *( const AffineSpaceT<L>& a, const AffineSpaceT<L>& b ) { return AffineSpaceT<L>(a.l*b.l,a.l*b.p+a.p); }
   template<typename L> inline AffineSpaceT<L> operator /( const AffineSpaceT<L>& a, const AffineSpaceT<L>& b ) { return a * rcp(b); }
   template<typename L> inline AffineSpaceT<L> operator /( const AffineSpaceT<L>& a, const ScalarT        & b ) { return a * rcp(b); }
 
@@ -138,9 +138,9 @@ namespace cuBQL {
   template<typename L> inline AffineSpaceT<L>& operator /=( AffineSpaceT<L>& a, const AffineSpaceT<L>& b ) { return a = a / b; }
   template<typename L> inline AffineSpaceT<L>& operator /=( AffineSpaceT<L>& a, const ScalarT        & b ) { return a = a / b; }
 
-  template<typename L> inline __both__ const VectorT xfmPoint (const AffineSpaceT<L>& m, const VectorT& p) { return madd(VectorT(p.x),m.l.vx,madd(VectorT(p.y),m.l.vy,madd(VectorT(p.z),m.l.vz,m.p))); }
-  template<typename L> inline __both__ const VectorT xfmVector(const AffineSpaceT<L>& m, const VectorT& v) { return xfmVector(m.l,v); }
-  template<typename L> inline __both__ const VectorT xfmNormal(const AffineSpaceT<L>& m, const VectorT& n) { return xfmNormal(m.l,n); }
+  template<typename L> inline __cubql_both const VectorT xfmPoint (const AffineSpaceT<L>& m, const VectorT& p) { return madd(VectorT(p.x),m.l.vx,madd(VectorT(p.y),m.l.vy,madd(VectorT(p.z),m.l.vz,m.p))); }
+  template<typename L> inline __cubql_both const VectorT xfmVector(const AffineSpaceT<L>& m, const VectorT& v) { return xfmVector(m.l,v); }
+  template<typename L> inline __cubql_both const VectorT xfmNormal(const AffineSpaceT<L>& m, const VectorT& n) { return xfmNormal(m.l,n); }
 
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -179,7 +179,7 @@ namespace cuBQL {
 #undef ScalarT
 
 
-  // inline __both__ box3f xfmBounds(const affine3f &xfm,
+  // inline __cubql_both box3f xfmBounds(const affine3f &xfm,
   //                                 const box3f &box)
   // {
   //   box3f dst;

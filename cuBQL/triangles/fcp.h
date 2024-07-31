@@ -19,6 +19,7 @@
 #include "cuBQL/bvh.h"
 // we're stealing the line seg test for edges
 #include "cuBQL/lineSegs/LineSegs3f.h"
+#include "cuBQL/queries/shrinkingRadiusQuery.h"
 
 namespace cuBQL {
   namespace triangles {
@@ -34,7 +35,7 @@ namespace cuBQL {
       inline __device__ void clear(float maxDistSqr) { primID = -1; sqrDistance = maxDistSqr; }
       
       int   primID;
-      float u, v;
+      // float u, v;
       float sqrDistance;
     };
 
@@ -74,6 +75,7 @@ namespace cuBQL {
     
     
 
+
     /*! compute point on 'triangle' that is closest to 'queryPoint',
       and return the square distance to that point. */
     inline __device__
@@ -82,28 +84,6 @@ namespace cuBQL {
       vec3f a = triangle.a;
       vec3f b = triangle.b;
       vec3f c = triangle.c;
-#if 0
-      // fast and approxiate code; not exact but at least correct
-      // within the paramters of that approximateoin
-      CPResult result;
-      result.sqrDistance = INFINITY;
-      auto doPoint = [&](vec3f p) {
-                       vec3f v = p - q;
-                       float dist2 = dot(v,v);
-                       if (dist2 < result.sqrDistance) {
-                         result.point = p;
-                         result.sqrDistance = dist2;
-                       }
-                     };
-      doPoint(a);
-      doPoint(b);
-      doPoint(c);
-      doPoint(.5f*(a+b));
-      doPoint(.5f*(b+c));
-      doPoint(.5f*(c+a));
-      doPoint(1.f/3.f * (a+b+c));
-      return result;
-#else
       vec3f N = cross(b-a,c-a);
       vec3f Nab = cross(b-a,N);
       vec3f Nbc = cross(c-b,N);
@@ -122,7 +102,8 @@ namespace cuBQL {
         // do edge test below
       } else {
         // point must be inside.
-        float dist = dot(q-a,N)/sqrtf(dot(N,N));
+        N = normalize(N);
+        float dist = dot(q-a,N);
         result.point = q - dist*N;
         edgeTest = false;
       }
@@ -133,7 +114,6 @@ namespace cuBQL {
 
       result.sqrDistance = sqrDistance(q,result.point);
       return result;
-#endif
     }
     
     /*! find closest point (to query point) among a set of line
@@ -151,58 +131,25 @@ namespace cuBQL {
              const vec3i *const __restrict__ indices,
              const vec3f *const __restrict__ vertices)
     {
-      using node_t = typename bvh3f::Node;
-
-      int2 stackBase[32], *stackPtr = stackBase;
-      int nodeID = 0;
-      int offset = 0;
-      int count  = 0;
-      while (true) {
-        while (true) {
-          offset = bvh.nodes[nodeID].admin.offset;
-          count  = bvh.nodes[nodeID].admin.count;
-          if (count>0)
-            // leaf
-            break;
-          const node_t child0 = bvh.nodes[offset+0];
-          const node_t child1 = bvh.nodes[offset+1];
-          float dist0 = fSqrDistance(child0.bounds,queryPoint);
-          float dist1 = fSqrDistance(child1.bounds,queryPoint);
-          int closeChild = offset + ((dist0 > dist1) ? 1 : 0);
-          if (dist1 < result.sqrDistance) {
-            float dist = max(dist0,dist1);
-            int distBits = __float_as_int(dist);
-            *stackPtr++ = make_int2(closeChild^1,distBits);
-          }
-          if (min(dist0,dist1) > result.sqrDistance) {
-            count = 0;
-            break;
-          }
-          nodeID = closeChild;
+      /* as with all cubql traversal routines, we use a lambda that
+         gets in a per-primitive ID, and that returns a square
+         distance that the traversal routines can from now on use to
+         cull (note if the traversal already has a closer culling
+         distance it will keep on using this no matter what this
+         function returns, so we don't need to be too sanguine about
+         which value to return) */
+      auto perPrim=[&result,queryPoint,indices,vertices](uint32_t primID) {
+        vec3i index = indices[primID];
+        Triangle triangle{vertices[index.x],vertices[index.y],vertices[index.z]};
+        CPResult primResult = closestPoint(queryPoint,triangle);
+        if (primResult.sqrDistance < result.sqrDistance) {
+          result.primID = primID;
+          result.sqrDistance = primResult.sqrDistance;
         }
-        for (int i=0;i<count;i++) {
-          int primID = bvh.primIDs[offset+i];
-          // if (primID == primIDtoIgnore) continue;
-
-          vec3i index = indices[primID];
-          Triangle triangle{vertices[index.x],vertices[index.y],vertices[index.z]};
-          CPResult primResult = closestPoint(queryPoint,triangle);
-          if (primResult.sqrDistance < result.sqrDistance) {
-            result.primID = primID;
-            result.u = primResult.u;
-            result.v = primResult.v;
-            result.sqrDistance = primResult.sqrDistance;
-          }
-        }
-        while (true) {
-          if (stackPtr == stackBase) 
-            return;
-          --stackPtr;
-          if (__int_as_float(stackPtr->y) > result.sqrDistance) continue;
-          nodeID = stackPtr->x;
-          break;
-        }
-      }
-    }
-  }
-}
+        return result.sqrDistance;
+      };
+      cuBQL::shrinkingRadiusQuery_forEachPrim(bvh,queryPoint,result.sqrDistance,perPrim);
+    } // fcp()
+    
+  } // ::cuBQL::triangles
+} // ::cuBQL

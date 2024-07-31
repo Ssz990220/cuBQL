@@ -43,7 +43,7 @@ namespace cuBQL {
   /// 2D Linear Transform (2x2 Matrix)
   ////////////////////////////////////////////////////////////////////////////////
 
-  template<typename T> struct OWL_INTERFACE LinearSpace2
+  template<typename T> struct LinearSpace2
     {
       using vector_t = T;
       // using Scalar = typename T::scalar_t;
@@ -52,31 +52,31 @@ namespace cuBQL {
     
       /*! default matrix constructor */
       inline LinearSpace2           ( ) = default;
-      inline __both__ LinearSpace2           ( const LinearSpace2& other ) { vx = other.vx; vy = other.vy; }
-      inline __both__ LinearSpace2& operator=( const LinearSpace2& other ) { vx = other.vx; vy = other.vy; return *this; }
+      inline __cubql_both LinearSpace2           ( const LinearSpace2& other ) { vx = other.vx; vy = other.vy; }
+      inline __cubql_both LinearSpace2& operator=( const LinearSpace2& other ) { vx = other.vx; vy = other.vy; return *this; }
 
-      template<typename L1> inline __both__ LinearSpace2( const LinearSpace2<L1>& s ) : vx(s.vx), vy(s.vy) {}
+      template<typename L1> inline __cubql_both LinearSpace2( const LinearSpace2<L1>& s ) : vx(s.vx), vy(s.vy) {}
 
       /*! matrix construction from column vectors */
-      inline __both__ LinearSpace2(const vector_t& vx, const vector_t& vy)
+      inline __cubql_both LinearSpace2(const vector_t& vx, const vector_t& vy)
       : vx(vx), vy(vy) {}
 
       /*! matrix construction from row mayor data */
-      inline __both__ LinearSpace2(const scalar_t& m00, const scalar_t& m01, 
+      inline __cubql_both LinearSpace2(const scalar_t& m00, const scalar_t& m01, 
                                    const scalar_t& m10, const scalar_t& m11)
       : vx(m00,m10), vy(m01,m11) {}
 
       /*! compute the determinant of the matrix */
-      inline __both__ const scalar_t det() const { return vx.x*vy.y - vx.y*vy.x; }
+      inline __cubql_both const scalar_t det() const { return vx.x*vy.y - vx.y*vy.x; }
 
       /*! compute adjoint matrix */
-      inline __both__ const LinearSpace2 adjoint() const { return LinearSpace2(vy.y,-vy.x,-vx.y,vx.x); }
+      inline __cubql_both const LinearSpace2 adjoint() const { return LinearSpace2(vy.y,-vy.x,-vx.y,vx.x); }
 
       /*! compute inverse matrix */
-      inline __both__ const LinearSpace2 inverse() const { return adjoint()/det(); }
+      inline __cubql_both const LinearSpace2 inverse() const { return adjoint()/det(); }
 
       /*! compute transposed matrix */
-      inline __both__ const LinearSpace2 transposed() const { return LinearSpace2(vx.x,vx.y,vy.x,vy.y); }
+      inline __cubql_both const LinearSpace2 transposed() const { return LinearSpace2(vx.x,vx.y,vy.x,vy.y); }
 
       /*! returns first row of matrix */
       inline const vector_t row0() const { return vector_t(vx.x,vy.x); }
@@ -88,8 +88,8 @@ namespace cuBQL {
       /// Constants
       ////////////////////////////////////////////////////////////////////////////////
 
-      inline __both__ LinearSpace2( ZeroTy ) : vx(ZeroTy()), vy(ZeroTy()) {}
-      inline __both__ LinearSpace2( OneTy ) : vx(OneTy(), ZeroTy()), vy(ZeroTy(), OneTy()) {}
+      inline __cubql_both LinearSpace2( ZeroTy ) : vx(ZeroTy()), vy(ZeroTy()) {}
+      inline __cubql_both LinearSpace2( OneTy ) : vx(OneTy(), ZeroTy()), vy(ZeroTy(), OneTy()) {}
 
       /*! return matrix for scaling */
       static inline LinearSpace2 scale(const vector_t& s) {
@@ -139,33 +139,33 @@ namespace cuBQL {
   // Unary Operators
   ////////////////////////////////////////////////////////////////////////////////
 
-  template<typename T> __both__ inline LinearSpace2<T> operator -( const LinearSpace2<T>& a ) { return LinearSpace2<T>(-a.vx,-a.vy); }
-  template<typename T> __both__ inline LinearSpace2<T> operator +( const LinearSpace2<T>& a ) { return LinearSpace2<T>(+a.vx,+a.vy); }
-  template<typename T> __both__ inline LinearSpace2<T> rcp       ( const LinearSpace2<T>& a ) { return a.inverse(); }
+  template<typename T> __cubql_both inline LinearSpace2<T> operator -( const LinearSpace2<T>& a ) { return LinearSpace2<T>(-a.vx,-a.vy); }
+  template<typename T> __cubql_both inline LinearSpace2<T> operator +( const LinearSpace2<T>& a ) { return LinearSpace2<T>(+a.vx,+a.vy); }
+  template<typename T> __cubql_both inline LinearSpace2<T> rcp       ( const LinearSpace2<T>& a ) { return a.inverse(); }
 
   ////////////////////////////////////////////////////////////////////////////////
   // Binary Operators
   ////////////////////////////////////////////////////////////////////////////////
 
-  template<typename T> inline __both__ LinearSpace2<T> operator +( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return LinearSpace2<T>(a.vx+b.vx,a.vy+b.vy); }
-  template<typename T> inline __both__ LinearSpace2<T> operator -( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return LinearSpace2<T>(a.vx-b.vx,a.vy-b.vy); }
+  template<typename T> inline __cubql_both LinearSpace2<T> operator +( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return LinearSpace2<T>(a.vx+b.vx,a.vy+b.vy); }
+  template<typename T> inline __cubql_both LinearSpace2<T> operator -( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return LinearSpace2<T>(a.vx-b.vx,a.vy-b.vy); }
 
-  template<typename T> inline __both__ LinearSpace2<T> operator*(const typename T::scalar_t & a, const LinearSpace2<T>& b) { return LinearSpace2<T>(a*b.vx, a*b.vy); }
-  template<typename T> inline __both__ T               operator*(const LinearSpace2<T>& a, const T              & b) { return b.x*a.vx + b.y*a.vy; }
-  template<typename T> inline __both__ LinearSpace2<T> operator*(const LinearSpace2<T>& a, const LinearSpace2<T>& b) { return LinearSpace2<T>(a*b.vx, a*b.vy); }
+  template<typename T> inline __cubql_both LinearSpace2<T> operator*(const typename T::scalar_t & a, const LinearSpace2<T>& b) { return LinearSpace2<T>(a*b.vx, a*b.vy); }
+  template<typename T> inline __cubql_both T               operator*(const LinearSpace2<T>& a, const T              & b) { return b.x*a.vx + b.y*a.vy; }
+  template<typename T> inline __cubql_both LinearSpace2<T> operator*(const LinearSpace2<T>& a, const LinearSpace2<T>& b) { return LinearSpace2<T>(a*b.vx, a*b.vy); }
 
-  template<typename T> inline __both__ LinearSpace2<T> operator/(const LinearSpace2<T>& a, const typename T::scalar_t & b) { return LinearSpace2<T>(a.vx/b, a.vy/b); }
-  template<typename T> inline __both__ LinearSpace2<T> operator/(const LinearSpace2<T>& a, const LinearSpace2<T>& b) { return a * rcp(b); }
+  template<typename T> inline __cubql_both LinearSpace2<T> operator/(const LinearSpace2<T>& a, const typename T::scalar_t & b) { return LinearSpace2<T>(a.vx/b, a.vy/b); }
+  template<typename T> inline __cubql_both LinearSpace2<T> operator/(const LinearSpace2<T>& a, const LinearSpace2<T>& b) { return a * rcp(b); }
 
-  template<typename T> inline __both__ LinearSpace2<T>& operator *=( LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a = a * b; }
-  template<typename T> inline __both__ LinearSpace2<T>& operator /=( LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a = a / b; }
+  template<typename T> inline __cubql_both LinearSpace2<T>& operator *=( LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a = a * b; }
+  template<typename T> inline __cubql_both LinearSpace2<T>& operator /=( LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a = a / b; }
 
   ////////////////////////////////////////////////////////////////////////////////
   /// Comparison Operators
   ////////////////////////////////////////////////////////////////////////////////
 
-  template<typename T> inline __both__ bool operator ==( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a.vx == b.vx && a.vy == b.vy; }
-  template<typename T> inline __both__ bool operator !=( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a.vx != b.vx || a.vy != b.vy; }
+  template<typename T> inline __cubql_both bool operator ==( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a.vx == b.vx && a.vy == b.vy; }
+  template<typename T> inline __cubql_both bool operator !=( const LinearSpace2<T>& a, const LinearSpace2<T>& b ) { return a.vx != b.vx || a.vy != b.vy; }
 
   ////////////////////////////////////////////////////////////////////////////////
   /// Output Operators
@@ -180,7 +180,7 @@ namespace cuBQL {
   ////////////////////////////////////////////////////////////////////////////////
 
   template<typename T> 
-  struct OWL_INTERFACE LinearSpace3
+  struct LinearSpace3
     {
       // using vector_t = T;
       using scalar_t = typename T::scalar_t;
@@ -189,82 +189,82 @@ namespace cuBQL {
 
       /*! default matrix constructor */
       // inline LinearSpace3           ( ) = default;
-      inline __both__ LinearSpace3()
+      inline __cubql_both LinearSpace3()
       : vx(OneTy(),ZeroTy(),ZeroTy()),
       vy(ZeroTy(),OneTy(),ZeroTy()),
       vz(ZeroTy(),ZeroTy(),OneTy())
       {}
         
-      inline// __both__
+      inline// __cubql_both
       LinearSpace3           ( const LinearSpace3& other ) = default;
-      inline __both__ LinearSpace3& operator=( const LinearSpace3& other ) { vx = other.vx; vy = other.vy; vz = other.vz; return *this; }
+      inline __cubql_both LinearSpace3& operator=( const LinearSpace3& other ) { vx = other.vx; vy = other.vy; vz = other.vz; return *this; }
 
-      template<typename L1> inline __both__ LinearSpace3( const LinearSpace3<L1>& s ) : vx(s.vx), vy(s.vy), vz(s.vz) {}
+      template<typename L1> inline __cubql_both LinearSpace3( const LinearSpace3<L1>& s ) : vx(s.vx), vy(s.vy), vz(s.vz) {}
 
       /*! matrix construction from column vectors */
-      inline __both__ LinearSpace3(const vector_t& vx, const vector_t& vy, const vector_t& vz)
+      inline __cubql_both LinearSpace3(const vector_t& vx, const vector_t& vy, const vector_t& vz)
       : vx(vx), vy(vy), vz(vz) {}
 
       /*! construction from quaternion */
-      inline __both__ LinearSpace3( const QuaternionT<scalar_t>& q )
+      inline __cubql_both LinearSpace3( const QuaternionT<scalar_t>& q )
       : vx((q.r*q.r + q.i*q.i - q.j*q.j - q.k*q.k), 2.0f*(q.i*q.j + q.r*q.k), 2.0f*(q.i*q.k - q.r*q.j))
       , vy(2.0f*(q.i*q.j - q.r*q.k), (q.r*q.r - q.i*q.i + q.j*q.j - q.k*q.k), 2.0f*(q.j*q.k + q.r*q.i))
       , vz(2.0f*(q.i*q.k + q.r*q.j), 2.0f*(q.j*q.k - q.r*q.i), (q.r*q.r - q.i*q.i - q.j*q.j + q.k*q.k)) {}
 
       /*! matrix construction from row mayor data */
-      inline __both__ LinearSpace3(const scalar_t& m00, const scalar_t& m01, const scalar_t& m02,
+      inline __cubql_both LinearSpace3(const scalar_t& m00, const scalar_t& m01, const scalar_t& m02,
                                    const scalar_t& m10, const scalar_t& m11, const scalar_t& m12,
                                    const scalar_t& m20, const scalar_t& m21, const scalar_t& m22)
       : vx(m00,m10,m20), vy(m01,m11,m21), vz(m02,m12,m22) {}
 
       /*! compute the determinant of the matrix */
-      inline __both__ const scalar_t det() const { return dot(vx,cross(vy,vz)); }
+      inline __cubql_both const scalar_t det() const { return dot(vx,cross(vy,vz)); }
 
       /*! compute adjoint matrix */
-      inline __both__ const LinearSpace3 adjoint() const { return LinearSpace3(cross(vy,vz),cross(vz,vx),cross(vx,vy)).transposed(); }
+      inline __cubql_both const LinearSpace3 adjoint() const { return LinearSpace3(cross(vy,vz),cross(vz,vx),cross(vx,vy)).transposed(); }
 
       /*! compute inverse matrix */
-      inline __both__ const LinearSpace3 inverse() const { return adjoint()/det(); }
+      inline __cubql_both const LinearSpace3 inverse() const { return adjoint()/det(); }
 
       /*! compute transposed matrix */
-      inline __both__ const LinearSpace3 transposed() const { return LinearSpace3(vx.x,vx.y,vx.z,vy.x,vy.y,vy.z,vz.x,vz.y,vz.z); }
+      inline __cubql_both const LinearSpace3 transposed() const { return LinearSpace3(vx.x,vx.y,vx.z,vy.x,vy.y,vy.z,vz.x,vz.y,vz.z); }
 
       /*! returns first row of matrix */
-      inline __both__ const vector_t row0() const { return vector_t(vx.x,vy.x,vz.x); }
+      inline __cubql_both const vector_t row0() const { return vector_t(vx.x,vy.x,vz.x); }
 
       /*! returns second row of matrix */
-      inline __both__ const vector_t row1() const { return vector_t(vx.y,vy.y,vz.y); }
+      inline __cubql_both const vector_t row1() const { return vector_t(vx.y,vy.y,vz.y); }
 
       /*! returns third row of matrix */
-      inline __both__ const vector_t row2() const { return vector_t(vx.z,vy.z,vz.z); }
+      inline __cubql_both const vector_t row2() const { return vector_t(vx.z,vy.z,vz.z); }
 
       ////////////////////////////////////////////////////////////////////////////////
       /// Constants
       ////////////////////////////////////////////////////////////////////////////////
 
       // #ifdef __CUDA_ARCH__
-      inline __both__ LinearSpace3( const ZeroTy & )
+      inline __cubql_both LinearSpace3( const ZeroTy & )
       : vx(ZeroTy()), vy(ZeroTy()), vz(ZeroTy())
       {}
-      inline __both__ LinearSpace3( const OneTy & )
+      inline __cubql_both LinearSpace3( const OneTy & )
       : vx(OneTy(), ZeroTy(), ZeroTy()),
       vy(ZeroTy(), OneTy(), ZeroTy()),
       vz(ZeroTy(), ZeroTy(), OneTy())
       {}
       // #else
-      //       inline __both__ LinearSpace3( ZeroTy ) : vx(zero), vy(zero), vz(zero) {}
-      //       inline __both__ LinearSpace3( OneTy ) : vx(one, zero, zero), vy(zero, one, zero), vz(zero, zero, one) {}
+      //       inline __cubql_both LinearSpace3( ZeroTy ) : vx(zero), vy(zero), vz(zero) {}
+      //       inline __cubql_both LinearSpace3( OneTy ) : vx(one, zero, zero), vy(zero, one, zero), vz(zero, zero, one) {}
       // #endif
 
       /*! return matrix for scaling */
-      static inline __both__ LinearSpace3 scale(const vector_t& s) {
+      static inline __cubql_both LinearSpace3 scale(const vector_t& s) {
         return LinearSpace3(s.x,   0,   0,
                             0  , s.y,   0,
                             0  ,   0, s.z);
       }
 
       /*! return matrix for rotation around arbitrary axis */
-      static inline __both__ LinearSpace3 rotate(const vector_t& _u, const scalar_t& r) {
+      static inline __cubql_both LinearSpace3 rotate(const vector_t& _u, const scalar_t& r) {
         vector_t u = normalize(_u);
         scalar_t s = sin(r), c = cos(r);
         return LinearSpace3(u.x*u.x+(1-u.x*u.x)*c,  u.x*u.y*(1-c)-u.z*s,    u.x*u.z*(1-c)+u.y*s,
@@ -273,29 +273,29 @@ namespace cuBQL {
       }
 
       /*! return quaternion for given rotation matrix */
-      static inline __both__ QuaternionT<scalar_t> rotation(const LinearSpace3 &a) {
+      static inline __cubql_both QuaternionT<scalar_t> rotation(const LinearSpace3 &a) {
         scalar_t tr = a.vx.x+a.vy.y+a.vz.z+1;
         vector_t diag(a.vx.x,a.vy.y,a.vz.z);
         if (tr > 1) {
-          scalar_t s = owl::common::polymorphic::sqrt(tr) * 2;
+          scalar_t s = sqrt(tr) * 2;
           return QuaternionT<scalar_t>(.25f * s,
                                        (a.vz.y-a.vy.z)/s,
                                        (a.vx.z-a.vz.x)/s,
                                        (a.vy.x-a.vx.y)/s);
         } else if (arg_max(diag) == 0) {
-          scalar_t s = owl::common::polymorphic::sqrt(1.f+diag.x-diag.y-diag.z)*2.f;
+          scalar_t s = sqrt(1.f+diag.x-diag.y-diag.z)*2.f;
           return QuaternionT<scalar_t>((a.vz.y-a.vy.z)/s,
                                        .25f * s,
                                        (a.vx.y-a.vy.x)/s,
                                        (a.vx.z-a.vz.x)/s);
         } else if (arg_max(diag) == 1) {
-          scalar_t s = owl::common::polymorphic::sqrt(1.f+diag.y-diag.x-diag.z)*2.f;
+          scalar_t s = sqrt(1.f+diag.y-diag.x-diag.z)*2.f;
           return QuaternionT<scalar_t>((a.vx.z-a.vz.x)/s,
                                        (a.vx.y-a.vy.x)/s,
                                        .25f * s,
                                        (a.vy.z-a.vz.y)/s);
         } else {
-          scalar_t s = owl::common::polymorphic::sqrt(1.f+diag.z-diag.x-diag.y)*2.f;
+          scalar_t s = sqrt(1.f+diag.z-diag.x-diag.y)*2.f;
           return QuaternionT<scalar_t>((a.vy.x-a.vx.y)/s,
                                        (a.vx.z-a.vz.x)/s,
                                        (a.vy.z-a.vz.y)/s,
@@ -313,13 +313,13 @@ namespace cuBQL {
   // Unary Operators
   ////////////////////////////////////////////////////////////////////////////////
 
-  template<typename T> inline __both__ LinearSpace3<T> operator -( const LinearSpace3<T>& a ) { return LinearSpace3<T>(-a.vx,-a.vy,-a.vz); }
-  template<typename T> inline __both__ LinearSpace3<T> operator +( const LinearSpace3<T>& a ) { return LinearSpace3<T>(+a.vx,+a.vy,+a.vz); }
-  template<typename T> inline __both__ LinearSpace3<T> rcp       ( const LinearSpace3<T>& a ) { return a.inverse(); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator -( const LinearSpace3<T>& a ) { return LinearSpace3<T>(-a.vx,-a.vy,-a.vz); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator +( const LinearSpace3<T>& a ) { return LinearSpace3<T>(+a.vx,+a.vy,+a.vz); }
+  template<typename T> inline __cubql_both LinearSpace3<T> rcp       ( const LinearSpace3<T>& a ) { return a.inverse(); }
 
   /* constructs a coordinate frame form a normalized normal */
   template<typename T>  
-  inline __both__ LinearSpace3<T> frame(const T &N) 
+  inline __cubql_both LinearSpace3<T> frame(const T &N) 
   {
     // #ifdef __CUDA_ARCH__
     const T dx0 = cross(T(OneTy(),ZeroTy(),ZeroTy()),N);
@@ -334,7 +334,7 @@ namespace cuBQL {
   }
 
   /* constructs a coordinate frame from a normal and approximate x-direction */
-  template<typename T> inline __both__ LinearSpace3<T> frame(const T& N, const T& dxi)
+  template<typename T> inline __cubql_both LinearSpace3<T> frame(const T& N, const T& dxi)
   {
     if (abs(dot(dxi,N)) > 0.99f) return frame(N); // fallback in case N and dxi are very parallel
     const T dx = normalize(cross(dxi,N));
@@ -343,7 +343,7 @@ namespace cuBQL {
   }
   
   /* clamps linear space to range -1 to +1 */
-  template<typename T> inline __both__ LinearSpace3<T> clamp(const LinearSpace3<T>& space) {
+  template<typename T> inline __cubql_both LinearSpace3<T> clamp(const LinearSpace3<T>& space) {
     return LinearSpace3<T>(clamp(space.vx,T(-1.0f),T(1.0f)),
                            clamp(space.vy,T(-1.0f),T(1.0f)),
                            clamp(space.vz,T(-1.0f),T(1.0f)));
@@ -353,23 +353,23 @@ namespace cuBQL {
   // Binary Operators
   ////////////////////////////////////////////////////////////////////////////////
 
-  template<typename T> inline __both__ LinearSpace3<T> operator +( const LinearSpace3<T>& a, const LinearSpace3<T>& b ) { return LinearSpace3<T>(a.vx+b.vx,a.vy+b.vy,a.vz+b.vz); }
-  template<typename T> inline __both__ LinearSpace3<T> operator -( const LinearSpace3<T>& a, const LinearSpace3<T>& b ) { return LinearSpace3<T>(a.vx-b.vx,a.vy-b.vy,a.vz-b.vz); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator +( const LinearSpace3<T>& a, const LinearSpace3<T>& b ) { return LinearSpace3<T>(a.vx+b.vx,a.vy+b.vy,a.vz+b.vz); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator -( const LinearSpace3<T>& a, const LinearSpace3<T>& b ) { return LinearSpace3<T>(a.vx-b.vx,a.vy-b.vy,a.vz-b.vz); }
 
-  template<typename T> inline __both__ LinearSpace3<T> operator*(const typename T::scalar_t & a, const LinearSpace3<T>& b) { return LinearSpace3<T>(a*b.vx, a*b.vy, a*b.vz); }
-  template<typename T> inline __both__ T               operator*(const LinearSpace3<T>& a, const T              & b) { return b.x*a.vx + b.y*a.vy + b.z*a.vz; }
-  template<typename T> inline __both__ LinearSpace3<T> operator*(const LinearSpace3<T>& a, const LinearSpace3<T>& b) { return LinearSpace3<T>(a*b.vx, a*b.vy, a*b.vz); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator*(const typename T::scalar_t & a, const LinearSpace3<T>& b) { return LinearSpace3<T>(a*b.vx, a*b.vy, a*b.vz); }
+  template<typename T> inline __cubql_both T               operator*(const LinearSpace3<T>& a, const T              & b) { return b.x*a.vx + b.y*a.vy + b.z*a.vz; }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator*(const LinearSpace3<T>& a, const LinearSpace3<T>& b) { return LinearSpace3<T>(a*b.vx, a*b.vy, a*b.vz); }
 
-  template<typename T> inline __both__ LinearSpace3<T> operator/(const LinearSpace3<T>& a, const typename T::scalar_t & b) { return LinearSpace3<T>(a.vx/b, a.vy/b, a.vz/b); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator/(const LinearSpace3<T>& a, const typename T::scalar_t & b) { return LinearSpace3<T>(a.vx/b, a.vy/b, a.vz/b); }
   
-  template<typename T> inline __both__ LinearSpace3<T> operator/(const LinearSpace3<T>& a, const LinearSpace3<T>& b) { return a * rcp(b); }
+  template<typename T> inline __cubql_both LinearSpace3<T> operator/(const LinearSpace3<T>& a, const LinearSpace3<T>& b) { return a * rcp(b); }
 
   template<typename T> inline LinearSpace3<T>& operator *=( LinearSpace3<T>& a, const LinearSpace3<T>& b ) { return a = a * b; }
   template<typename T> inline LinearSpace3<T>& operator /=( LinearSpace3<T>& a, const LinearSpace3<T>& b ) { return a = a / b; }
 
-  template<typename T> inline __both__ T xfmPoint (const LinearSpace3<T>& s, const T& a) { return madd(T(a.x),s.vx,madd(T(a.y),s.vy,T(a.z*s.vz))); }
-  template<typename T> inline __both__ T xfmVector(const LinearSpace3<T>& s, const T& a) { return madd(T(a.x),s.vx,madd(T(a.y),s.vy,T(a.z*s.vz))); }
-  template<typename T> inline __both__ T xfmNormal(const LinearSpace3<T>& s, const T& a) { return xfmVector(s.inverse().transposed(),a); }
+  template<typename T> inline __cubql_both T xfmPoint (const LinearSpace3<T>& s, const T& a) { return madd(T(a.x),s.vx,madd(T(a.y),s.vy,T(a.z*s.vz))); }
+  template<typename T> inline __cubql_both T xfmVector(const LinearSpace3<T>& s, const T& a) { return madd(T(a.x),s.vx,madd(T(a.y),s.vy,T(a.z*s.vz))); }
+  template<typename T> inline __cubql_both T xfmNormal(const LinearSpace3<T>& s, const T& a) { return xfmVector(s.inverse().transposed(),a); }
 
   ////////////////////////////////////////////////////////////////////////////////
   /// Comparison Operators
