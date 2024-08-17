@@ -16,14 +16,13 @@
 
 #pragma once
 
-#include "testing/helper.h"
-#include "testing/helper/CUDAArray.h"
-#include <memory>
-#include "testing/helper/triangles.h"
+#include "cuBQL/triangles/Triangle.h"
+#include "samples/common/IO.h"
 
 namespace cuBQL {
-  namespace test_rig {
+  namespace samples {
 
+    // ==================================================================
     /*! a 'point generator' is a class that implements a procedure to
       create a randomized set of points (of given type and
       dimensoins). In particular, this library allows for describing
@@ -33,30 +32,32 @@ namespace cuBQL {
     template<typename T, int D>
     struct PointGenerator {
       typedef std::shared_ptr<PointGenerator> SP;
-
+      /*! create a set of requested number of elements with given
+          generator seed*/
+      virtual std::vector<vec_t<T,D>> generate(int numRequested, int seed) = 0;
+      
+      // helper stuff to parse itself from cmd-line descriptor string
       static SP createFromString(const std::string &wholeString);
-    
+      
       static SP createAndParse(const char *&curr);
       virtual void parse(const char *&currentParsePos);
     
-      virtual void generate(CUDAArray<vec_t<T,D>> &points,
-                            int numRequested, int seed) = 0;
     };
   
+    // ==================================================================
     template<typename T, int D>
     struct BoxGenerator {
       typedef std::shared_ptr<BoxGenerator<T,D>> SP;
-    
 
+      /*! create a set of requested number of elements with given
+          generator seed*/
+      virtual std::vector<box_t<T,D>> generate(int numRequested, int seed) = 0;
+      
       static SP createFromString(const std::string &wholeString);
     
       static SP createAndParse(const char *&curr);
       virtual void parse(const char *&currentParsePos);
-    
-      virtual void generate(CUDAArray<box_t<T,D>> &boxes,
-                            int numRequested, int seed) = 0;
     };
-
 
 
 
@@ -65,15 +66,13 @@ namespace cuBQL {
     template<typename T, int D>
     struct UniformPointGenerator : public PointGenerator<T, D>
     {
-      void generate(CUDAArray<vec_t<T,D>> &points,
-                    int numRequested, int seed) override;
+      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
     };
 
     template<typename T, int D>
     struct UniformBoxGenerator : public BoxGenerator<T, D>
     {
-      void generate(CUDAArray<box_t<T,D>> &boxes,
-                    int numRequested, int seed) override;
+      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
     };
   
     /*! re-maps points from the 'default domain' to the domain specified
@@ -97,8 +96,7 @@ namespace cuBQL {
     {
       RemapPointGenerator();
     
-      void generate(CUDAArray<vec_t<T,D>> &points,
-                    int numRequested, int seed) override;
+      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
     
       virtual void parse(const char *&currentParsePos);
 
@@ -110,8 +108,7 @@ namespace cuBQL {
     {
       RemapBoxGenerator();
     
-      void generate(CUDAArray<box_t<T,D>> &boxes,
-                    int numRequested, int seed) override;
+      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
     
       virtual void parse(const char *&currentParsePos);
 
@@ -125,16 +122,14 @@ namespace cuBQL {
     template<typename T, int D>
     struct ClusteredPointGenerator : public PointGenerator<T, D>
     {
-      void generate(CUDAArray<vec_t<T,D>> &points,
-                    int numRequested, int seed) override;
+      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
     };
   
     template<typename T, int D>
     struct ClusteredBoxGenerator : public BoxGenerator<T, D>
     {
       void parse(const char *&currentParsePos) override;
-      void generate(CUDAArray<box_t<T,D>> &boxes,
-                    int numRequested, int seed) override;
+      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
       
       struct {
         float mean = -1.f, sigma = 0.f, scale = 1.f;
@@ -150,8 +145,7 @@ namespace cuBQL {
     template<typename T, int D>
     struct NRooksPointGenerator : public PointGenerator<T, D>
     {
-      void generate(CUDAArray<vec_t<T,D>> &points,
-                    int numRequested, int seed) override;
+      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
     };
 
     // ==================================================================
@@ -161,8 +155,7 @@ namespace cuBQL {
     template<typename T, int D>
     struct NRooksBoxGenerator : public BoxGenerator<T, D>
     {
-      void generate(CUDAArray<box_t<T,D>> &boxes,
-                    int numRequested, int seed) override;
+      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
       void parse(const char *&currentParsePos) override;
       struct {
         float mean = -1.f, sigma = 0.f, scale = 1.f;
@@ -188,12 +181,11 @@ namespace cuBQL {
     template<typename T, int D>
     struct TrianglesBoxGenerator : public BoxGenerator<T, D>
     {
-      void generate(CUDAArray<box_t<T,D>> &boxes,
-                    int numRequested, int seed) override;
+      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
-      std::vector<test_rig::Triangle> triangles;
+      std::vector<cuBQL::Triangle> triangles;
     };
 
     // ==================================================================
@@ -210,12 +202,11 @@ namespace cuBQL {
     template<typename T, int D>
     struct TrianglesPointGenerator : public PointGenerator<T, D>
     {
-      void generate(CUDAArray<vec_t<T,D>> &points,
-                    int numRequested, int seed) override;
+      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
-      std::vector<test_rig::Triangle> triangles;
+      std::vector<cuBQL::Triangle> triangles;
     };
 
     // ==================================================================
@@ -223,28 +214,26 @@ namespace cuBQL {
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
     template<typename T, int D>
-    struct MixtureBoxGenerator : public BoxGenerator<T,D> {
-      void generate(CUDAArray<box_t<T,D>> &boxes,
-                    int numRequested, int seed) override;
+    struct MixturePointGenerator : public PointGenerator<T,D> {
+      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
-      typename BoxGenerator<T,D>::SP gen_a;
-      typename BoxGenerator<T,D>::SP gen_b;
+      typename PointGenerator<T,D>::SP gen_a;
+      typename PointGenerator<T,D>::SP gen_b;
       float prob_a;
     };
 
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
     template<typename T, int D>
-    struct MixturePointGenerator : public PointGenerator<T,D> {
-      void generate(CUDAArray<vec_t<T,D>> &points,
-                    int numRequested, int seed) override;
+    struct MixtureBoxGenerator : public BoxGenerator<T,D> {
+      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
-      typename PointGenerator<T,D>::SP gen_a;
-      typename PointGenerator<T,D>::SP gen_b;
+      typename BoxGenerator<T,D>::SP gen_a;
+      typename BoxGenerator<T,D>::SP gen_b;
       float prob_a;
     };
 

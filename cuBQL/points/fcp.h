@@ -22,7 +22,7 @@ namespace cuBQL {
   namespace points {
 
     /*! find closest point, up to (and exluding) provided maximum
-        query distance. return value is index of point in dta points
+        query distance. return value is index of point in data points
         array, or -1 if none was found */
     inline __device__
     int fcp(const vec3f  queryPoint,

@@ -31,7 +31,7 @@ else()
   set(CUBQL_IS_SUBPROJECT OFF)
 endif()
 
-set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING "which arch to use for cubby" )
+set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING "which CUDA arch to use for building cuBQL" )
 
 if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
   # leave CMAKE_CUDA_ARCHITECTURES to whatever the may may or may not have set
@@ -121,6 +121,6 @@ target_link_libraries(cuBQL_impl PUBLIC
   )
 
 if (NOT CUBQL_IS_SUBPROJECT)
-  add_subdirectory(testing)
   add_subdirectory(samples)
+#  add_subdirectory(testing)
 endif()

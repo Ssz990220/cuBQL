@@ -1,5 +1,5 @@
 // ======================================================================== //
-// Copyright 2023-2023 Ingo Wald                                            //
+// Copyright 2024-2024 Ingo Wald                                            //
 //                                                                          //
 // Licensed under the Apache License, Version 2.0 (the "License");          //
 // you may not use this file except in compliance with the License.         //
@@ -14,24 +14,34 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#pragma once
+/*! \file cuBQL/triangles/Triangle.h Defines a generic triangle type and
+    some operations thereon, that various queries can then build on */
 
 #include "cuBQL/math/vec.h"
-#include "testing/helper.h"
+#include "cuBQL/math/box.h"
 
 namespace cuBQL {
-  namespace test_rig {
+  
+  struct Triangle {
+    /*! returns an axis aligned bounding box enclosing this triangle */
+    inline __cubql_both box3f bounds() const;
+    inline __cubql_both vec3f sample(float u, float v) const;
+    
+    vec3f a, b, c;
+  };
 
-    std::vector<Triangle> loadOBJ(const std::string &fileName);
-    void loadOBJ(std::vector<vec3i> &indices,
-                 std::vector<vec3f> &vertices,
-                 const std::string &fileName);
-    std::vector<Triangle> triangulate(const std::vector<box3f> &boxes);
+  inline __cubql_both box3f Triangle::bounds() const
+  { return box3f().including(a).including(b).including(c); }
 
-    std::vector<vec3f> sample(const std::vector<Triangle> &triangles,
-                              size_t numSamples,
-                              int seed=0x34234987);
-    void saveOBJ(const std::vector<Triangle> &triangles, const std::string &fileName);
+  inline __cubql_both float area(Triangle tri)
+  { return length(cross(tri.b-tri.a,tri.c-tri.a)); }
 
-  } // ::cuBQL::test_rig
-} // ::cuBQL
+  inline __cubql_both vec3f Triangle::sample(float u, float v) const
+  {
+    if (u+v >= 1.f) { u = 1.f-u; v = 1.f-v; }
+    return (1.f-u-v)*a + u * b + v * c;
+  }
+    
+
+} // cuBQL
+

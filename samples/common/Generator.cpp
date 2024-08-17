@@ -14,12 +14,14 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "testing/helper/Generator.h"
+#include "samples/common/Generator.h"
 #include "cuBQL/math/random.h"
 #include <exception>
+#include <string>
+#include <cstring>
 
 namespace cuBQL {
-  namespace test_rig {
+  namespace samples {
 
     namespace tokenizer {
       std::string findFirst(const char *curr, const char *&endOfFound)
@@ -76,12 +78,12 @@ namespace cuBQL {
           std::string tok = tokenizer::findFirst(curr,next);
         }
         assert(!values.empty());
-        vec_t<float,D> ret;
+        vec_t<T,D> ret;
         for (int i=0;i<D;i++)
           ret[i] = values[i % values.size()];
         return ret;
       } else
-        return vec_t<float,D>(std::stof(tok));
+        return vec_t<T,D>(std::stof(tok));
     }
     
     // ==================================================================
@@ -100,8 +102,10 @@ namespace cuBQL {
         gen = std::make_shared<UniformPointGenerator<T,D>>();
       else if (type == "clustered")
         gen = std::make_shared<ClusteredPointGenerator<T,D>>();
+#if 0
       else if (type == "nrooks")
         gen = std::make_shared<NRooksPointGenerator<T,D>>();
+#endif
       else if (type == "mixture")
         gen = std::make_shared<MixturePointGenerator<T,D>>();
       else if (type == "remap")
@@ -132,12 +136,6 @@ namespace cuBQL {
     void PointGenerator<T,D>::parse(const char *&currentParsePos)
     {}
 
-    template struct PointGenerator<float,2>;
-    template struct PointGenerator<float,3>;
-    template struct PointGenerator<float,4>;
-#if CUBQL_TEST_N
-    template struct PointGenerator<float,CUBQL_TEST_N>;
-#endif
     // ==================================================================
 
 
@@ -159,8 +157,8 @@ namespace cuBQL {
         gen = std::make_shared<UniformBoxGenerator<T,D>>();
       else if (type == "clustered")
         gen = std::make_shared<ClusteredBoxGenerator<T,D>>();
-      else if (type == "nrooks")
-        gen = std::make_shared<NRooksBoxGenerator<T,D>>();
+      // else if (type == "nrooks")
+      //   gen = std::make_shared<NRooksBoxGenerator<T,D>>();
       else if (type == "remap")
         gen = std::make_shared<RemapBoxGenerator<T,D>>();
       else if (type == "mixture")
@@ -208,97 +206,81 @@ namespace cuBQL {
     template<typename T> inline __cubql_both T uniform_default_upper();
     template<> inline __cubql_both float uniform_default_lower<float>() { return 0.f; }
     template<> inline __cubql_both float uniform_default_upper<float>() { return 1.f; }
-  
-    template<typename T, int D>
-    __global__
-    void uniformPointGenerator(vec_t<T,D> *d_points, int count, int seed)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= count) return;
-      vec_t<T,D> &mine = d_points[tid];
+    template<> inline __cubql_both double uniform_default_lower<double>() { return 0.; }
+    template<> inline __cubql_both double uniform_default_upper<double>() { return 1.; }
 
-      LCG<8> rng(seed,tid);
-
-      T lo = uniform_default_lower<T>();
-      T hi = uniform_default_upper<T>();
+    template<> inline __cubql_both int uniform_default_lower<int>() { return -100000; }
+    template<> inline __cubql_both int uniform_default_upper<int>() { return +100000; }
+    template<> inline __cubql_both int64_t uniform_default_lower<int64_t>() { return -100000; }
+    template<> inline __cubql_both int64_t uniform_default_upper<int64_t>() { return +100000; }
     
-      for (int i=0;i<D;i++)
-        mine[i] = T(lo + rng() * (hi-lo));
-    }
-
     template<typename T, int D>
-    void UniformPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &res,
-                                              int count, int seed)
+    inline 
+    void uniformPointGenerator(std::vector<vec_t<T,D>> &points, int seed)
     {
-      if (count <= 0)
-        throw std::runtime_error("UniformPointGenerator<T,D>::generate(): invalid count...");
-      res.resize(count);
-      int bs = 1024;
-      int nb = divRoundUp(int(count),bs);
-      uniformPointGenerator<T,D><<<nb,bs>>>(res.data(),count,seed);
-    }
-
-    // ------------------------------------------------------------------
-    template<typename T, int D>
-    __global__
-    void uniformBoxGenerator(box_t<T,D> *d_boxes, int count, int seed,
-                             T size)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= count) return;
-      box_t<T,D> &mine = d_boxes[tid];
-
-      LCG<8> rng(seed,tid);
-
-      T lo = uniform_default_lower<T>();
-      T hi = uniform_default_upper<T>();
-
-      vec_t<T,D> center;
-      for (int i=0;i<D;i++)
-        center[i] = T(lo + rng() * (hi-lo));
-
-      for (int i=0;i<D;i++) {
-        T scalarSize = T((hi - lo) * size);
-        mine.lower[i] = center[i] - scalarSize/2;
-        mine.upper[i] = mine.lower[i] + scalarSize;
+      for (int tid=0;tid<(int)points.size();tid++) {
+        LCG<8> rng(seed,tid);
+        auto &mine = points[tid];
+        
+        T lo = uniform_default_lower<T>();
+        T hi = uniform_default_upper<T>();
+        
+        for (int i=0;i<D;i++)
+          mine[i] = T(lo + rng() * (hi-lo));
       }
     }
 
     template<typename T, int D>
-    void UniformBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &res,
-                                            int count, int seed)
+    std::vector<vec_t<T,D>>
+    UniformPointGenerator<T,D>::generate(int count, int seed)
+    {
+      if (count <= 0)
+        throw std::runtime_error("UniformPointGenerator<T,D>::generate(): invalid count...");
+      std::vector<vec_t<T,D>> res(count);
+      uniformPointGenerator<T,D>(res,seed);
+      return res;
+    }
+
+    // ------------------------------------------------------------------
+    template<typename T, int D>
+    void uniformBoxGenerator(std::vector<box_t<T,D>> &boxes,
+                             int seed, T size)
+    {
+      for (int tid=0;tid<int(boxes.size());tid++) {
+        box_t<T,D> &mine = boxes[tid];
+        
+        LCG<8> rng(seed,tid);
+        
+        T lo = uniform_default_lower<T>();
+        T hi = uniform_default_upper<T>();
+        
+        vec_t<T,D> center;
+        for (int i=0;i<D;i++)
+          center[i] = T(lo + rng() * (hi-lo));
+        
+        for (int i=0;i<D;i++) {
+          T scalarSize = T((hi - lo) * size);
+          mine.lower[i] = center[i] - scalarSize/2;
+          mine.upper[i] = mine.lower[i] + scalarSize;
+        }
+      }
+    }
+    
+    template<typename T, int D>
+    std::vector<box_t<T,D>>
+    UniformBoxGenerator<T,D>::generate(int count, int seed)
     {
       if (count <= 0)
         throw std::runtime_error("UniformBoxGenerator<T,D>::generate(): invalid count...");
-      res.resize(count);
-      int bs = 1024;
-      int nb = divRoundUp(int(count),bs);
+      std::vector<box_t<T,D>> res(count);
       float size = 0.5f / powf((float)count,float(1.f/D));
-      uniformBoxGenerator<T,D><<<nb,bs>>>(res.data(),count,seed,size);
+      uniformBoxGenerator<T,D>(res,seed,size);
+      return res;
     }
 
     // ==================================================================
     // re-mapping
     // ==================================================================
-  
-    template<typename T, int D>
-    __global__
-    void remapPointsKernel(vec_t<T,D> *points,
-                           int count,
-                           vec_t<T,D> lower,
-                           vec_t<T,D> upper)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= count) return;
-
-      auto &point = points[tid];
-      for (int d=0;d<D;d++)
-        point[d]
-          = lower[d]
-          + T(point[d]
-              * (typename dot_result_t<T>::type)(upper[d]-lower[d])
-              / (uniform_default_upper<T>() - uniform_default_lower<T>()));
-    }
   
     template<typename T, int D>
     RemapPointGenerator<T,D>::RemapPointGenerator()
@@ -310,16 +292,22 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    void RemapPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &pts,
-                                            int count, int seed)
+    std::vector<vec_t<T,D>>
+    RemapPointGenerator<T,D>::generate(int count, int seed)
     {
       if (!source)
         throw std::runtime_error("RemapPointGenerator: no source defined");
-      source->generate(pts,count,seed);
+      std::vector<vec_t<T,D>> pts = source->generate(count,seed);
 
-      int bs = 128;
-      int nb = divRoundUp(count,bs);
-      remapPointsKernel<<<nb,bs>>>(pts.get(),count,lower,upper);
+      for (auto &point : pts) {
+        for (int d=0;d<D;d++)
+          point[d]
+            = lower[d]
+            + T(point[d]
+                * (typename dot_result_t<T>::type)(upper[d]-lower[d])
+                / (uniform_default_upper<T>() - uniform_default_lower<T>()));
+      }
+      return pts;
     }
 
     template<typename T, int D>
@@ -345,33 +333,6 @@ namespace cuBQL {
 
     // ------------------------------------------------------------------
 
-
-
-    template<typename T, int D>
-    __global__
-    void remapBoxsKernel(box_t<T,D> *boxs,
-                         int count,
-                         vec_t<T,D> lower,
-                         vec_t<T,D> upper)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= count) return;
-
-      auto &box = boxs[tid];
-      for (int d=0;d<D;d++)
-        box.lower[d]
-          = lower[d]
-          + T(box.lower[d]
-              * (typename dot_result_t<T>::type)(upper[d]-lower[d])
-              / (uniform_default_upper<T>() - uniform_default_lower<T>()));
-      for (int d=0;d<D;d++)
-        box.upper[d]
-          = lower[d]
-          + T(box.upper[d]
-              * (typename dot_result_t<T>::type)(upper[d]-lower[d])
-              / (uniform_default_upper<T>() - uniform_default_lower<T>()));
-    }
-  
     template<typename T, int D>
     RemapBoxGenerator<T,D>::RemapBoxGenerator()
     {
@@ -382,16 +343,29 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    void RemapBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &boxes,
-                                          int count, int seed)
+    std::vector<box_t<T,D>>
+    RemapBoxGenerator<T,D>::generate(int count, int seed)
     {
       if (!source)
         throw std::runtime_error("RemapBoxGenerator: no source defined");
-      source->generate(boxes,count,seed);
+      std::vector<box_t<T,D>> boxes
+        = source->generate(count,seed);
 
-      int bs = 128;
-      int nb = divRoundUp(count,bs);
-      remapBoxsKernel<<<nb,bs>>>(boxes.get(),count,lower,upper);
+      for (auto &box : boxes) {
+        for (int d=0;d<D;d++)
+          box.lower[d]
+            = lower[d]
+            + T(box.lower[d]
+                * (typename dot_result_t<T>::type)(upper[d]-lower[d])
+                / (uniform_default_upper<T>() - uniform_default_lower<T>()));
+        for (int d=0;d<D;d++)
+          box.upper[d]
+            = lower[d]
+            + T(box.upper[d]
+                * (typename dot_result_t<T>::type)(upper[d]-lower[d])
+                / (uniform_default_upper<T>() - uniform_default_lower<T>()));
+      }
+      return boxes;
     }
 
     template<typename T, int D>
@@ -422,12 +396,17 @@ namespace cuBQL {
     // ==================================================================
 
     template<typename T, int D>
-    void ClusteredPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &res,
-                                                int count, int seed)
+    std::vector<vec_t<T,D>>
+    ClusteredPointGenerator<T,D>::generate(int count, int seed)
     {
       std::default_random_engine rng;
       rng.seed(seed);
-      std::uniform_real_distribution<double> uniform(0.f,1.f);
+
+      T lower = uniform_default_lower<T>();
+      T upper = uniform_default_upper<T>();
+      T width = upper - lower;
+        
+      std::uniform_real_distribution<double> uniform(lower,upper);
 
       int numClusters = int(1+powf((float)count,(D-1.f)/D));
       // = int(1+powf(count/50.f);
@@ -448,13 +427,13 @@ namespace cuBQL {
       std::vector<vec_t<T,D>> points;
       for (int sID=0;sID<count;sID++) {
         int clusterID = int(uniform(rng)*numClusters) % numClusters;
-        vec_t<float,D> pt;
+        vec_t<T,D> pt;
         for (int i=0;i<D;i++)
           pt[i] = T(gaussian(rng) + clusterCenters[clusterID][i]);
         points.push_back(pt);
       }
     
-      res.upload(points);
+      return points;
     }
   
     template<typename T, int D>
@@ -491,8 +470,8 @@ namespace cuBQL {
     }
     
     template<typename T, int D>
-    void ClusteredBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &res,
-                                              int count, int seed)
+    std::vector<box_t<T,D>>
+    ClusteredBoxGenerator<T,D>::generate(int count, int seed)
     {
       std::default_random_engine rng;
       rng.seed(seed);
@@ -562,11 +541,11 @@ namespace cuBQL {
         boxes.push_back(box);
       }
 
-      res.upload(boxes);
+      return boxes;
     }
   
 
-
+#if 0
     // ==================================================================
     // "nrooks": generate N clusters of ~50 points each, then arrange
     // these N clusters in a NxNx...xN grid with a N-rooks pattern. Each
@@ -574,8 +553,8 @@ namespace cuBQL {
     // that clusters "field"
     // ==================================================================
     template<typename T, int D>
-    void NRooksPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &res,
-                                             int count, int seed)
+    std::vector<vec_t<T,D>>
+    NRooksPointGenerator<T,D>::generate(int count, int seed)
     {
       int numClusters = (int)(1+powf((float)count,0.5f*(D-1.f)/D));
       LCG<8> rng(seed,290374);
@@ -598,8 +577,7 @@ namespace cuBQL {
           points[i][d] = clusterLower[clusterID][d] + (1.f/numClusters)*rng();
       }
     
-      res.resize(count);
-      res.upload(points);
+      return points;
     }
 
     template<typename T, int D>
@@ -636,8 +614,8 @@ namespace cuBQL {
     }
   
     template<typename T, int D>
-    void NRooksBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &res,
-                                           int count, int seed)
+    std::vector<box_t<T,D>>
+    NRooksBoxGenerator<T,D>::generate(int count, int seed)
     {
       int numClusters = (int)(1+powf((float)count,0.5f*(D-1.f)/D));
       LCG<8> lcg(seed,290374);
@@ -715,28 +693,28 @@ namespace cuBQL {
         box.upper = center + halfSize;
         boxes.push_back(box);
       }
-    
-      res.upload(boxes);
-    }
 
+      return boxes;
+    }
+#endif
 
     // ==================================================================
     template<typename T, int D>
-    void TrianglesBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &d_boxes,
-                                              int numRequested, int seed)
+    std::vector<box_t<T,D>>
+    TrianglesBoxGenerator<T,D>::generate(int numRequested, int seed)
     {
       throw std::runtime_error("can generate boxes from triangles only "
                                "for T=float and D=3");
     }
 
     template<>
-    void TrianglesBoxGenerator<float,3>::generate(CUDAArray<box_t<float,3>> &d_boxes,
-                                                  int numRequested, int seed)
+    std::vector<box_t<float,3>>
+    TrianglesBoxGenerator<float,3>::generate(int numRequested, int seed)
     {
       std::vector<box3f> boxes;
       for (auto tri : triangles)
-        boxes.push_back(make_box<float,3>(tri.a).grow(tri.b).grow(tri.c));
-      d_boxes.upload(boxes);
+        boxes.push_back(tri.bounds());
+      return boxes;
     }
     
     template<typename T, int D>
@@ -753,7 +731,7 @@ namespace cuBQL {
 
       std::cout << "going to start reading triangles from '"
                 << fileName << "'" << std::endl;
-      triangles = loadData<Triangle>(fileName);
+      triangles = loadBinary<Triangle>(fileName);
       std::cout << "done loading " << prettyNumber(triangles.size())
                 << " triangles..." << std::endl;
       currentParsePos = next;
@@ -763,18 +741,16 @@ namespace cuBQL {
 
     // ==================================================================
     template<typename T, int D>
-    void 
-    TrianglesPointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &d_points,
-                                           int numRequested, int seed)
+    std::vector<vec_t<T,D>>
+    TrianglesPointGenerator<T,D>::generate(int numRequested, int seed)
     {
       throw std::runtime_error("can generate sample points from triangles only "
                                "for T=float and D=3");
     }
-
+    
     template<>
-    void
-    TrianglesPointGenerator<float,3>::generate(CUDAArray<vec_t<float,3>> &d_points,
-                                               int numRequested, int seed)
+    std::vector<vec_t<float,3>>
+    TrianglesPointGenerator<float,3>::generate(int numRequested, int seed)
     {
       float sumAreas = 0.f;
       std::vector<float> areas;
@@ -785,11 +761,24 @@ namespace cuBQL {
         areas.push_back(a);
         sumAreas += a;
       }
+      std::vector<float> cdf;
+      float s = 0.f;
+      for (auto a : areas) {
+        s += a;
+        cdf.push_back(s/sumAreas);
+      }
 
-      std::vector<vec3f> points = sample(triangles,numRequested,seed);
-      assert(points.size() == numRequested);
+      std::vector<vec_t<float,3>> points(numRequested);
+      LCG<8> rng(seed,0);
+      for (int tid=0;tid<numRequested;tid++) {
+        float r_which = rng();
+        auto it = std::lower_bound(cdf.begin(),cdf.end(),r_which);
+        int triID = std::min(size_t(it - cdf.begin()),cdf.size()-1);
+        auto triangle = triangles[triID];
+        points.push_back(triangle.sample(rng(),rng()));
+      }
       
-      d_points.upload(points);
+      return points;
     }
     
     template<typename T, int D>
@@ -806,62 +795,44 @@ namespace cuBQL {
 
       std::cout << "going to start reading triangles from '"
                 << fileName << "'" << std::endl;
-      triangles = loadData<Triangle>(fileName);
+      triangles = loadBinary<Triangle>(fileName);
       std::cout << "done loading " << prettyNumber(triangles.size())
                 << " triangles..." << std::endl;
       currentParsePos = next;
     }
 
-    template<typename T, int D>
-    __global__ void mixKernel(box_t<T,D> *out, int outCount,
-                              float prob_a,
-                              int seed,
-                              const box_t<T,D> *a, int aCount,
-                              const box_t<T,D> *b, int bCount)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= outCount) return;
-      
-      box_t<T,D> &mine = out[tid];
-      LCG<8> rng(seed,tid);
-      
-      bool use_a
-        = (prob_a < 1.f)
-        ? (rng() < prob_a)
-        : (tid < (int)prob_a);
-      const box_t<T,D> *in = (use_a ? a : b);
-      int inCount = (use_a ? aCount : bCount);
-      
-      int which
-        = (inCount == outCount)
-        ? tid
-        : (rng.ui32() & inCount);
-      mine = in[which];
-    }
-    
     // ==================================================================
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
     template<typename T, int D>
-    void MixtureBoxGenerator<T,D>::generate(CUDAArray<box_t<T,D>> &boxes,
-                                            int numRequested, int seed)
+    std::vector<box_t<T,D>> MixtureBoxGenerator<T,D>::generate(int numRequested, int seed)
     {
       assert(gen_a);
       assert(gen_b);
-      CUDAArray<box_t<T,D>>  boxes_a;
-      gen_a->generate(boxes_a,numRequested,3*seed+0);
-      CUDAArray<box_t<T,D>>  boxes_b;
-      gen_b->generate(boxes_b,numRequested,3*seed+1);
+      std::vector<box_t<T,D>>  boxes_a
+        = gen_a->generate(numRequested,3*seed+0);
+      std::vector<box_t<T,D>>  boxes_b
+        = gen_b->generate(numRequested,3*seed+1);
 
-      boxes.resize(numRequested);
-      
-      int bs = 128;
-      int nb = divRoundUp(numRequested,bs);
-      mixKernel<<<nb,bs>>>(boxes.data(),(int)boxes.size(),
-                           prob_a,
-                           3*seed+2,
-                           boxes_a.data(),(int)boxes_a.size(),
-                           boxes_b.data(),(int)boxes_b.size());
+      std::vector<box_t<T,D>> boxes(numRequested);
+
+      for (int tid=0;tid<boxes.size();tid++) {
+        LCG<8> rng(3*seed+2,tid);
+        bool use_a
+          = (prob_a < 1.f)
+          ? (rng() < prob_a)
+          : (tid < (int)prob_a);
+        const auto &in = (use_a ? boxes_a : boxes_b);
+        size_t inCount  = in.size();
+        size_t outCount = numRequested;
+        
+        size_t which
+          = (inCount == outCount)
+          ? tid
+          : (rng.ui32() % inCount);
+        boxes[tid] = in[which];
+      }
+      return boxes;
     }
     
     template<typename T, int D>
@@ -879,56 +850,41 @@ namespace cuBQL {
       gen_b = BoxGenerator<T,D>::createAndParse(currentParsePos);
     }
     
-    template<typename T, int D>
-    __global__ void mixKernel(vec_t<T,D> *out, int outCount,
-                              float prob_a,
-                              int seed,
-                              const vec_t<T,D> *a, int aCount,
-                              const vec_t<T,D> *b, int bCount)
-    {
-      int tid = threadIdx.x+blockIdx.x*blockDim.x;
-      if (tid >= outCount) return;
-      
-      vec_t<T,D> &mine = out[tid];
-      LCG<8> rng(seed,tid);
-      
-      bool use_a
-        = (prob_a < 1.f)
-        ? (rng() < prob_a)
-        : (tid < (int)prob_a);
-      const vec_t<T,D> *in = (use_a ? a : b);
-      int inCount = (use_a ? aCount : bCount);
-      
-      int which
-        = (inCount == outCount)
-        ? tid
-        : (rng.ui32() & inCount);
-      mine = in[which];
-    }
     
     // ==================================================================
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
     template<typename T, int D>
-    void MixturePointGenerator<T,D>::generate(CUDAArray<vec_t<T,D>> &points,
-                                              int numRequested, int seed)
+    std::vector<vec_t<T,D>>
+    MixturePointGenerator<T,D>::generate(int numRequested, int seed)
     {
       assert(gen_a);
       assert(gen_b);
-      CUDAArray<vec_t<T,D>>  points_a;
-      gen_a->generate(points_a,numRequested,3*seed+0);
-      CUDAArray<vec_t<T,D>>  points_b;
-      gen_b->generate(points_b,numRequested,3*seed+1);
+      std::vector<vec_t<T,D>>  points_a
+        = gen_a->generate(numRequested,3*seed+0);
+      std::vector<vec_t<T,D>>  points_b
+        = gen_b->generate(numRequested,3*seed+1);
 
-      points.resize(numRequested);
-      
-      int bs = 128;
-      int nb = divRoundUp(numRequested,bs);
-      mixKernel<<<nb,bs>>>(points.data(), (int)points.size(),
-                           prob_a,
-                           3*seed+2,
-                           points_a.data(), (int)points_a.size(),
-                           points_b.data(), (int)points_b.size());
+      std::vector<vec_t<T,D>> points(numRequested);
+      const vec_t<T,D> *a = points_a.data();
+      const vec_t<T,D> *b = points_b.data();
+      for (int tid=0;tid<numRequested;tid++) {
+        LCG<8> rng(3*seed+2,tid);
+        bool use_a
+          = (prob_a < 1.f)
+          ? (rng() < prob_a)
+          : (tid < (int)prob_a);
+        const auto &in = (use_a ? points_a : points_b);
+        size_t inCount = in.size();
+        size_t outCount = numRequested;
+        
+        size_t which
+          = (inCount == outCount)
+          ? tid
+          : (rng.ui32() % inCount);
+        points[tid] = in[which];
+      }
+      return points;
     }
     
     template<typename T, int D>
@@ -945,6 +901,17 @@ namespace cuBQL {
       gen_a = PointGenerator<T,D>::createAndParse(currentParsePos);
       gen_b = PointGenerator<T,D>::createAndParse(currentParsePos);
     }
-    
-  } // ::cuBQL::test_rig
+
+
+    template struct PointGenerator<int,2>;
+    template struct PointGenerator<int,3>;
+    template struct PointGenerator<int,4>;
+
+    template struct PointGenerator<float,2>;
+    template struct PointGenerator<float,3>;
+    template struct PointGenerator<float,4>;
+#if CUBQL_USER_DIM
+    template struct PointGenerator<float,CUBQL_USER_DIM>;
+#endif
+  } // ::cuBQL::samples
 } // ::cuBQL

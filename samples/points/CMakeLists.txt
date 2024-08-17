@@ -14,17 +14,20 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-# common stuff - data generators and IO for loading/generating test data
-add_subdirectory(common)
-
-# samples of various queries that operate on *point* data sets
-add_subdirectory(points)
-
-
-#add_executable(cuBQL_lineSegs3f lineSegs3f.cu)
-#target_link_libraries(cuBQL_lineSegs3f cuBQL_interface)
-
-#add_executable(cuBQL_fcpTriangles fcpTriangles.cu)
-#target_link_libraries(cuBQL_fcpTriangles cuBQL_testing cuBQL_interface)
-
+add_executable(cuBQL_pointData_closestPoint_host
+  closestPoint.h
+  closestPoint.cpp
+  )
+target_link_libraries(cuBQL_pointData_closestPoint_host
+  PUBLIC
+  cuBQL_samples_common
+  )
+add_executable(cuBQL_pointData_closestPoint_cuda
+  closestPoint.h
+  closestPoint.cu
+  )
+target_link_libraries(cuBQL_pointData_closestPoint_cuda
+  PUBLIC
+  cuBQL_samples_common
+  )
 
