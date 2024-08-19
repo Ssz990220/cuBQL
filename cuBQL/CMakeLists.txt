@@ -39,6 +39,23 @@ target_include_directories(cuBQL_interface INTERFACE
   ${PROJECT_SOURCE_DIR}/
   )
 
+foreach(T IN ITEMS float)
+  foreach(D IN ITEMS 2 3 4)
+    add_library(cuBQL_cuda_${T}${D} STATIC EXCLUDE_FROM_ALL 
+      impl/instantiate_builders.cu
+      )
+    target_link_libraries(cuBQL_cuda_${T}${D}
+      PUBLIC
+      cuBQL_interface
+      )
+    target_compile_definitions(cuBQL_cuda_${T}${D}
+      PUBLIC
+      -DCUBQL_INSTANTIATE_T=${T}
+      -DCUBQL_INSTANTIATE_D=${D}
+      )
+  endforeach()
+endforeach()
+
 add_library(cuBQL_queries INTERFACE)
 target_sources(cuBQL_queries INTERFACE
   queries/shrinkingRadiusQuery.h

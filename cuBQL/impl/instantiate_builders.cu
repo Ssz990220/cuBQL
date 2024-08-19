@@ -18,8 +18,14 @@
 #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
 
+#ifdef CUBQL_INSTANTIATE_T
+// instantiate an explict type and dimension
+CUBQL_INSTANTIATE_BINARY_BVH(CUBQL_INSTANTIATE_T,CUBQL_INSTANTIATE_D)
+#else
+// default instantiation(s) for float3 only
 CUBQL_INSTANTIATE_BINARY_BVH(float,3)
 CUBQL_INSTANTIATE_WIDE_BVH(float,3,4)
 CUBQL_INSTANTIATE_WIDE_BVH(float,3,8)
+#endif
   
  

@@ -37,6 +37,7 @@ foreach(T IN ITEMS float)
     target_link_libraries(cuBQL_pointData_closestPoint_cuda_${T}${D}
       PUBLIC
       cuBQL_testing_common
+      cuBQL_cuda_${T}${D}
       )
     target_compile_definitions(cuBQL_pointData_closestPoint_cuda_${T}${D}
       PUBLIC

@@ -26,13 +26,26 @@ namespace cuBQL {
       virtual void free(const void *ptr) = 0;
       
       template<typename T>
-      T *alloc(size_t numElems);
+      T *alloc(size_t numElems)
+      {
+        return (T*)malloc(numElems*sizeof(T));
+      }
       
       template<typename T>
-      T *upload(const std::vector<T> &vec);
+      T *upload(const std::vector<T> &vec)
+      {
+        T *ptr = alloc<T>(vec.size());
+        this->upload((void*)ptr,(void*)vec.data(),vec.size()*sizeof(T));
+        return ptr;
+      }
 
       template<typename T>
-      std::vector<T> download(const T *data, size_t numData);
+      std::vector<T> download(const T *d_data, size_t numData)
+      {
+        std::vector<T> vec(numData);
+        this->download((void*)vec.data(),(void*)d_data,vec.size()*sizeof(T));
+        return vec;
+      }
 
     };
     

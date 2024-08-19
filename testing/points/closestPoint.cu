@@ -46,18 +46,29 @@ namespace cuBQL {
         return bvh;
       }
 
+      __global__
+      void runQuery(bvh_t bvh,
+                    const data_t  *d_data,
+                    result_t      *d_results,
+                    const query_t *d_queries,
+                    int            numQueries)
+      {
+        int tid = threadIdx.x+blockIdx.x*blockDim.x;
+        if (tid >= numQueries) return;
+        
+        d_results[tid] = runQuery(bvh,d_data,d_queries[tid]);
+      }
+
       void launchQueries(bvh_t bvh,
                          const data_t  *d_data,
                          result_t      *d_results,
                          const query_t *d_queries,
                          int            numQueries)
       {
-        int tid = threadIdx.x+blockIdx.x*blockDim.x;
-        if (tid >= numQueries) return;
-
-        d_results[tid] = runQuery(bvh,d_data,d_queries[tid]);
+        runQuery<<<divRoundUp(numQueries,128),128>>>
+          (bvh,d_data,d_results,d_queries,numQueries);
       }
-
+      
       void free(bvh_t bvh)
       { cuBQL::cuda::free(bvh); }
     }
