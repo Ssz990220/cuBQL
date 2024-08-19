@@ -84,6 +84,8 @@ int main(int ac, char **av)
       dataType = cmdLine.getString();
     } else if (arg == "-d" || arg == "--dim") {
       dataDim = cmdLine.getInt();
+    } else if (arg == "-n" || arg == "--num") {
+      numPoints = cmdLine.getInt();
     } else if (arg == "-s" || arg == "--seed") {
       seed = cmdLine.getInt();
     } else if (arg == "-o" || arg == "--out") {

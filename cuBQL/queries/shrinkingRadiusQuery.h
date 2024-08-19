@@ -254,47 +254,6 @@ namespace cuBQL {
       return sum;
     }
     
-    
-    // /*! compute square distance with round-down where necessary. Use
-    //   this in traversal query-to-node distance checks, because the
-    //   rounding down will mean we'll only ever, if anything,
-    //   _under_estimate the distance to the node, and thus never wrongly
-    //   cull any subtrees) */
-    // inline __cubql_both
-    // float fSqrDistance_rd(vec2l point, box2l box)
-    // {
-    //   vec2l projected = min(max(point,box.lower),box.upper);
-    //   vec2l v = projected - point;
-    //   return fdot_rd(v,v);
-    // }
-    
-    // /*! compute square distance with round-down where necessary. Use
-    //   this in traversal query-to-node distance checks, because the
-    //   rounding down will mean we'll only ever, if anything,
-    //   _under_estimate the distance to the node, and thus never wrongly
-    //   cull any subtrees) */
-    // inline __cubql_both
-    // float fSqrDistance_rd(vec3l point, box3l box)
-    // {
-    //   vec3l projected = min(max(point,box.lower),box.upper);
-    //   vec3l v = projected - point;
-    //   return fdot_rd(v,v);
-    // }
-    
-    // /*! compute square distance with round-down where necessary. Use
-    //   this in traversal query-to-node distance checks, because the
-    //   rounding down will mean we'll only ever, if anything,
-    //   _under_estimate the distance to the node, and thus never wrongly
-    //   cull any subtrees) */
-    // inline __cubql_both
-    // float fSqrDistance_rd(vec4l point, box4l box)
-    // {
-    //   vec4l projected = min(max(point,box.lower),box.upper);
-    //   vec4l v = projected - point;
-    //   return fdot_rd(v,v);
-    // }
-    
-    
     /*! performs a 'shrinking radius (leaf-)query', which iterate
       through all bvh leaves that overlap a given query ball that is
       centered around a fixed point in space, and whose radius may by
