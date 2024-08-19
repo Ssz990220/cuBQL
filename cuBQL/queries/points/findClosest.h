@@ -46,51 +46,51 @@ namespace cuBQL {
       result, different BVHs built even over the same input data may
       not)
     */
-    template<int D>
+    template<typename T, int D>
     inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
-                    BinaryBVH<float,D> bvhOverPoints,
+                    BinaryBVH<T,D> bvhOverPoints,
                     /*! data points that the bvh was built over */
-                    const vec_t<float,D> *points,
+                    const vec_t<T,D> *points,
                     /*! the query point for which we want to know the
                       result */
-                    vec_t<float,D> queryPoint,
+                    vec_t<T,D> queryPoint,
                     /*! square of the maximum query distance in which
                       this query is to look for candidates. note
                       this is the SQUARE distance */
                     float squareOfMaxQueryDistance=INFINITY);
 
 
-    template<int D>
+    template<typename T, int D>
     inline __cubql_device
     int findClosest_exludeID(/*! primitive ID to _exclude_ from queries */
                              int idOfPointtoExclude,
                              /*! binary bvh built over the given points[]
                                specfied below */
-                             BinaryBVH<float,D> bvhOverPoints,
+                             BinaryBVH<T,D> bvhOverPoints,
                              /*! data points that the bvh was built over */
-                             const vec_t<float,D> *points,
+                             const vec_t<T,D> *points,
                              /*! the query point for which we want to know the
                                result */
-                             vec_t<float,D> queryPoint,
+                             vec_t<T,D> queryPoint,
                              /*! square of the maximum query distance in which
                                this query is to look for candidates. note
                                this is the SQUARE distance */
                              float squareOfMaxQueryDistance=INFINITY);
     
-    template<int D>
+    template<typename T, int D>
     /*! same as regular points::closestPoint, but excluding all data
       points that are at the query position itself */ 
     inline __cubql_device
     int findClosest_exludeSelf(/*! binary bvh built over the given points[]
                                  specfied below */
-                               BinaryBVH<float,D> bvhOverPoints,
+                               BinaryBVH<T,D> bvhOverPoints,
                                /*! data points that the bvh was built over */
-                               const vec_t<float,D> *points,
+                               const vec_t<T,D> *points,
                                /*! the query point for which we want to know the
                                  result */
-                               vec_t<float,D> queryPoint,
+                               vec_t<T,D> queryPoint,
                                /*! square of the maximum query distance in which
                                  this query is to look for candidates. note
                                  this is the SQUARE distance */
@@ -147,17 +147,17 @@ namespace cuBQL {
     // IMPLEMENTATION
     // ******************************************************************
 
-    template<typename BlackListLambda, int D>
+    template<typename T, typename BlackListLambda, int D>
     inline __cubql_device
     int findClosest_withBlackList(const BlackListLambda blackListed,
                                   /*! binary bvh built over the given points[]
                                     specfied below */
-                                  BinaryBVH<float,D> bvhOverPoints,
+                                  BinaryBVH<T,D> bvhOverPoints,
                                   /*! data points that the bvh was built over */
-                                  const vec_t<float,D> *points,
+                                  const vec_t<T,D> *points,
                                   /*! the query point for which we want to know the
                                     result */
-                                  vec_t<float,D> queryPoint,
+                                  vec_t<T,D> queryPoint,
                                   /*! square of the maximum query distance in which
                                     this query is to look for candidates. note
                                     this is the SQUARE distance */
@@ -194,18 +194,18 @@ namespace cuBQL {
       return closestID;
     }
 
-    template<int D>
+    template<typename T, int D>
     inline __cubql_device
     int findClosest_exludeID(/*! primitive ID to _exclude_ from queries */
                              int idOfPointToExclude,
                              /*! binary bvh built over the given points[]
                                specfied below */
-                             BinaryBVH<float,D> bvhOverPoints,
+                             BinaryBVH<T,D> bvhOverPoints,
                              /*! data points that the bvh was built over */
-                             const vec_t<float,D> *points,
+                             const vec_t<T,D> *points,
                              /*! the query point for which we want to know the
                                result */
-                             vec_t<float,D> queryPoint,
+                             vec_t<T,D> queryPoint,
                              /*! square of the maximum query distance in which
                                this query is to look for candidates. note
                                this is the SQUARE distance */
@@ -225,16 +225,16 @@ namespace cuBQL {
 
     /*! same as regular points::closestPoint, but excluding all data
       points that are at the query position itself */
-    template<int D>
+    template<typename T, int D>
     inline __cubql_device
     int findClosest_exludeSelf(/*! binary bvh built over the given points[]
                                  specfied below */
-                               BinaryBVH<float,D> bvhOverPoints,
+                               BinaryBVH<T,D> bvhOverPoints,
                                /*! data points that the bvh was built over */
-                               const vec_t<float,D> *points,
+                               const vec_t<T,D> *points,
                                /*! the query point for which we want to know the
                                  result */
-                               vec_t<float,D> queryPoint,
+                               vec_t<T,D> queryPoint,
                                /*! square of the maximum query distance in which
                                  this query is to look for candidates. note
                                  this is the SQUARE distance */
@@ -252,16 +252,16 @@ namespace cuBQL {
                                        squareOfMaxQueryDistance);
     }
 
-    template<int D>
+    template<typename T, int D>
     inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
-                    BinaryBVH<float,D> bvhOverPoints,
+                    BinaryBVH<T,D> bvhOverPoints,
                     /*! data points that the bvh was built over */
-                    const vec_t<float,D> *points,
+                    const vec_t<T,D> *points,
                     /*! the query point for which we want to know the
                       result */
-                    vec_t<float,D> queryPoint,
+                    vec_t<T,D> queryPoint,
                     /*! square of the maximum query distance in which
                       this query is to look for candidates. note
                       this is the SQUARE distance */

@@ -179,6 +179,10 @@ namespace cuBQL {
   using vec3f = vec_t<float,3>;
   using vec4f = vec_t<float,4>;
 
+  using vec2d = vec_t<double,2>;
+  using vec3d = vec_t<double,3>;
+  using vec4d = vec_t<double,4>;
+
   using vec2i = vec_t<int,2>;
   using vec3i = vec_t<int,3>;
   using vec4i = vec_t<int,4>;
@@ -336,9 +340,28 @@ namespace cuBQL {
   CUBQL_BINARY(max)
 #undef CUBQL_FUNCTOR
 
+
+  /*! host-side equivalent(s) of various cuda functions */
+  namespace host {
+    inline float __ull2float_rd(uint64_t ul) {
+      float f = float(ul);
+      if ((uint64_t)f > ul)
+        f = nextafterf(f,-INFINITY);
+      return f;
+    }
+    inline float __udouble2float_rd(double ud) {
+      float f = float(ud);
+      if ((uint64_t)f > ud)
+        f = nextafterf(f,-INFINITY);
+      return f;
+    }
+  }
+  
   template<typename T> struct dot_result_t;
+  template<> struct dot_result_t<double> { using type = double; };
   template<> struct dot_result_t<float> { using type = float; };
   template<> struct dot_result_t<int32_t> { using type = int64_t; };
+  template<> struct dot_result_t<long long int> { using type = int64_t; };
 
   template<typename T, int D> inline __cubql_both
   typename dot_result_t<T>::type dot(vec_t<T,D> a, vec_t<T,D> b)
@@ -346,7 +369,7 @@ namespace cuBQL {
     typename dot_result_t<T>::type result = 0;
     CUBQL_PRAGMA_UNROLL
       for (int i=0;i<D;i++)
-        result += a[i]*b[i];
+        result += a[i]*(typename dot_result_t<T>::type)b[i];
     return result;
   }
 

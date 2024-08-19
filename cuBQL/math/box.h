@@ -162,9 +162,22 @@ namespace cuBQL {
     inline __cubql_both bool overlaps(const box_t<T,D> &otherBox) const;
   };
 
+  /*! float32 */
   using box2f = box_t<float,2>;
   using box3f = box_t<float,3>;
   using box4f = box_t<float,4>;
+  /* (signed) int (ie, int32) */
+  using box2i = box_t<int,2>;
+  using box3i = box_t<int,3>;
+  using box4i = box_t<int,4>;
+  /* (signed) long long (ie, int64) */
+  using box2l = box_t<long long,2>;
+  using box3l = box_t<long long,3>;
+  using box4l = box_t<long long,4>;
+  /* double */
+  using box2d = box_t<double,2>;
+  using box3d = box_t<double,3>;
+  using box4d = box_t<double,4>;
 
   inline __cubql_both
   float surfaceArea(box3f box)
