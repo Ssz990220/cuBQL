@@ -14,20 +14,31 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-add_executable(cuBQL_pointData_closestPoint_host
-  closestPoint.h
-  closestPoint.cpp
-  )
-target_link_libraries(cuBQL_pointData_closestPoint_host
-  PUBLIC
-  cuBQL_samples_common
-  )
-add_executable(cuBQL_pointData_closestPoint_cuda
-  closestPoint.h
-  closestPoint.cu
-  )
-target_link_libraries(cuBQL_pointData_closestPoint_cuda
-  PUBLIC
-  cuBQL_samples_common
-  )
-
+foreach(T in float)
+  add_executable(cuBQL_pointData_closestPoint_host_${T}
+    closestPoint.h
+    closestPoint.cpp
+    )
+  target_link_libraries(cuBQL_pointData_closestPoint_host_${T}
+    PUBLIC
+    cuBQL_samples_common
+    )
+  target_compile_definitions(cuBQL_pointData_closestPoint_host_${T}
+    PUBLIC
+    -DCUBQL_SAMPLES_T=${T}
+    )
+  
+  add_executable(cuBQL_pointData_closestPoint_cuda_${T}
+    closestPoint.h
+    closestPoint.cu
+    )
+  target_link_libraries(cuBQL_pointData_closestPoint_cuda_${T}
+    PUBLIC
+    cuBQL_samples_common
+    )
+  target_compile_definitions(cuBQL_pointData_closestPoint_host_${T}
+    PUBLIC
+    -DCUBQL_SAMPLES_T=${T}
+    )
+  
+endforeach()

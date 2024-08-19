@@ -20,6 +20,7 @@
 #pragma once
 
 #include "cuBQL/bvh.h"
+#include "cuBQL/queries/shrinkingRadiusQuery.h"
 
 namespace cuBQL {
   namespace points {
@@ -45,7 +46,8 @@ namespace cuBQL {
       result, different BVHs built even over the same input data may
       not)
     */
-    inline __device__
+    template<int D>
+    inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
                     BinaryBVH<float,D> bvhOverPoints,
@@ -59,8 +61,10 @@ namespace cuBQL {
                       this is the SQUARE distance */
                     float squareOfMaxQueryDistance=INFINITY);
 
-    inline __device__
-    int findClosest_exludeID(/*! primitive ID to _exclude_ from queries */,
+
+    template<int D>
+    inline __cubql_device
+    int findClosest_exludeID(/*! primitive ID to _exclude_ from queries */
                              int idOfPointtoExclude,
                              /*! binary bvh built over the given points[]
                                specfied below */
@@ -74,10 +78,11 @@ namespace cuBQL {
                                this query is to look for candidates. note
                                this is the SQUARE distance */
                              float squareOfMaxQueryDistance=INFINITY);
-
+    
+    template<int D>
     /*! same as regular points::closestPoint, but excluding all data
       points that are at the query position itself */ 
-    inline __device__
+    inline __cubql_device
     int findClosest_exludeSelf(/*! binary bvh built over the given points[]
                                  specfied below */
                                BinaryBVH<float,D> bvhOverPoints,
@@ -90,14 +95,12 @@ namespace cuBQL {
                                  this query is to look for candidates. note
                                  this is the SQUARE distance */
                                float squareOfMaxQueryDistance=INFINITY);
-    
 
-
-    
+#ifdef __CUDACC__
     // ******************************************************************
     /*! variant of cuBQL::point::findClosest() that's specialized for
       CUDA float2 type, just for convenience */
-    inline __device__
+    inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
                     bvh_float2 bvhOverPoints,
@@ -107,27 +110,27 @@ namespace cuBQL {
                     /*! square of the maximum query distance in which
                       this query is to look for candidates. note
                       this is the SQUARE distance */
-                    float squareOfMaxQueryDistance=INFINITY)
+                    float squareOfMaxQueryDistance=INFINITY);
 
     // ******************************************************************
     /*! variant of cuBQL::point::findClosest() that's specialized for
       CUDA float3 type, just for convenience */
-      inline __device__
-      int findClosest(/*! binary bvh built over the given points[]
-                        specfied below */
-                      bvh_float3 bvhOverPoints,
-                      /*! data points that the bvh was built over */
-                      const float3 *points,
-                      float3 queryPoint,
-                      /*! square of the maximum query distance in which
-                        this query is to look for candidates. note
-                        this is the SQUARE distance */
-                      float squareOfMaxQueryDistance=INFINITY);
+    inline __cubql_device
+    int findClosest(/*! binary bvh built over the given points[]
+                      specfied below */
+                    bvh_float3 bvhOverPoints,
+                    /*! data points that the bvh was built over */
+                    const float3 *points,
+                    float3 queryPoint,
+                    /*! square of the maximum query distance in which
+                      this query is to look for candidates. note
+                      this is the SQUARE distance */
+                    float squareOfMaxQueryDistance=INFINITY);
 
     // ******************************************************************
     /*! variant of cuBQL::point::findClosest() that's specialized for
       CUDA float4 type, just for convenience */
-    inline __device__
+    inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
                     bvh_float4 bvhOverPoints,
@@ -138,13 +141,14 @@ namespace cuBQL {
                       this query is to look for candidates. note
                       this is the SQUARE distance */
                     float squareOfMaxQueryDistance=INFINITY);
-
+#endif
+    
     // ******************************************************************
     // IMPLEMENTATION
     // ******************************************************************
 
-    template<typename BlackListLambda>
-    inline __device__
+    template<typename BlackListLambda, int D>
+    inline __cubql_device
     int findClosest_withBlackList(const BlackListLambda blackListed,
                                   /*! binary bvh built over the given points[]
                                     specfied below */
@@ -163,32 +167,37 @@ namespace cuBQL {
       float closestSqrDist = squareOfMaxQueryDistance;
       // callback that processes each candidate, and checks if its
       // closer than current best
-      auto candidateLambda = [blackListed,closestID,closestSqrDist](int pointID)->bool {
-        if (blackListed(pointID))
-          // caller explicitly blacklisted this point, do not process
+      auto candidateLambda
+        = [blackListed,&closestID,&closestSqrDist,points,queryPoint]
+        (int pointID)->bool
+        {
+          if (blackListed(pointID))
+            // caller explicitly blacklisted this point, do not process
+            return closestSqrDist;
+          
+          // compute (square distance)
+          float sqrDist = sqrDistance(points[pointID],queryPoint);
+          if (sqrDist >= closestSqrDist)
+            // candidate is further away than what we already have
+            return closestSqrDist;
+
+          // candidate is closer - accept and update search distance
+          closestSqrDist = sqrDist;
+          closestID      = pointID;
           return closestSqrDist;
+        };
 
-        // compute (square distance)
-        float sqrDist = sqrDistance(points[pointID],queryPoint);
-        if (sqrDist >= closestSqrDist)
-          // candidate is further away than what we already have
-          return closestSqrDist;
-
-        // candidate is closer - accept and update search distance
-        closestSqrDist = sqrDist;
-        closestID      = pointID;
-        return closestSqrDist;
-      };
-
-      cuBQL::shrinkingRadiusQuery_forEachPrim(bvh,queryPoint,
-                                              squareOfMaxQueryDistance,
-                                              candidateLambda);
+      cuBQL::shrinkingRadiusQuery::forEachPrim(candidateLambda,
+                                               bvhOverPoints,
+                                               queryPoint,
+                                               squareOfMaxQueryDistance);
       return closestID;
     }
-    
-    inline __device__
-    int findClosest_exludeID(/*! primitive ID to _exclude_ from queries */,
-                             int idOfPointtoExclude,
+
+    template<int D>
+    inline __cubql_device
+    int findClosest_exludeID(/*! primitive ID to _exclude_ from queries */
+                             int idOfPointToExclude,
                              /*! binary bvh built over the given points[]
                                specfied below */
                              BinaryBVH<float,D> bvhOverPoints,
@@ -200,23 +209,24 @@ namespace cuBQL {
                              /*! square of the maximum query distance in which
                                this query is to look for candidates. note
                                this is the SQUARE distance */
-                             float squareOfMaxQueryDistance=INFINITY)
+                             float squareOfMaxQueryDistance)
     {
       /* blacklist the ID itself, then call
          `findClosest_withBlackList()` */
-      auto blackList = [](int pointID)->bool {
+      auto blackList = [idOfPointToExclude](int pointID)->bool {
         return pointID == idOfPointToExclude;
       };
-      findClosest_withBlackList(blackList,
-                                bvhOverPoints,
-                                points,
-                                queryPoint,
-                                squareOfMaxQueryDistance);
+      return findClosest_withBlackList(blackList,
+                                       bvhOverPoints,
+                                       points,
+                                       queryPoint,
+                                       squareOfMaxQueryDistance);
     }
 
     /*! same as regular points::closestPoint, but excluding all data
-      points that are at the query position itself */ 
-    inline __device__
+      points that are at the query position itself */
+    template<int D>
+    inline __cubql_device
     int findClosest_exludeSelf(/*! binary bvh built over the given points[]
                                  specfied below */
                                BinaryBVH<float,D> bvhOverPoints,
@@ -228,25 +238,51 @@ namespace cuBQL {
                                /*! square of the maximum query distance in which
                                  this query is to look for candidates. note
                                  this is the SQUARE distance */
-                               float squareOfMaxQueryDistance=INFINITY)
+                               float squareOfMaxQueryDistance)
     {
       /* blacklist any point at same position as query point, then
          call `findClosest_withBlackList()` */
-      auto blackList = [](int pointID)->bool {
+      auto blackList = [points,queryPoint](int pointID)->bool {
         return points[pointID] == queryPoint;
       };
-      findClosest_withBlackList(blackList,
-                                bvhOverPoints,
-                                points,
-                                queryPoint,
-                                squareOfMaxQueryDistance);
+      return findClosest_withBlackList(blackList,
+                                       bvhOverPoints,
+                                       points,
+                                       queryPoint,
+                                       squareOfMaxQueryDistance);
     }
 
+    template<int D>
+    inline __cubql_device
+    int findClosest(/*! binary bvh built over the given points[]
+                      specfied below */
+                    BinaryBVH<float,D> bvhOverPoints,
+                    /*! data points that the bvh was built over */
+                    const vec_t<float,D> *points,
+                    /*! the query point for which we want to know the
+                      result */
+                    vec_t<float,D> queryPoint,
+                    /*! square of the maximum query distance in which
+                      this query is to look for candidates. note
+                      this is the SQUARE distance */
+                    float squareOfMaxQueryDistance)
+    {
+      /* no blacklist for 'general' find-closest */
+      auto blackList = [](int pointID)->bool {
+        return false;
+      };
+      return findClosest_withBlackList(blackList,
+                                       bvhOverPoints,
+                                       points,
+                                       queryPoint,
+                                       squareOfMaxQueryDistance);
+    }
     
+#ifdef __CUDACC__
     // ******************************************************************
     /*! variant of cuBQL::point::findClosest() that's specialized for
       CUDA float2 type, just for convenience */
-    inline __device__
+    inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
                     bvh_float2 bvhOverPoints,
@@ -257,7 +293,8 @@ namespace cuBQL {
                       this query is to look for candidates. note
                       this is the SQUARE distance */
                     float squareOfMaxQueryDistance)
-    { return findClosest(bvhOverPoints,
+    {
+      return findClosest(bvhOverPoints,
                          (const vec_t<float,2> *)points,
                          (const vec_t<float,2> &)queryPoint,
                          squareOfMaxQueryDistance);
@@ -266,7 +303,7 @@ namespace cuBQL {
     // ******************************************************************
     /*! variant of cuBQL::point::findClosest() that's specialized for
       CUDA float3 type, just for convenience */
-    inline __device__
+    inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
                     bvh_float3 bvhOverPoints,
@@ -286,7 +323,7 @@ namespace cuBQL {
     // ******************************************************************
     /*! variant of cuBQL::point::findClosest() that's specialized for
       CUDA float4 type, just for convenience */
-    inline __device__
+    inline __cubql_device
     int findClosest(/*! binary bvh built over the given points[]
                       specfied below */
                     bvh_float4 bvhOverPoints,
@@ -302,5 +339,6 @@ namespace cuBQL {
                          (const vec_t<float,4> &)queryPoint,
                          squareOfMaxQueryDistance);
     }
+#endif
   }
 }

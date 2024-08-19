@@ -1,5 +1,5 @@
 # ======================================================================== #
-# Copyright 2023-2023 Ingo Wald                                            #
+# Copyright 2023-2024 Ingo Wald                                            #
 #                                                                          #
 # Licensed under the Apache License, Version 2.0 (the "License");          #
 # you may not use this file except in compliance with the License.         #
@@ -85,40 +85,7 @@ else()
   endforeach()
 endif()
 
-# a interface-only library that only sets include paths etc; when
-# using this the user has to manulaly set CUBQL_BUILDER_INSTANTIATION
-# in one of his/her source files
-add_library(cuBQL_interface INTERFACE)
-target_sources(cuBQL_interface INTERFACE
-  # main public "interface" to this library
-  cuBQL/bvh.h
-  cuBQL/queries/fcp.h
-  # general math struff to make public stuff work
-  cuBQL/math/common.h
-  cuBQL/math/math.h
-  cuBQL/math/vec.h
-  cuBQL/math/box.h
-  # internal stuff
-  cuBQL/impl/builder_common.h
-  cuBQL/impl/sm_builder.h
-  cuBQL/impl/sah_builder.h
-  cuBQL/impl/gpu_builder.h
-  cuBQL/impl/morton.h
-  cuBQL/impl/rebinMortonBuilder.h
-  cuBQL/impl/wide_gpu_builder.h
-  )
-target_include_directories(cuBQL_interface INTERFACE
-  ${PROJECT_SOURCE_DIR}/
-  )
-
-# builds an actual static library that already contains
-# template-instantiations of the builder(s), helper functions, etc
-add_library(cuBQL_impl STATIC
-  cuBQL/impl/instantiate_builders.cu
-  )
-target_link_libraries(cuBQL_impl PUBLIC
-  cuBQL_interface
-  )
+add_subdirectory(cuBQL)
 
 if (NOT CUBQL_IS_SUBPROJECT)
   add_subdirectory(samples)

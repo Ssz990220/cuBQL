@@ -1,5 +1,5 @@
 // ======================================================================== //
-// Copyright 2023-2023 Ingo Wald                                            //
+// Copyright 2023-2024 Ingo Wald                                            //
 //                                                                          //
 // Licensed under the Apache License, Version 2.0 (the "License");          //
 // you may not use this file except in compliance with the License.         //
@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include "cuBQL/impl/builder_common.h"
-#include "cuBQL/impl/sm_builder.h"
-#include "cuBQL/impl/sah_builder.h"
-#include "cuBQL/impl/elh_builder.h"
+#include "cuBQL/builder/cuda/builder_common.h"
+#include "cuBQL/builder/cuda/sm_builder.h"
+#include "cuBQL/builder/cuda/sah_builder.h"
+#include "cuBQL/builder/cuda/elh_builder.h"
 
 namespace cuBQL {
 

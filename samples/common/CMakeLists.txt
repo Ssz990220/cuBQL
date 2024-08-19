@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and      #
 # limitations under the License.                                           #
 # ======================================================================== #
+set(CUBQL_USER_DIM "" CACHE STRING "user-specified dim for tests w/ dim!=2,3,4") 
 
 add_library(cuBQL_samples_common
   Generator.h
@@ -22,7 +23,21 @@ target_link_libraries(cuBQL_samples_common
   PUBLIC
   cuBQL_interface
   )
+
+# ==================================================================
+# for testing, allow to specify a compile-time but user-defined
+# arbitrary dimensionality. not all tests might respect that (eg,
+# triangles only work for float3), but some will
+# ==================================================================
+if (NOT ("${CUBQL_USER_DIM}" STREQUAL ""))
+  target_compile_definitions(cuBQL_samples_common
+    PUBLIC
+    CUBQL_USER_DIM=${CUBQL_USER_DIM})
+endif()
   
+# ==================================================================
+# generate points (according to cmdline-generator), and dump to file
+# ==================================================================
 add_executable(cuBQL_generatePoints
   generatePoints.cpp
   )
