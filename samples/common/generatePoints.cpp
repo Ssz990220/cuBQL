@@ -54,7 +54,7 @@ void run()
   std::vector<vec_t<T,D>> points
     = generator->generate(numPoints,seed);
   std::cout << "#cuBQL.genPoints: saving to " << outFileName << std::endl;
-  writeBinary(outFileName,points);
+  saveBinary(outFileName,points);
   std::cout << "#cuBQL.genPoints: all done." << std::endl;
 }
 

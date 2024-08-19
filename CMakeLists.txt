@@ -89,5 +89,5 @@ add_subdirectory(cuBQL)
 
 if (NOT CUBQL_IS_SUBPROJECT)
   add_subdirectory(samples)
-#  add_subdirectory(testing)
+  add_subdirectory(testing)
 endif()

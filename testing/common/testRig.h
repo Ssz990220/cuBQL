@@ -14,12 +14,10 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#define CUBQL_SAMPLES_CUDA
+#pragma once
 
-#include "closestPoint.h"
+#include "testRig_host.h"
+#if defined(__CUDACC__)
+# include "testRig_cuda.h"
+#endif
 
-int main(int ac, char **av)
-{
-  cuBQL::points::closestPoint::main(ac,av);
-  return 0;
-}

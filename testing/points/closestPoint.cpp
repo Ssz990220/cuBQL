@@ -14,12 +14,24 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#define CUBQL_SAMPLES_HOST
-
 #include "closestPoint.h"
+
+namespace cuBQL {
+  namespace points {
+    namespace closestPoint {
+
+      bvh_t computeBVH(const box_t *d_boxes, int numBoxes);
+      void launchQueries(bvh_t bvh,
+                         data_t );
+
+      void free(bvh_t bvh);
+    }
+  }
+}
 
 int main(int ac, char **av)
 {
-  cuBQL::points::closestPoint::main(ac,av);
+  cuBQL::testRig::HostDevice device;
+  cuBQL::points::closestPoint::main(ac,av,device);
   return 0;
 }

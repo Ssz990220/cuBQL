@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and      #
 # limitations under the License.                                           #
 # ======================================================================== #
-set(CUBQL_USER_DIM "" CACHE STRING "user-specified dim for tests w/ dim!=2,3,4") 
+
+set(CUBQL_USER_DIM "" CACHE STRING "user-specified dim for tests w/ dim!=2,3,4")
 
 add_library(cuBQL_samples_common
   Generator.h

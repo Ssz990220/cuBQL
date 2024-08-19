@@ -137,6 +137,15 @@ namespace cuBQL {
             cudaStream_t      s=0,
             GpuMemoryResource& memResource=defaultGpuMemResource());
 
+  namespace cuda {
+    /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+      building the BVH. this assumes */
+    template<typename T, int D>
+    void free(BinaryBVH<T,D> &bvh,
+              cudaStream_t      s=0,
+              GpuMemoryResource& memResource=defaultGpuMemResource());
+  }
+    
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
   template<typename T, int D, int N>

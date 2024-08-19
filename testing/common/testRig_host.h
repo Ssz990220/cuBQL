@@ -16,16 +16,33 @@
 
 #pragma once
 
-#include "cuBQL/bvh.h"
-#include "cuBQL/queries/points/findClosest.h"
-
 namespace cuBQL {
-  namespace points {
-    namespace closestPoint {
-      void main(int ac, char **av)
-      {
-      }
-    }
+  namespace testRig {
+
+    struct DeviceAbstraction {
+      virtual void *malloc(size_t numBytes) = 0;
+      virtual void upload(void *d_mem, void *h_mem, size_t numBytes) = 0;
+      virtual void download(void *h_mem, void *d_mem, size_t numBytes) = 0;
+      virtual void free(const void *ptr) = 0;
+      
+      template<typename T>
+      T *alloc(size_t numElems);
+      
+      template<typename T>
+      T *upload(const std::vector<T> &vec);
+
+      template<typename T>
+      std::vector<T> download(const T *data, size_t numData);
+
+    };
+    
+    struct HostDevice : public DeviceAbstraction {
+      void *malloc(size_t numBytes) override;
+      void upload(void *d_mem, void *h_mem, size_t numBytes) override;
+      void download(void *h_mem, void *d_mem, size_t numBytes) override;
+      void free(const void *ptr) override { ::free((void *)ptr); }
+    };
+    
   }
 }
 

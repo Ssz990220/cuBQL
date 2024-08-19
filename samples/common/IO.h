@@ -45,13 +45,13 @@ namespace cuBQL {
         the *number* N of elements to be expected in that file,
         followed by the N "raw"-binary data items */
     template<typename T>
-    void writeBinary(const std::string &fileName,
-                     const std::vector<T> &data)
+    void saveBinary(const std::string &fileName,
+                    const std::vector<T> &data)
     {
       std::ofstream out(fileName.c_str(),std::ios::binary);
       size_t count = data.size();
       out.write((char*)&count,sizeof(count));
-
+      
       out.write((char*)data.data(),count*sizeof(T));
     }
 
