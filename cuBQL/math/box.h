@@ -19,7 +19,8 @@
 #include "cuBQL/math/vec.h"
 
 namespace cuBQL {
-
+  using int64 = ::int64_t;
+  
   /*! @{ defines what box.lower/box.upper coordinate values to use for
       indicating an "empty box" of the given type */
   template<typename scalar_t>
@@ -33,6 +34,8 @@ namespace cuBQL {
   template<> inline __cubql_both double empty_box_upper_value<double>() { return -INFINITY; }
   template<> inline __cubql_both int empty_box_lower_value<int>() { return INT_MAX; }
   template<> inline __cubql_both int empty_box_upper_value<int>() { return INT_MIN; }
+  template<> inline __cubql_both int64 empty_box_lower_value<int64>() { return LONG_MAX; }
+  template<> inline __cubql_both int64 empty_box_upper_value<int64>() { return LONG_MIN; }
   /*! @} */
   
   /*! data-only part of a axis-aligned bounding box, made up of a
@@ -191,7 +194,8 @@ namespace cuBQL {
   template<typename T, int D> inline __cubql_both
   bool box_t<T,D>::overlaps(const box_t<T,D> &other) const
   {
-    return !(any_less_than(this->upper,other.lower) || any_less_than(other.upper,this->lower));
+    return !(any_less_than(this->upper,other.lower) ||
+             any_less_than(other.upper,this->lower));
   }
   
   template<typename T, int D> inline __cubql_both
@@ -201,12 +205,12 @@ namespace cuBQL {
     return sqrDistance(closestPoint,point);
   }
 
-  template<typename T, int D> inline __cubql_both
-  float fSqrDistance(box_t<T,D> box, vec_t<T,D> point)
-  {
-    vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
-    return sqrDistance(closestPoint,point);
-  }
+  // template<typename T, int D> inline __cubql_both
+  // float fSqrDistance(box_t<T,D> box, vec_t<T,D> point)
+  // {
+  //   vec_t<T,D> closestPoint = min(max(point,box.lower),box.upper);
+  //   return sqrDistance(closestPoint,point);
+  // }
 
   template<typename T, int D> inline __cubql_both
   box_t<T,D> &grow(box_t<T,D> &b, vec_t<T,D> v)
@@ -221,9 +225,18 @@ namespace cuBQL {
 
   template<typename T, int D> inline __cubql_both
   box_t<T,D> make_box(vec_t<T,D> v) { return box_t<T,D>(v); }
-  
 
 
-  
+  /*! projects a vector into a box, in the sense that the point
+      returned is the point within the box that's closest to the point
+      provided; if input point is inside the box it will return
+      itself, otherwise it'll be a point on the outer shell of the
+      box */
+  template<typename T, int D>
+  inline __cubql_both vec_t<T,D> project(box_t<T,D> box, vec_t<T,D> point)
+  {
+    return min(max(point,box.lower),box.upper);
+  }
+
 }
 

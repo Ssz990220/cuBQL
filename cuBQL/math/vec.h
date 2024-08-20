@@ -373,23 +373,6 @@ namespace cuBQL {
     return result;
   }
 
-  /*! approximate-conservative square distance between two
-    points. whatever type the points are, the result will be
-    returned in floats, including whatever rounding error that might
-    incur. we will, however, always round downwars, so if this is
-    used for culling it will, if anything, under-estiamte the
-    distance to a subtree (and thus, still traverse it) rather than
-    wrongly skipping it*/
-  template<typename T> inline __cubql_both float fSqrLength(T v);
-  template<> inline __cubql_both float fSqrLength<float>(float v)
-  { return v*v; }
-
-#ifdef __CUDA_ARCH__
-  template<> inline __cubql_both float fSqrLength<int>(int _v)
-  { float v = __int2float_rz(_v); return v*v; }
-#else
-  template<> inline __cubql_both float fSqrLength<int>(int _v);
-#endif
 
   /*! accurate square-length of a vector; due to the 'square' involved
     in computing the distance this may need to change the type from
@@ -417,22 +400,22 @@ namespace cuBQL {
     return sqrLength(a-b);
   }
 
-  /*! approximate-conservative square distance between two
-    points. whatever type the points are, the result will be
-    returned in floats, including whatever rounding error that might
-    incur. we will, however, always round downwars, so if this is
-    used for culling it will, if anything, under-estiamte the
-    distance to a subtree (and thus, still traverse it) rather than
-    wrongly skipping it*/
-  template<typename T, int D> inline __cubql_both
-  float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
-  {
-    float sum = 0.f;
-    CUBQL_PRAGMA_UNROLL
-      for (int i=0;i<D;i++)
-        sum += fSqrLength(a[i]-b[i]);
-    return sum;
-  }
+  // /*! approximate-conservative square distance between two
+  //   points. whatever type the points are, the result will be
+  //   returned in floats, including whatever rounding error that might
+  //   incur. we will, however, always round downwars, so if this is
+  //   used for culling it will, if anything, under-estiamte the
+  //   distance to a subtree (and thus, still traverse it) rather than
+  //   wrongly skipping it*/
+  // template<typename T, int D> inline __cubql_both
+  // float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
+  // {
+  //   float sum = 0.f;
+  //   CUBQL_PRAGMA_UNROLL
+  //     for (int i=0;i<D;i++)
+  //       sum += fSqrLength(a[i]-b[i]);
+  //   return sum;
+  // }
 
   
   // ------------------------------------------------------------------

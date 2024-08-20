@@ -46,7 +46,7 @@ void run()
   using namespace cuBQL;
   using namespace cuBQL::samples;
   
-  std::cout << "#cuBQL.genPoints: creating generator '" << ::generator << std::endl;
+  std::cout << "#cuBQL.genPoints: creating generator '" << ::generator << "'" << std::endl;
   typename PointGenerator<T,D>::SP generator
     = PointGenerator<T,D>::createFromString(::generator);
   std::cout << "#cuBQL.genPoints: generating '" << numPoints

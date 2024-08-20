@@ -20,6 +20,7 @@
 #include <cuBQL/math/vec.h>
 #include <cuBQL/math/box.h>
 #include <cuBQL/math/affine.h>
+#include <cuBQL/math/conservativeDistances.h>
 
 namespace cuBQL {
   namespace shrinkingRadiusQuery {

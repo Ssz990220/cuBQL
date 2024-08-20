@@ -14,7 +14,7 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-foreach(T IN ITEMS float int)
+foreach(T IN ITEMS float int double int64)
   foreach(D IN ITEMS 2 3 4)
     # add_executable(cuBQL_pointData_closestPoint_host_${T}${D}
     #   closestPoint.h

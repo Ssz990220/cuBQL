@@ -176,7 +176,7 @@ namespace cuBQL {
             return closestSqrDist;
           
           // compute (square distance)
-          float sqrDist = sqrDistance(points[pointID],queryPoint);
+          float sqrDist = fSqrDistance_rd(points[pointID],queryPoint);
           if (sqrDist >= closestSqrDist)
             // candidate is further away than what we already have
             return closestSqrDist;

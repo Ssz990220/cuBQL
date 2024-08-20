@@ -43,7 +43,7 @@ namespace cuBQL {
         if (closestID < 0)
           return INFINITY;
         data_t closest = data[closestID];
-        return sqrDistance(closest,query);
+        return cuBQL::fSqrDistance_rd(closest,query);
       }
         
                                    
@@ -58,14 +58,23 @@ namespace cuBQL {
                          const query_t *d_queries,
                          int            numQueries);
       void free(bvh_t bvh);
+
+      void usage(const std::string &error = "")
+      {
+        if (!error.empty())
+          std::cout << "Error: " << error << "\n\n";
+        std::cout << "Usage: ./cuBQL_genPoints -d dataPoints.bin -q queryPoints.bin -g goldResults.bin [--rebuild-gold]" << std::endl;
+        exit(error.empty()?0:1);
+      }
       
       void main(int ac, char **av,
                 cuBQL::testRig::DeviceAbstraction &device)
       {
-        std::string dataFileName = "<not_specified>";
-        std::string queryFileName = "<not_specified>";
-        std::string goldFileName = "<not_specified>";
+        std::string dataFileName;
+        std::string queryFileName;
+        std::string goldFileName;
         bool rebuildGold = false;
+        int numPrint = 0;
 
         CmdLine cmdLine(ac,av);
         while (!cmdLine.consumed()) {
@@ -76,11 +85,17 @@ namespace cuBQL {
             dataFileName = cmdLine.getString();
           else if (arg == "-q")
             queryFileName = cmdLine.getString();
-          else if (arg == "--rebuild-gold")
+          else if (arg == "-r" || arg == "--rebuild-gold")
             rebuildGold = true;
+          else if (arg == "-p") 
+            numPrint = cmdLine.getInt();
           else
-            throw std::runtime_error("Usage: "+std::string(av[0])+" -d dataPoints.bin -q queryPoints.bin -g goldResults.bin [--rebuild-gold]");
+            usage("un-recognized cmd-line argument '"+arg+"'");
         }
+        if (dataFileName.empty()) usage("no data file name specified");
+        if (queryFileName.empty()) usage("no query file name specified");
+        if (goldFileName.empty()) usage("no gold file name specified");
+
         std::vector<data_t>  dataPoints  = loadBinary<data_t>(dataFileName);
         std::vector<query_t> queryPoints = loadBinary<query_t>(queryFileName);
         
@@ -108,6 +123,10 @@ namespace cuBQL {
                       d_results,d_queries,numQueries);
         std::cout << "queries done, downloading results..." << std::flush << std::endl;
         std::vector<result_t> results = device.download(d_results,queryPoints.size());
+        if (numPrint != 0) 
+          for (int i=0;i<(int)results.size();i++) 
+            if (numPrint < 0 || i < numPrint)
+              std::cout << "[" << i << "] res = " << results[i] << std::endl;
         if (rebuildGold) {
           std::cout << "#cuBQL: asked to _rebuild_ gold results, "
                     << "so just saving instead of comparing" << std::endl;

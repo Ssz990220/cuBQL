@@ -39,7 +39,7 @@ target_include_directories(cuBQL_interface INTERFACE
   ${PROJECT_SOURCE_DIR}/
   )
 
-foreach(T IN ITEMS float int)
+foreach(T IN ITEMS float int double int64)
   foreach(D IN ITEMS 2 3 4)
     add_library(cuBQL_cuda_${T}${D} STATIC EXCLUDE_FROM_ALL 
       impl/instantiate_builders.cu
