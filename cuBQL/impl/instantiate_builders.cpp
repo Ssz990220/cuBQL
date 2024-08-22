@@ -15,17 +15,17 @@
 // ======================================================================== //
 
 /*! instantiates the GPU builder(s) */
-#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
+#define CUBQL_HOST_BUILDER_IMPLEMENTATION 1
+
 #include "cuBQL/bvh.h"
+#include "cuBQL/builder/host/spatialMedian.h"
 
 #ifdef CUBQL_INSTANTIATE_T
 // instantiate an explict type and dimension
-CUBQL_INSTANTIATE_BINARY_BVH(CUBQL_INSTANTIATE_T,CUBQL_INSTANTIATE_D)
+CUBQL_HOST_INSTANTIATE_BINARY_BVH(CUBQL_INSTANTIATE_T,CUBQL_INSTANTIATE_D)
 #else
 // default instantiation(s) for float3 only
-CUBQL_INSTANTIATE_BINARY_BVH(float,3)
-CUBQL_INSTANTIATE_WIDE_BVH(float,3,4)
-CUBQL_INSTANTIATE_WIDE_BVH(float,3,8)
+CUBQL_HOST_INSTANTIATE_BINARY_BVH(float,3)
 #endif
   
  

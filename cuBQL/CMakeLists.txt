@@ -39,8 +39,39 @@ target_include_directories(cuBQL_interface INTERFACE
   ${PROJECT_SOURCE_DIR}/
   )
 
+# ------------------------------------------------------------------
+# generate all type/dim specific targets, ie, one target for each
+# {int,float,double,long}x{2,3,4}. Each such target contains the
+# pre-compiled builder(s) for that specific type/dimension, for the
+# case where the user does NOT want to use the header-only
+# mechanism. To avoid "polluting" the user's project with lots of
+# different targets that he or she may or may not need we add all
+# those as 'EXCLUDE_FROM_ALL', so only those that get actually used
+# will actually get built
+# ------------------------------------------------------------------
 foreach(T IN ITEMS float int double int64)
   foreach(D IN ITEMS 2 3 4)
+    # ------------------------------------------------------------------
+    # all host variants
+    # ------------------------------------------------------------------
+    add_library(cuBQL_host_${T}${D} STATIC EXCLUDE_FROM_ALL
+      builder/host.h
+      builder/host/spatialMedian.h
+      impl/instantiate_builders.cpp
+      )
+    target_link_libraries(cuBQL_host_${T}${D}
+      PUBLIC
+      cuBQL_interface
+      )
+    target_compile_definitions(cuBQL_host_${T}${D}
+      PUBLIC
+      -DCUBQL_INSTANTIATE_T=${T}
+      -DCUBQL_INSTANTIATE_D=${D}
+      )
+
+    # ------------------------------------------------------------------
+    # all CUDA/GPU variants
+    # ------------------------------------------------------------------
     add_library(cuBQL_cuda_${T}${D} STATIC EXCLUDE_FROM_ALL 
       impl/instantiate_builders.cu
       )

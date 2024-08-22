@@ -16,20 +16,27 @@
 
 foreach(T IN ITEMS float int double int64)
   foreach(D IN ITEMS 2 3 4)
-    # add_executable(cuBQL_pointData_closestPoint_host_${T}${D}
-    #   closestPoint.h
-    #   closestPoint.cpp
-    #   )
-    # target_link_libraries(cuBQL_pointData_closestPoint_host_${T}${D}
-    #   PUBLIC
-    #   cuBQL_testing_common
-    #   )
-    # target_compile_definitions(cuBQL_pointData_closestPoint_host_${T}${D}
-    #   PUBLIC
-    #   -DCUBQL_TEST_T=${T}
-    #   -DCUBQL_TEST_D=${D}
-    #   )
+    # ------------------------------------------------------------------
+    # all host-side variants
+    # ------------------------------------------------------------------
+    add_executable(cuBQL_pointData_closestPoint_host_${T}${D}
+      closestPoint.h
+      closestPoint.cpp
+      )
+    target_link_libraries(cuBQL_pointData_closestPoint_host_${T}${D}
+      PUBLIC
+      cuBQL_testing_common
+      cuBQL_host_${T}${D}
+      )
+    target_compile_definitions(cuBQL_pointData_closestPoint_host_${T}${D}
+      PUBLIC
+      -DCUBQL_TEST_T=${T}
+      -DCUBQL_TEST_D=${D}
+      )
     
+    # ------------------------------------------------------------------
+    # all CUDA/GPU variants
+    # ------------------------------------------------------------------
     add_executable(cuBQL_pointData_closestPoint_cuda_${T}${D}
       closestPoint.h
       closestPoint.cu
