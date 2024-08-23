@@ -14,42 +14,74 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-foreach(T IN ITEMS float int double int64)
+# =========================================================================
+# 'closestPoint': both query points and data are regular points of
+# type <typeN> (float2, int3, etc). For each query point, find the
+# closest data point.
+# =========================================================================
+function(add_testing_target sampleName device suffix T D)
+  # sampleName - name of sample
+  # device - host or cuda
+  # T - T : scalar type
+  # D - D : dimension
+    add_executable(cuBQL_pointData_${sampleName}_${device}_${T}${D}
+      ${sampleName}.h
+      ${sampleName}.${suffix}
+      )
+    target_link_libraries(cuBQL_pointData_${sampleName}_${device}_${T}${D}
+      PUBLIC
+      cuBQL_testing_common
+      cuBQL_${device}_${T}${D}
+      )
+    target_compile_definitions(cuBQL_pointData_${sampleName}_${device}_${T}${D}
+      PUBLIC
+      -DCUBQL_TEST_T=${T}
+      -DCUBQL_TEST_D=${D}
+      )
+endfunction()
+
+foreach(T IN ITEMS float int double longlong)
   foreach(D IN ITEMS 2 3 4)
-    # ------------------------------------------------------------------
-    # all host-side variants
-    # ------------------------------------------------------------------
-    add_executable(cuBQL_pointData_closestPoint_host_${T}${D}
-      closestPoint.h
-      closestPoint.cpp
-      )
-    target_link_libraries(cuBQL_pointData_closestPoint_host_${T}${D}
-      PUBLIC
-      cuBQL_testing_common
-      cuBQL_host_${T}${D}
-      )
-    target_compile_definitions(cuBQL_pointData_closestPoint_host_${T}${D}
-      PUBLIC
-      -DCUBQL_TEST_T=${T}
-      -DCUBQL_TEST_D=${D}
-      )
+    add_testing_target(closestPoint cuda cu ${T} ${D})
+    add_testing_target(closestPoint host cpp ${T} ${D})
+
+    add_testing_target(knn5 cuda cu ${T} ${D})
+    add_testing_target(knn5 host cpp ${T} ${D})
     
-    # ------------------------------------------------------------------
-    # all CUDA/GPU variants
-    # ------------------------------------------------------------------
-    add_executable(cuBQL_pointData_closestPoint_cuda_${T}${D}
-      closestPoint.h
-      closestPoint.cu
-      )
-    target_link_libraries(cuBQL_pointData_closestPoint_cuda_${T}${D}
-      PUBLIC
-      cuBQL_testing_common
-      cuBQL_cuda_${T}${D}
-      )
-    target_compile_definitions(cuBQL_pointData_closestPoint_cuda_${T}${D}
-      PUBLIC
-      -DCUBQL_TEST_T=${T}
-      -DCUBQL_TEST_D=${D}
-      )
+    # # ------------------------------------------------------------------
+    # # all host-side variants
+    # # ------------------------------------------------------------------
+    # add_executable(cuBQL_pointData_closestPoint_host_${T}${D}
+    #   closestPoint.h
+    #   closestPoint.cpp
+    #   )
+    # target_link_libraries(cuBQL_pointData_closestPoint_host_${T}${D}
+    #   PUBLIC
+    #   cuBQL_testing_common
+    #   cuBQL_host_${T}${D}
+    #   )
+    # target_compile_definitions(cuBQL_pointData_closestPoint_host_${T}${D}
+    #   PUBLIC
+    #   -DCUBQL_TEST_T=${T}
+    #   -DCUBQL_TEST_D=${D}
+    #   )
+    
+    # # ------------------------------------------------------------------
+    # # all CUDA/GPU variants
+    # # ------------------------------------------------------------------
+    # add_executable(cuBQL_pointData_closestPoint_cuda_${T}${D}
+    #   closestPoint.h
+    #   closestPoint.cu
+    #   )
+    # target_link_libraries(cuBQL_pointData_closestPoint_cuda_${T}${D}
+    #   PUBLIC
+    #   cuBQL_testing_common
+    #   cuBQL_cuda_${T}${D}
+    #   )
+    # target_compile_definitions(cuBQL_pointData_closestPoint_cuda_${T}${D}
+    #   PUBLIC
+    #   -DCUBQL_TEST_T=${T}
+    #   -DCUBQL_TEST_D=${D}
+    #   )
   endforeach()
 endforeach()

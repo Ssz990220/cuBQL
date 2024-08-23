@@ -101,7 +101,7 @@ int main(int ac, char **av)
     run_t<int>();
   else if (dataType == "double" || dataType == "d")
     run_t<int>();
-  else if (dataType == "long" || dataType == "l")
+  else if (dataType == "long" || dataType == "l" || dataType == "longlong")
     run_t<int>();
   else
     usage("unknown or unsupported data type '"+dataType+"'");

@@ -14,11 +14,10 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "closestPoint.h"
+#include "knn5.h"
 #include "cuBQL/builder/cuda.h"
 
 namespace testing {
-
   __global__
   void computeBox(box_t *d_boxes, const data_t *d_data, int numData)
   {
@@ -67,15 +66,6 @@ namespace testing {
       (bvh,d_data,d_results,d_queries,numQueries);
   }
       
-  void computeReferenceResults(const data_t  *d_data,
-                               int            numData,
-                               result_t      *d_results,
-                               const query_t *d_queries,
-                               int            numQueries)
-  {
-    throw std::runtime_error("computing reference results only implemented on host");
-  }
-  
   void free(bvh_t bvh)
   { cuBQL::cuda::free(bvh); }
   

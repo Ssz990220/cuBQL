@@ -204,11 +204,17 @@ namespace cuBQL {
 
     template<typename T> inline __cubql_both T uniform_default_lower();
     template<typename T> inline __cubql_both T uniform_default_upper();
+#if 1
+    template<> inline __cubql_both float uniform_default_lower<float>() { return -100000; }
+    template<> inline __cubql_both float uniform_default_upper<float>() { return +100000; }
+    template<> inline __cubql_both double uniform_default_lower<double>() { return -100000; }
+    template<> inline __cubql_both double uniform_default_upper<double>() { return +100000; }
+#else
     template<> inline __cubql_both float uniform_default_lower<float>() { return 0.f; }
     template<> inline __cubql_both float uniform_default_upper<float>() { return 1.f; }
     template<> inline __cubql_both double uniform_default_lower<double>() { return 0.; }
     template<> inline __cubql_both double uniform_default_upper<double>() { return 1.; }
-
+#endif
     template<> inline __cubql_both int uniform_default_lower<int>() { return -100000; }
     template<> inline __cubql_both int uniform_default_upper<int>() { return +100000; }
     template<> inline __cubql_both int64_t uniform_default_lower<int64_t>() { return -100000; }
@@ -299,13 +305,20 @@ namespace cuBQL {
         throw std::runtime_error("RemapPointGenerator: no source defined");
       std::vector<vec_t<T,D>> pts = source->generate(count,seed);
 
+      box_t<T,D> bbox;
+      for (auto pt : pts)
+        bbox.extend(pt);
+      
       for (auto &point : pts) {
-        for (int d=0;d<D;d++)
-          point[d]
-            = lower[d]
-            + T(point[d]
-                * (typename dot_result_t<T>::type)(upper[d]-lower[d])
-                / (uniform_default_upper<T>() - uniform_default_lower<T>()));
+        for (int d=0;d<D;d++) {
+          double v = point[d];
+          v = v - bbox.lower[d];
+          if (bbox.lower[d] != bbox.upper[d])
+            v = v / (double(bbox.upper[d] - bbox.lower[d]));
+
+          v = v * (double)(upper[d]-lower[d]) + (double)lower[d];
+          point[d] = T(v);
+        }
       }
       return pts;
     }

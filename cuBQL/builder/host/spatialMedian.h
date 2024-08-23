@@ -26,7 +26,7 @@ namespace cuBQL {
   namespace host {
     // ******************************************************************
     // INTERFACE
-    // (which functions this header file provides)
+    // (which functionality this header file provides)
     // ******************************************************************
 
     /*! a simple (and currently non parallel) recursive spatial median

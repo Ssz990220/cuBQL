@@ -17,36 +17,35 @@
 #pragma once
 
 #include "cuBQL/bvh.h"
-#include "cuBQL/queries/points/findClosest.h"
+#include "cuBQL/queries/points/knn.h"
 #include "samples/common/CmdLine.h"
 #include "samples/common/IO.h"
 #include "testing/common/testRig.h"
 
 namespace testing {
-  
-  using namespace cuBQL;
   using namespace cuBQL::samples;
-      
+  using namespace cuBQL;
+
   using box_t = cuBQL::box_t<CUBQL_TEST_T,CUBQL_TEST_D>;
   using data_t = cuBQL::vec_t<CUBQL_TEST_T,CUBQL_TEST_D>;
   using query_t = cuBQL::vec_t<CUBQL_TEST_T,CUBQL_TEST_D>;
   using result_t = float;
-  using bvh_t = cuBQL::bvh_t<CUBQL_TEST_T,CUBQL_TEST_D>;
+  using bvh_t = cuBQL::BinaryBVH<CUBQL_TEST_T,CUBQL_TEST_D>;
 
   inline __cubql_both
   float runQuery(bvh_t bvh,
                  const data_t *data,
                  query_t query)
   {
-    int closestID
-      = cuBQL::points::findClosest(bvh,data,query);
-    if (closestID < 0)
-      return INFINITY;
-    data_t closest = data[closestID];
-    return cuBQL::fSqrDistance_rd(closest,query);
+    cuBQL::knn::Candidate nearest[5];
+    cuBQL::knn::Result    result
+      = cuBQL::points::findKNN(nearest,5,
+                               bvh,
+                               data,
+                               query,(float)INFINITY);
+    return result.sqrDistMax;
   }
-        
-                                   
+      
   void computeBoxes(box_t *d_boxes,
                     const data_t *d_data,
                     int numData);
@@ -57,11 +56,6 @@ namespace testing {
                      result_t      *d_results,
                      const query_t *d_queries,
                      int            numQueries);
-  void computeReferenceResults(const data_t  *d_data,
-                               int            numData,
-                               result_t      *d_results,
-                               const query_t *d_queries,
-                               int            numQueries);
   void free(bvh_t bvh);
 
   void usage(const std::string &error = "")
@@ -78,7 +72,6 @@ namespace testing {
     std::string dataFileName;
     std::string queryFileName;
     std::string goldFileName;
-    bool slowReference = false;
     bool rebuildGold = false;
     int numPrint = 0;
 
@@ -95,8 +88,6 @@ namespace testing {
         rebuildGold = true;
       else if (arg == "-p") 
         numPrint = cmdLine.getInt();
-      else if (arg == "--slow-reference") 
-        slowReference = true;
       else
         usage("un-recognized cmd-line argument '"+arg+"'");
     }
@@ -125,16 +116,10 @@ namespace testing {
         
     std::cout << "computing bvh" << std::flush << std::endl;
     bvh_t bvh = computeBVH(d_boxes,numBoxes);
-
-    if (slowReference) {
-      std::cout << "computing slow, non-accelerated reference" << std::flush << std::endl;
-      computeReferenceResults(d_dataPoints,numData,
-                              d_results,d_queries,numQueries);
-    } else {
-      std::cout << "launching queries" << std::flush << std::endl;
-      launchQueries(bvh,d_dataPoints,
-                    d_results,d_queries,numQueries);
-    }
+        
+    std::cout << "launching queries" << std::flush << std::endl;
+    launchQueries(bvh,d_dataPoints,
+                  d_results,d_queries,numQueries);
     std::cout << "queries done, downloading results..." << std::flush << std::endl;
     std::vector<result_t> results = device.download(d_results,queryPoints.size());
     if (numPrint != 0) 
@@ -149,18 +134,13 @@ namespace testing {
       std::cout << "loading reference 'gold' results..." << std::flush << std::endl;
       std::vector<result_t> gold = loadBinary<result_t>(goldFileName);
       for (int i=0;i<(int)results.size();i++) {
-        float difference = fabsf(results[i] - gold[i]);
-        if (difference >= 1e-8f)
-          std::cout << "!! different result for index "
-                    << i << ": ours says " << results[i] << ", gold says " << gold[i]
-                    << ", that's a difference of " << difference
-                    << std::endl;
+        if (results[i] != gold[i])
+          std::cout << "!! different result for index " << i << ": ours says " << results[i] << ", gold says " << gold[i] << std::endl;
       }
     }
     device.free(d_results);
     device.free(d_dataPoints);
     device.free(d_queries);
   }
-
+  
 } // ::testing
-

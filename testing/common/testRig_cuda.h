@@ -21,6 +21,14 @@
 namespace cuBQL {
   namespace testRig {
 
+    // ******************************************************************
+    // INTERFACE
+    // (which functionality this header file provides)
+    // ******************************************************************
+
+    /*! device abstraction that implements a 'cuda device'; i.e., one
+        where all memory allocations, uploads, downloads, etc, target
+        GPUd evice memory of a CUDA-enabled GPU */
     struct CUDADevice : public DeviceAbstraction {
       void free(const void *ptr) override;
       void *malloc(size_t numBytes) override;
@@ -28,6 +36,10 @@ namespace cuBQL {
       void download(void *h_mem, void *d_mem, size_t numBytes) override;
     };
 
+    // ******************************************************************
+    // IMPLEMENTATION
+    // ******************************************************************
+    
     void CUDADevice::free(const void *ptr) 
     {
       CUBQL_CUDA_CALL(Free((void *)ptr));

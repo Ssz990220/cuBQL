@@ -101,6 +101,9 @@
 #endif
 
 namespace cuBQL {
+
+  using longlong = int64_t;
+  
   namespace detail {
     inline static std::string backtrace()
     {

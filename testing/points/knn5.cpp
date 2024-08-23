@@ -14,76 +14,44 @@
 // limitations under the License.                                           //
 // ======================================================================== //
 
-#include "closestPoint.h"
-#include "cuBQL/builder/cuda.h"
+#include "knn5.h"
+#include "cuBQL/builder/host.h"
 
 namespace testing {
 
-  __global__
-  void computeBox(box_t *d_boxes, const data_t *d_data, int numData)
-  {
-    int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    if (tid >= numData) return;
-
-    d_boxes[tid] = box_t().including(d_data[tid]);
-  }
-      
   void computeBoxes(box_t *d_boxes,
                     const data_t *d_data,
                     int numData)
   {
-    computeBox<<<divRoundUp(numData,128),128>>>(d_boxes,d_data,numData);
-    CUBQL_CUDA_SYNC_CHECK();
+    for (int tid=0; tid<numData; tid++)
+      d_boxes[tid] = box_t().including(d_data[tid]);
   }
       
-  bvh_t computeBVH(const box_t *d_boxes,
-                   int numBoxes)
+  bvh_t computeBVH(const box_t *d_boxes, int numBoxes)
   {
     bvh_t bvh;
-    cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,BuildConfig());
+    cuBQL::host::spatialMedian(bvh,d_boxes,numBoxes,BuildConfig());
     return bvh;
   }
-
-  __global__
-  void runQueries(bvh_t bvh,
-                  const data_t  *d_data,
-                  result_t      *d_results,
-                  const query_t *d_queries,
-                  int            numQueries)
-  {
-    int tid = threadIdx.x+blockIdx.x*blockDim.x;
-    if (tid >= numQueries) return;
-        
-    d_results[tid] = runQuery(bvh,d_data,d_queries[tid]);
-  }
-
+      
   void launchQueries(bvh_t bvh,
                      const data_t  *d_data,
                      result_t      *d_results,
                      const query_t *d_queries,
                      int            numQueries)
   {
-    runQueries<<<divRoundUp(numQueries,128),128>>>
-      (bvh,d_data,d_results,d_queries,numQueries);
+    for (int tid=0;tid<numQueries;tid++)
+      d_results[tid] = runQuery(bvh,d_data,d_queries[tid]);
   }
-      
-  void computeReferenceResults(const data_t  *d_data,
-                               int            numData,
-                               result_t      *d_results,
-                               const query_t *d_queries,
-                               int            numQueries)
-  {
-    throw std::runtime_error("computing reference results only implemented on host");
-  }
-  
+
   void free(bvh_t bvh)
-  { cuBQL::cuda::free(bvh); }
-  
+  { cuBQL::host::freeBVH(bvh); }
+
 } // ::testing
 
 int main(int ac, char **av)
 {
-  cuBQL::testRig::CUDADevice device;
+  cuBQL::testRig::HostDevice device;
   testing::main(ac,av,device);
   return 0;
 }

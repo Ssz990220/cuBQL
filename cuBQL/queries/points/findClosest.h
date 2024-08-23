@@ -20,7 +20,7 @@
 #pragma once
 
 #include "cuBQL/bvh.h"
-#include "cuBQL/queries/shrinkingRadiusQuery.h"
+#include "cuBQL/traversal/shrinkingRadiusQuery.h"
 
 namespace cuBQL {
   namespace points {
@@ -169,7 +169,7 @@ namespace cuBQL {
       // closer than current best
       auto candidateLambda
         = [blackListed,&closestID,&closestSqrDist,points,queryPoint]
-        (int pointID)->bool
+        (int pointID)->float
         {
           if (blackListed(pointID))
             // caller explicitly blacklisted this point, do not process

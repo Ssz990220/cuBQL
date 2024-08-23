@@ -18,3 +18,17 @@
 
 #include "cuBQL/builder/host/spatialMedian.h"
 
+namespace cuBQL {
+  namespace host {
+    
+    template<typename T, int D>
+    inline void freeBVH(BinaryBVH<T,D> &bvh)
+    {
+      delete[] bvh.nodes;
+      delete[] bvh.primIDs;
+      bvh.nodes = 0;
+      bvh.primIDs = 0;
+    }
+    
+  }
+}

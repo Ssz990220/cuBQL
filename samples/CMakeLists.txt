@@ -21,6 +21,11 @@ add_subdirectory(common)
 add_subdirectory(points)
 
 
+
+
+
+
+
 #add_executable(cuBQL_lineSegs3f lineSegs3f.cu)
 #target_link_libraries(cuBQL_lineSegs3f cuBQL_interface)
 

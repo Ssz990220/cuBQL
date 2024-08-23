@@ -32,6 +32,8 @@ namespace cuBQL {
     std::vector<T> loadBinary(const std::string &fileName)
     {
       std::ifstream in(fileName.c_str(),std::ios::binary);
+      if (!in.good())
+        throw std::runtime_error("could not open '"+fileName+"'");
       size_t count;
       in.read((char*)&count,sizeof(count));
 
