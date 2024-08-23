@@ -27,40 +27,45 @@ namespace testing {
   using namespace cuBQL;
   using namespace cuBQL::samples;
       
+  using vecND = cuBQL::vec_t<double,CUBQL_TEST_D>;
   using box_t = cuBQL::box_t<CUBQL_TEST_T,CUBQL_TEST_D>;
-  using data_t = cuBQL::vec_t<CUBQL_TEST_T,CUBQL_TEST_D>;
-  using query_t = cuBQL::vec_t<CUBQL_TEST_T,CUBQL_TEST_D>;
-  using result_t = float;
+  using point_t = cuBQL::vec_t<CUBQL_TEST_T,CUBQL_TEST_D>;
   using bvh_t = cuBQL::bvh_t<CUBQL_TEST_T,CUBQL_TEST_D>;
 
   inline __cubql_both
   float runQuery(bvh_t bvh,
-                 const data_t *data,
-                 query_t query)
+                 const point_t *data,
+                 point_t query)
   {
     int closestID
       = cuBQL::points::findClosest(bvh,data,query);
     if (closestID < 0)
       return INFINITY;
-    data_t closest = data[closestID];
-    return cuBQL::fSqrDistance_rd(closest,query);
+    point_t closest = data[closestID];
+    return sqrtf(cuBQL::fSqrDistance_rd(closest,query));
   }
-        
-                                   
+
+  double differenceThreshold() {
+    return is_real<CUBQL_TEST_T>::value
+      ? 1e-3f
+      /* due to rounding coords, difference can be 2 off in each dim */
+      : sqrtf(CUBQL_TEST_D*2*2);
+  }
+   
   void computeBoxes(box_t *d_boxes,
-                    const data_t *d_data,
+                    const point_t *d_data,
                     int numData);
   bvh_t computeBVH(const box_t *d_boxes,
                    int numBoxes);
   void launchQueries(bvh_t bvh,
-                     const data_t  *d_data,
-                     result_t      *d_results,
-                     const query_t *d_queries,
+                     const point_t  *d_data,
+                     float         *d_results,
+                     const point_t *d_queries,
                      int            numQueries);
-  void computeReferenceResults(const data_t  *d_data,
+  void computeReferenceResults(const point_t  *d_data,
                                int            numData,
-                               result_t      *d_results,
-                               const query_t *d_queries,
+                               float      *d_results,
+                               const point_t *d_queries,
                                int            numQueries);
   void free(bvh_t bvh);
 
@@ -68,7 +73,7 @@ namespace testing {
   {
     if (!error.empty())
       std::cout << "Error: " << error << "\n\n";
-    std::cout << "Usage: ./cuBQL_genPoints -d dataPoints.bin -q queryPoints.bin -g goldResults.bin [--rebuild-gold]" << std::endl;
+    std::cout << "Usage: ./cuBQL...closestPoint... -d dataPoints.bin -q queryPoints.bin -g goldResults.bin [--rebuild-gold]" << std::endl;
     exit(error.empty()?0:1);
   }
       
@@ -104,19 +109,19 @@ namespace testing {
     if (queryFileName.empty()) usage("no query file name specified");
     if (goldFileName.empty()) usage("no gold file name specified");
 
-    std::vector<data_t>  dataPoints  = loadBinary<data_t>(dataFileName);
-    std::vector<query_t> queryPoints = loadBinary<query_t>(queryFileName);
+    std::vector<point_t>  dataPoints  = cast<CUBQL_TEST_T>(loadBinary<vecND>(dataFileName));
+    std::vector<point_t> queryPoints = cast<CUBQL_TEST_T>(loadBinary<vecND>(queryFileName));
         
-    const data_t *d_dataPoints
+    const point_t *d_dataPoints
       = device.upload(dataPoints);
     int numData = int(dataPoints.size());
         
-    const query_t *d_queries
+    const point_t *d_queries
       = device.upload(queryPoints);
     int numQueries = int(queryPoints.size());
         
-    result_t *d_results
-      = device.alloc<result_t>(queryPoints.size());
+    float *d_results
+      = device.alloc<float>(queryPoints.size());
 
     std::cout << "computing boxes for bvh build" << std::flush << std::endl;
     int numBoxes = numData;
@@ -136,7 +141,7 @@ namespace testing {
                     d_results,d_queries,numQueries);
     }
     std::cout << "queries done, downloading results..." << std::flush << std::endl;
-    std::vector<result_t> results = device.download(d_results,queryPoints.size());
+    std::vector<float> results = device.download(d_results,queryPoints.size());
     if (numPrint != 0) 
       for (int i=0;i<(int)results.size();i++) 
         if (numPrint < 0 || i < numPrint)
@@ -145,17 +150,50 @@ namespace testing {
       std::cout << "#cuBQL: asked to _rebuild_ gold results, "
                 << "so just saving instead of comparing" << std::endl;
       saveBinary(goldFileName,results);
+      for (int i=0;i<std::min(10,int(results.size())); i++)
+        std::cout << "result[" << i << "] was " << results[i] << std::endl;
     } else {
       std::cout << "loading reference 'gold' results..." << std::flush << std::endl;
-      std::vector<result_t> gold = loadBinary<result_t>(goldFileName);
+      std::vector<float> gold = loadBinary<float>(goldFileName);
+
+      bool foundResultAboveThreshold = false;
+      double avg_gold = 0.f;
+      int    numFinite = 0;
+      for (float r : gold)
+        if (finite(r)) {
+          avg_gold += r;
+          numFinite++;
+        } 
+      avg_gold /= numFinite;
+
+      double avg_diff = 0.f;
+      double max_diff = 0.f;
+      numFinite = 0;
+      double threshold = differenceThreshold();
       for (int i=0;i<(int)results.size();i++) {
-        float difference = fabsf(results[i] - gold[i]);
-        if (difference >= 1e-8f)
+        double difference = fabsf(results[i] - gold[i]);
+        if (finite(difference)) {
+          max_diff = std::max(max_diff,difference);
+          avg_diff += difference;
+          numFinite++;
+        }
+        if (difference >= threshold) {
           std::cout << "!! different result for index "
                     << i << ": ours says " << results[i] << ", gold says " << gold[i]
                     << ", that's a difference of " << difference
                     << std::endl;
+          foundResultAboveThreshold = true;
+        }
       }
+      avg_diff /= numFinite;
+      std::cout << "avg result                   " << avg_gold << std::endl;
+      std::cout << "avg difference (rel to gold) " << avg_diff << std::endl;
+      std::cout << "max difference (rel to gold) " << max_diff << std::endl;
+      std::cout << "(note tolerance threshold (due to rounding for given type) is "
+                << threshold << ")" << std::endl;
+      if (foundResultAboveThreshold)
+        throw std::runtime_error
+          ("round (at least one) result outside of expected error tolerance threshold!");
     }
     device.free(d_results);
     device.free(d_dataPoints);

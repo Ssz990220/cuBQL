@@ -20,7 +20,7 @@
 namespace testing {
 
   void computeBoxes(box_t *d_boxes,
-                    const data_t *d_data,
+                    const point_t *d_data,
                     int numData)
   {
     for (int tid=0; tid<numData; tid++)
@@ -35,9 +35,9 @@ namespace testing {
   }
       
   void launchQueries(bvh_t bvh,
-                     const data_t  *d_data,
-                     result_t      *d_results,
-                     const query_t *d_queries,
+                     const point_t  *d_data,
+                     float      *d_results,
+                     const point_t *d_queries,
                      int            numQueries)
   {
     for (int tid=0;tid<numQueries;tid++)

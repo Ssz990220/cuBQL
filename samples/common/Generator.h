@@ -22,6 +22,8 @@
 namespace cuBQL {
   namespace samples {
 
+    inline double defaultDomainSize() { return 100000.; }
+    
     // ==================================================================
     /*! a 'point generator' is a class that implements a procedure to
       create a randomized set of points (of given type and
@@ -29,12 +31,12 @@ namespace cuBQL {
       various point generators through a string, such as "uniform"
       (uniformly distributed points), "nrooks" (a n-rooks style
       distribution, see below), "clustered", etc. */
-    template<typename T, int D>
+    template<int D>
     struct PointGenerator {
       typedef std::shared_ptr<PointGenerator> SP;
       /*! create a set of requested number of elements with given
           generator seed*/
-      virtual std::vector<vec_t<T,D>> generate(int numRequested, int seed) = 0;
+      virtual std::vector<vec_t<double,D>> generate(int numRequested, int seed) = 0;
       
       // helper stuff to parse itself from cmd-line descriptor string
       static SP createFromString(const std::string &wholeString);
@@ -45,13 +47,13 @@ namespace cuBQL {
     };
   
     // ==================================================================
-    template<typename T, int D>
+    template<int D>
     struct BoxGenerator {
-      typedef std::shared_ptr<BoxGenerator<T,D>> SP;
+      typedef std::shared_ptr<BoxGenerator<D>> SP;
 
       /*! create a set of requested number of elements with given
           generator seed*/
-      virtual std::vector<box_t<T,D>> generate(int numRequested, int seed) = 0;
+      virtual std::vector<box_t<double,D>> generate(int numRequested, int seed) = 0;
       
       static SP createFromString(const std::string &wholeString);
     
@@ -63,16 +65,16 @@ namespace cuBQL {
 
 
     // ==================================================================
-    template<typename T, int D>
-    struct UniformPointGenerator : public PointGenerator<T, D>
+    template<int D>
+    struct UniformPointGenerator : public PointGenerator<D>
     {
-      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<vec_t<double,D>> generate(int numRequested, int seed) override;
     };
 
-    template<typename T, int D>
-    struct UniformBoxGenerator : public BoxGenerator<T, D>
+    template<int D>
+    struct UniformBoxGenerator : public BoxGenerator<D>
     {
-      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<box_t<double,D>> generate(int numRequested, int seed) override;
     };
   
     /*! re-maps points from the 'default domain' to the domain specified
@@ -91,45 +93,45 @@ namespace cuBQL {
       "remap 2 2 4 4 nrooks" would first generate points with the "nrooks"
       generator, then re-map those to [(2,2),(4,4)].
     */
-    template<typename T, int D>
-    struct RemapPointGenerator : public PointGenerator<T, D>
+    template<int D>
+    struct RemapPointGenerator : public PointGenerator<D>
     {
       RemapPointGenerator();
     
-      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<vec_t<double,D>> generate(int numRequested, int seed) override;
     
       virtual void parse(const char *&currentParsePos);
 
-      vec_t<T,D> lower, upper;
-      typename PointGenerator<T,D>::SP source;
+      vec_t<double,D> lower, upper;
+      typename PointGenerator<D>::SP source;
     };
-    template<typename T, int D>
-    struct RemapBoxGenerator : public BoxGenerator<T, D>
+    template<int D>
+    struct RemapBoxGenerator : public BoxGenerator<D>
     {
       RemapBoxGenerator();
     
-      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<box_t<double,D>> generate(int numRequested, int seed) override;
     
       virtual void parse(const char *&currentParsePos);
 
-      vec_t<T,D> lower, upper;
-      typename BoxGenerator<T,D>::SP source;
+      vec_t<double,D> lower, upper;
+      typename BoxGenerator<D>::SP source;
     };
 
 
 
     // ==================================================================
-    template<typename T, int D>
-    struct ClusteredPointGenerator : public PointGenerator<T, D>
+    template<int D>
+    struct ClusteredPointGenerator : public PointGenerator<D>
     {
-      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<vec_t<double,D>> generate(int numRequested, int seed) override;
     };
   
-    template<typename T, int D>
-    struct ClusteredBoxGenerator : public BoxGenerator<T, D>
+    template<int D>
+    struct ClusteredBoxGenerator : public BoxGenerator<D>
     {
       void parse(const char *&currentParsePos) override;
-      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<box_t<double,D>> generate(int numRequested, int seed) override;
       
       struct {
         float mean = -1.f, sigma = 0.f, scale = 1.f;
@@ -142,20 +144,20 @@ namespace cuBQL {
     // ==================================================================
     /*! "nrooks": generate ~sqrt(N) N clusters of around sqrt(N)
         points each, and arrange thsoe in a n-rooks patterns */
-    template<typename T, int D>
-    struct NRooksPointGenerator : public PointGenerator<T, D>
+    template<int D>
+    struct NRooksPointGenerator : public PointGenerator<D>
     {
-      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<vec_t<double,D>> generate(int numRequested, int seed) override;
     };
 
     // ==================================================================
     /*! "nrooks": same as n-rooks point generator (for the box centers),
       then surrounds each of these points with a box whose size can be
       controlled through various distributions */
-    template<typename T, int D>
-    struct NRooksBoxGenerator : public BoxGenerator<T, D>
+    template<int D>
+    struct NRooksBoxGenerator : public BoxGenerator<D>
     {
-      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<box_t<double,D>> generate(int numRequested, int seed) override;
       void parse(const char *&currentParsePos) override;
       struct {
         float mean = -1.f, sigma = 0.f, scale = 1.f;
@@ -178,10 +180,10 @@ namespace cuBQL {
       triangles from bunny.obj, just the generator string "triangles
       obj bunny.obj"
     */
-    template<typename T, int D>
-    struct TrianglesBoxGenerator : public BoxGenerator<T, D>
+    template<int D>
+    struct TrianglesBoxGenerator : public BoxGenerator<D>
     {
-      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<box_t<double,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
@@ -199,10 +201,10 @@ namespace cuBQL {
       triangles from bunny.obj, just the generator string "triangles
       obj bunny.obj"
     */
-    template<typename T, int D>
-    struct TrianglesPointGenerator : public PointGenerator<T, D>
+    template<int D>
+    struct TrianglesPointGenerator : public PointGenerator<D>
     {
-      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
+      std::vector<vec_t<double,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
@@ -213,27 +215,27 @@ namespace cuBQL {
     
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
-    template<typename T, int D>
-    struct MixturePointGenerator : public PointGenerator<T,D> {
-      std::vector<vec_t<T,D>> generate(int numRequested, int seed) override;
+    template<int D>
+    struct MixturePointGenerator : public PointGenerator<D> {
+      std::vector<vec_t<double,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
-      typename PointGenerator<T,D>::SP gen_a;
-      typename PointGenerator<T,D>::SP gen_b;
+      typename PointGenerator<D>::SP gen_a;
+      typename PointGenerator<D>::SP gen_b;
       float prob_a;
     };
 
     /*! "mixture" generator - generates a new distributoin based by
       randomly picking between two input distributions */
-    template<typename T, int D>
-    struct MixtureBoxGenerator : public BoxGenerator<T,D> {
-      std::vector<box_t<T,D>> generate(int numRequested, int seed) override;
+    template<int D>
+    struct MixtureBoxGenerator : public BoxGenerator<D> {
+      std::vector<box_t<double,D>> generate(int numRequested, int seed) override;
     
       void parse(const char *&currentParsePos) override;
     
-      typename BoxGenerator<T,D>::SP gen_a;
-      typename BoxGenerator<T,D>::SP gen_b;
+      typename BoxGenerator<D>::SP gen_a;
+      typename BoxGenerator<D>::SP gen_b;
       float prob_a;
     };
 

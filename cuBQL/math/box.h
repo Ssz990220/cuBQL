@@ -79,7 +79,14 @@ namespace cuBQL {
     
     /*! copy-constructor - create a box from another box (or
       POD-version of such) of same type */
-    inline __cubql_both box_t(const box_t_pod<T,D> &ob);
+    inline explicit __cubql_both box_t(const box_t_pod<T,D> &ob);
+
+    template<typename OT>
+    /*! copy-constructor - create a box from another box (or
+      POD-version of such) of same type */
+    inline __cubql_both box_t(const box_t_pod<OT,D> &ob)
+    { lower = cuBQL::vec_t<T,D>(ob.lower); upper = cuBQL::vec_t<T,D>(ob.upper); }
+
 
     /*! create a box containing a single point */
     inline __cubql_both box_t(const vec_t_data<T,D> &v) { lower = upper = v; }

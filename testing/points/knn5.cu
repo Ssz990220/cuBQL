@@ -19,7 +19,7 @@
 
 namespace testing {
   __global__
-  void computeBox(box_t *d_boxes, const data_t *d_data, int numData)
+  void computeBox(box_t *d_boxes, const point_t *d_data, int numData)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
     if (tid >= numData) return;
@@ -28,7 +28,7 @@ namespace testing {
   }
       
   void computeBoxes(box_t *d_boxes,
-                    const data_t *d_data,
+                    const point_t *d_data,
                     int numData)
   {
     computeBox<<<divRoundUp(numData,128),128>>>(d_boxes,d_data,numData);
@@ -45,9 +45,9 @@ namespace testing {
 
   __global__
   void runQueries(bvh_t bvh,
-                  const data_t  *d_data,
-                  result_t      *d_results,
-                  const query_t *d_queries,
+                  const point_t  *d_data,
+                  float      *d_results,
+                  const point_t *d_queries,
                   int            numQueries)
   {
     int tid = threadIdx.x+blockIdx.x*blockDim.x;
@@ -57,9 +57,9 @@ namespace testing {
   }
 
   void launchQueries(bvh_t bvh,
-                     const data_t  *d_data,
-                     result_t      *d_results,
-                     const query_t *d_queries,
+                     const point_t  *d_data,
+                     float      *d_results,
+                     const point_t *d_queries,
                      int            numQueries)
   {
     runQueries<<<divRoundUp(numQueries,128),128>>>

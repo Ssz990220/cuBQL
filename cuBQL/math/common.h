@@ -292,6 +292,9 @@ namespace cuBQL {
     return s.substr(s.size()-suffix.size()) == suffix;
   }
 
+  template<typename T> struct is_real { enum { value = false }; };
+  template<> struct is_real<float> { enum { value = true }; };
+  template<> struct is_real<double> { enum { value = true }; };
 } // ::cubql
 
 

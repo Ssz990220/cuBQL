@@ -20,7 +20,6 @@
 std::string generator   = "uniform";
 int         numPoints   = 100000;
 std::string outFileName = "cuBQL.dat";
-std::string dataType    = "float";
 int         dataDim     = 3;
 int         seed        = 290374;
 
@@ -31,8 +30,7 @@ void usage(const std::string &error)
   std::cout << "Usage: ./cuBQL_generatePoints [args]*\n";
   std::cout << "w/ args:\n";
   std::cout << " -n int:numPoints\n";
-  std::cout << " -t type(float|int)\n";
-  std::cout << " -d dims(1,2,3,4,n)\n";
+  std::cout << " -d dims(1,2,3,4,n)\n"; 
   std::cout << " -g generator        ; see README for generator strings\n";
   std::cout << " -o outFileName\n";
   
@@ -40,39 +38,25 @@ void usage(const std::string &error)
 }
 
 
-template<typename T, int D>
+template<int D>
 void run()
 {
   using namespace cuBQL;
   using namespace cuBQL::samples;
   
   std::cout << "#cuBQL.genPoints: creating generator '" << ::generator << "'" << std::endl;
-  typename PointGenerator<T,D>::SP generator
-    = PointGenerator<T,D>::createFromString(::generator);
+  typename PointGenerator<D>::SP generator
+    = PointGenerator<D>::createFromString(::generator);
   std::cout << "#cuBQL.genPoints: generating '" << numPoints
             << " points w/ seed " << seed << std::endl;
-  std::vector<vec_t<T,D>> points
+  std::vector<vec_t<double,D>> points
     = generator->generate(numPoints,seed);
+  PRINT(points.size());
+  for (int i=0;i<std::min(points.size(),(size_t)10);i++)
+    PRINT(points[i]);
   std::cout << "#cuBQL.genPoints: saving to " << outFileName << std::endl;
   saveBinary(outFileName,points);
   std::cout << "#cuBQL.genPoints: all done." << std::endl;
-}
-
-template<typename T>
-void run_t()
-{
-  if (dataDim == 2)
-    run<T,2>();
-  else if (dataDim == 3)
-    run<T,3>();
-  else if (dataDim == 4)
-    run<T,4>();
-#if CUBQL_USER_DIM
-  else if (dataDim == CUBQL_USER_DIM || dataDim == -1)
-    run<T,CUBQL_USER_DIM>();
-#endif
-  else
-    usage("un-supported data dimensionality '"+std::to_string(dataDim)+"'");
 }
 
 int main(int ac, char **av)
@@ -80,9 +64,7 @@ int main(int ac, char **av)
   cuBQL::samples::CmdLine cmdLine(ac,av);
   while (!cmdLine.consumed()) {
     const std::string arg = cmdLine.getString();
-    if (arg == "-t" || arg == "--type") {
-      dataType = cmdLine.getString();
-    } else if (arg == "-d" || arg == "--dim") {
+    if (arg == "-d" || arg == "--dim") {
       dataDim = cmdLine.getInt();
     } else if (arg == "-n" || arg == "--num") {
       numPoints = cmdLine.getInt();
@@ -95,16 +77,18 @@ int main(int ac, char **av)
     } else
       usage("unknown cmd-line argument '"+arg+"'");
   }
-  if (dataType == "float" || dataType == "f")
-    run_t<float>();
-  else if (dataType == "int" || dataType == "i")
-    run_t<int>();
-  else if (dataType == "double" || dataType == "d")
-    run_t<int>();
-  else if (dataType == "long" || dataType == "l" || dataType == "longlong")
-    run_t<int>();
+  if (dataDim == 2)
+    run<2>();
+  else if (dataDim == 3)
+    run<3>();
+  else if (dataDim == 4)
+    run<4>();
+#if CUBQL_USER_DIM
+  else if (dataDim == CUBQL_USER_DIM || dataDim == -1)
+    run<CUBQL_USER_DIM>();
+#endif
   else
-    usage("unknown or unsupported data type '"+dataType+"'");
+    usage("un-supported data dimensionality '"+std::to_string(dataDim)+"'");
   return 0;
 }
 

@@ -22,4 +22,5 @@ target_link_libraries(cuBQL_testing_common
   cuBQL_samples_common
   )
 
+add_subdirectory(common)
 add_subdirectory(points)
