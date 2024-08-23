@@ -17,19 +17,33 @@
 # common stuff - data generators and IO for loading/generating test data
 add_subdirectory(common)
 
-# samples of various queries that operate on *point* data sets
-add_subdirectory(points)
+# ==================================================================
+# sample that performs gpu-side closest-point queries between sets of
+# float3 points
+# ==================================================================
+add_executable(cuBQL_sample01_points_closestPoint_cuda
+  s01_closestPoint_points_gpu/closestPointGPU.cu
+  )
+target_link_libraries(cuBQL_sample01_points_closestPoint_cuda
+  # the cuda-side builders for float3 data
+  cuBQL_cuda_float3
+  # common samples stuff
+  cuBQL_samples_common
+  )
 
 
-
-
-
-
-
-#add_executable(cuBQL_lineSegs3f lineSegs3f.cu)
-#target_link_libraries(cuBQL_lineSegs3f cuBQL_interface)
-
-#add_executable(cuBQL_fcpTriangles fcpTriangles.cu)
-#target_link_libraries(cuBQL_fcpTriangles cuBQL_testing cuBQL_interface)
+# ==================================================================
+# sample that performs gpu-side closest-point queries between sets of
+# float3 points
+# ==================================================================
+add_executable(cuBQL_sample02_distanceToTriangleMesh
+  s02_distanceToTriangleMesh/distanceToTriangleMesh.cu
+  )
+target_link_libraries(cuBQL_sample02_distanceToTriangleMesh
+  # the cuda-side builders for float3 data
+  cuBQL_cuda_float3
+  # common samples stuff
+  cuBQL_samples_common
+  )
 
 

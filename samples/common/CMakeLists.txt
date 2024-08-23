@@ -19,6 +19,9 @@ set(CUBQL_USER_DIM "" CACHE STRING "user-specified dim for tests w/ dim!=2,3,4")
 add_library(cuBQL_samples_common
   Generator.h
   Generator.cpp
+  tiny_obj_loader.h
+  loadOBJ.h
+  loadOBJ.cpp
   )
 target_link_libraries(cuBQL_samples_common
   PUBLIC

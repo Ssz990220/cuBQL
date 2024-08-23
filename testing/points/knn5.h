@@ -102,8 +102,10 @@ namespace testing {
     if (queryFileName.empty()) usage("no query file name specified");
     if (goldFileName.empty()) usage("no gold file name specified");
 
-    std::vector<point_t> dataPoints  = cast<CUBQL_TEST_T>(loadBinary<vecND>(dataFileName));
-    std::vector<point_t> queryPoints = cast<CUBQL_TEST_T>(loadBinary<vecND>(queryFileName));
+    std::vector<point_t>  dataPoints
+      = cuBQL::samples::convert<CUBQL_TEST_T>(loadBinary<vecND>(dataFileName));
+    std::vector<point_t> queryPoints
+      = cuBQL::samples::convert<CUBQL_TEST_T>(loadBinary<vecND>(queryFileName));
         
     const point_t *d_dataPoints
       = device.upload(dataPoints);

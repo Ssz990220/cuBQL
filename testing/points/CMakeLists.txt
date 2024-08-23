@@ -24,16 +24,16 @@ function(add_testing_target sampleName device suffix T D)
   # device - host or cuda
   # T - scalar type
   # D - dimension
-    add_executable(cuBQL_pointData_${sampleName}_${device}_${T}${D}
+    add_executable(testing_points_${sampleName}_${device}_${T}${D}
       ${sampleName}.h
       ${sampleName}.${suffix}
       )
-    target_link_libraries(cuBQL_pointData_${sampleName}_${device}_${T}${D}
+    target_link_libraries(testing_points_${sampleName}_${device}_${T}${D}
       PUBLIC
       cuBQL_testing_common
       cuBQL_${device}_${T}${D}
       )
-    target_compile_definitions(cuBQL_pointData_${sampleName}_${device}_${T}${D}
+    target_compile_definitions(testing_points_${sampleName}_${device}_${T}${D}
       PUBLIC
       -DCUBQL_TEST_T=${T}
       -DCUBQL_TEST_D=${D}

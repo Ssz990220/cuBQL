@@ -242,5 +242,8 @@ namespace cuBQL {
     return min(max(point,box.lower),box.upper);
   }
 
+  template<typename T, int D>
+  std::ostream &operator<<(std::ostream &o, const box_t<T,D> &box)
+  { o << "{" << box.lower << "," << box.upper << "}"; return o; }
 }
 

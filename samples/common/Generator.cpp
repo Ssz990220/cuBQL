@@ -200,17 +200,20 @@ namespace cuBQL {
   
     template<int D>
     inline 
-    void uniformPointGenerator(std::vector<vec_t<double,D>> &points, int seed)
+    void uniformPointGenerator(std::vector<vec_t<double,D>> &points,
+                               vec_t<double,D> lower,
+                               vec_t<double,D> upper,
+                               int seed)
     {
       for (int tid=0;tid<(int)points.size();tid++) {
         LCG<8> rng(seed,tid);
         auto &mine = points[tid];
         
-        double lo = - defaultDomainSize();
-        double hi = + defaultDomainSize();
+        // double lo = lower[othis->lower;//- defaultDomainSize();
+        // double hi = this->upper;//+ defaultDomainSize();
         
         for (int i=0;i<D;i++)
-          mine[i] = lo + rng() * (hi-lo);
+          mine[i] = lower[i] + rng() * (upper[i] - lower[i]);
       }
     }
 
@@ -221,7 +224,7 @@ namespace cuBQL {
       if (count <= 0)
         throw std::runtime_error("UniformPointGenerator<D>::generate(): invalid count...");
       std::vector<vec_t<double,D>> res(count);
-      uniformPointGenerator<D>(res,seed);
+      uniformPointGenerator<D>(res,lower,upper,seed);
       return res;
     }
 

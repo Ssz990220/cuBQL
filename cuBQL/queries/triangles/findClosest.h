@@ -17,26 +17,20 @@
 #pragma once
 
 #include "cuBQL/bvh.h"
+#include "cuBQL/queries/triangles/Triangle.h"
 // we're stealing the line seg test for edges
-#include "cuBQL/lineSegs/LineSegs3f.h"
-#include "cuBQL/queries/shrinkingRadiusQuery.h"
+#include "cuBQL/traversal/shrinkingRadiusQuery.h"
 
 namespace cuBQL {
   namespace triangles {
 
-    /*! a line segment, referring to two input points that define the
-        two opposite corners of that line segment */
-    struct Triangle {
-      vec3f a, b, c;
-    };
-
     /*! result of a fcp (find closest point) query */
     struct FCPResult {
-      inline __device__ void clear(float maxDistSqr) { primID = -1; sqrDistance = maxDistSqr; }
+      inline __device__ void clear(float maxDistSqr) { primID = -1; sqrDist = maxDistSqr; }
       
       int   primID;
-      // float u, v;
-      float sqrDistance;
+      float sqrDist;
+      vec3f P;
     };
 
     /*! fcp = find-closest-point on triangle mesh. Finds, for a given
@@ -57,98 +51,104 @@ namespace cuBQL {
     // implementation
     // ==================================================================
     
-    /*! result of a closest-point intersection operation */
-    struct CPResult {
-      vec3f point;
-      
-      /*! parameterized distance along the line triangle of where the
-          hit is; u=0 being begin point, u=1 being end point */
-      float u, v;
-
-      float sqrDistance;
+    /*! helper struct for a edge with double coordinates; mainly
+      exists for the Edge::closestPoint test method */
+    struct Edge {
+      inline __cubql_both
+      Edge(vec3f a, vec3f b) : a(a), b(b) {}
+    
+      /*! compute point-to-distance for this triangle; returns true if the
+        result struct was updated with a closer point than what it
+        previously contained */
+      inline __cubql_both
+      bool closestPoint(FCPResult &result,
+                        const vec3f &referencePointToComputeDistanceTo) const;
+    
+      const vec3f a, b; 
     };
     
-    /*! compute point on 'triangle' that is closest to 'queryPoint',
-      and return the square distance to that point. */
-    inline __device__
-    CPResult closestPoint(const vec3f queryPoint, const Triangle triangle);
-    
-    
 
-
-    /*! compute point on 'triangle' that is closest to 'queryPoint',
-      and return the square distance to that point. */
+    /*! compute point-to-distance for this edge; returns true if the
+      result struct was updated with a closer point than what it
+      previously contained */
     inline __device__
-    CPResult closestPoint(const vec3f q, const Triangle triangle)
+    bool Edge::closestPoint(FCPResult &result,
+                            const vec3f &p) const
+    {
+      float t = dot(p-a,b-a) / dot(b-a,b-a);
+      t = clamp(t);
+      vec3f cp = a + t * (b-a);
+      float sqrDist = dot(cp-p,cp-p);
+      if (sqrDist >= result.sqrDist) 
+        return false;
+
+      result.sqrDist = sqrDist;
+      result.P      = cp;
+      return true;
+    }
+  
+    /*! compute point-to-distance for this triangle; returns true if the
+      result struct was updated with a closer point than what it
+      previously contained */
+    inline __device__
+    bool closestPoint(FCPResult &result,
+                      Triangle triangle,
+                      vec3f qp) 
     {
       vec3f a = triangle.a;
       vec3f b = triangle.b;
       vec3f c = triangle.c;
+      
       vec3f N = cross(b-a,c-a);
-      vec3f Nab = cross(b-a,N);
-      vec3f Nbc = cross(c-b,N);
-      vec3f Nca = cross(a-c,N);
-      CPResult result;
-      lineSegs::Segment edge;
-      bool edgeTest = true;
-      if (dot(q-a,Nab) >= 0.f) {
-        edge = { a, b };
-        // do edge test below
-      } else if (dot(q-b,Nbc) >= 0.f) {
-        edge = { b, c };
-        // do edge test below
-      } else if (dot(q-c,Nca) >= 0.f) {
-        edge = { c, a };
-        // do edge test below
+      bool projectsOutside
+        =  (N == vec3f(0.f,0.f,0.f))
+        || (dot(qp-a,cross(b-a,N)) >= 0.f)
+        || (dot(qp-b,cross(c-b,N)) >= 0.f)
+        || (dot(qp-c,cross(a-c,N)) >= 0.f);
+      if (projectsOutside) {
+        return
+          Edge(a,b).closestPoint(result,qp) |
+          Edge(b,c).closestPoint(result,qp) |
+          Edge(c,a).closestPoint(result,qp);
       } else {
-        // point must be inside.
         N = normalize(N);
-        float dist = dot(q-a,N);
-        result.point = q - dist*N;
-        edgeTest = false;
+        float signed_dist = dot(qp-a,N);
+        float sqrDist = signed_dist*signed_dist;
+        if (sqrDist >= result.sqrDist) return false;
+        result.sqrDist = sqrDist;
+        result.P       = qp - signed_dist * N;
+        return true;
       }
-      if (edgeTest) {
-        lineSegs::CPResult cp = lineSegs::closestPoint(q,edge);
-        result.point = cp.point;
-      }
-
-      result.sqrDistance = sqrDistance(q,result.point);
-      return result;
     }
-    
+
     /*! find closest point (to query point) among a set of line
         triangles (given by triangles[] and vertices[], up to a maximum
-        (square) query distance provided in result.sqrDistance. any
-        line egments further away than result.sqrDistance will get
-        rejected; at the end of the query result.maxSqrDistance will
+        (square) query dist provided in result.sqrDist. any
+        line egments further away than result.sqrDist will get
+        rejected; at the end of the query result.maxSqrDist will
         be the (square) distnace to the found triangle (if found), or
         will be left un-modified if no such triangle could be found
         within the initial query radius */
     inline __device__
-    void fcp(FCPResult   &result,
-             const vec3f  queryPoint,
-             const bvh3f  bvh,
-             const vec3i *const __restrict__ indices,
-             const vec3f *const __restrict__ vertices)
+    void findClosest(FCPResult      &result,
+                     const bvh3f     bvh,
+                     const Triangle *triangles,
+                     const vec3f     queryPoint)
     {
       /* as with all cubql traversal routines, we use a lambda that
          gets in a per-primitive ID, and that returns a square
-         distance that the traversal routines can from now on use to
+         dist that the traversal routines can from now on use to
          cull (note if the traversal already has a closer culling
-         distance it will keep on using this no matter what this
+         dist it will keep on using this no matter what this
          function returns, so we don't need to be too sanguine about
          which value to return) */
-      auto perPrim=[&result,queryPoint,indices,vertices](uint32_t primID) {
-        vec3i index = indices[primID];
-        Triangle triangle{vertices[index.x],vertices[index.y],vertices[index.z]};
-        CPResult primResult = closestPoint(queryPoint,triangle);
-        if (primResult.sqrDistance < result.sqrDistance) {
+      auto perPrim=[&result,queryPoint,triangles](uint32_t primID)->float {
+        Triangle triangle = triangles[primID];
+        if (closestPoint(result,triangle,queryPoint))
           result.primID = primID;
-          result.sqrDistance = primResult.sqrDistance;
-        }
-        return result.sqrDistance;
+        return result.sqrDist;
       };
-      cuBQL::shrinkingRadiusQuery_forEachPrim(bvh,queryPoint,result.sqrDistance,perPrim);
+      cuBQL::shrinkingRadiusQuery::forEachPrim(perPrim,bvh,queryPoint,result.sqrDist);
     } // fcp()
     
   } // ::cuBQL::triangles

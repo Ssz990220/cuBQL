@@ -58,7 +58,7 @@ namespace cuBQL {
     }
 
     template<typename T, int D>
-    std::vector<vec_t<T,D>> cast(const std::vector<vec_t<double,D>> &in) {
+    std::vector<vec_t<T,D>> convert(const std::vector<vec_t<double,D>> &in) {
       std::vector<vec_t<T,D>> result(in.size());
       for (size_t i=0;i<in.size();i++)
         result[i] = vec_t<T,D>(in[i]);
