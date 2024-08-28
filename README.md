@@ -260,3 +260,108 @@ does not build any actual library.
 	   cuBQL_cuda_float3)
 ```
 
+# Traveral Templates
+
+CuBQL is the fourth one of different libraries that all aimed at
+providing fast, GPU-accelerated geometric queries. Throughout these
+previous predecessor libraries, a common theme that emerged was that
+whatever exact implementation the library provided, the user(s)
+typically required something that, though similar, was often just a
+little bit different. For example, a "find closest point point" kernel
+on point data is very similar to "find closest *surface* point" (on a
+set of triangles), but the actual point-to-primitive test is
+nevertheless different. Similarly, k-nearest-neighbor (kNN) queries
+might want to exclude certain points (e.g., based on surface normal
+for photon mapping), or a "find all points that overlap this box"
+kernel might only actually require the *number* of points vs another
+use case that might require the actual primitive IDs, etc.
+ 
+Based on this experience `cuBQL` decided to not only provide a set of
+very specific geometric kernels, but to *also* provide a set of what
+it calls `traversal templates` that can be used to easily generate
+different variants of queries using lamdba functions. For example,
+both kNN (with or without culling by surface normal) and find closest
+point (on points *or* on triangles) in principle work the same way, by
+performing a ball-shaped query where the radius of that ball *shrinks*
+during traversal, based on what primitive(s) have already been
+found. What exactly the query wants to do with a given primitmive that
+the traversal encounters depends on the actual query code, but as long
+as the traversal knows what range it has to look for *after* a given
+primitmive has been processed it does not actually need to know what
+specific operation that query need to do.q
+
+In cuBQL, this pattern is realized through what we call a "shrinking
+radius query": In this query, the user provides a query point (as the
+origin of that query), a (intital) maximum search radius, and a lambda
+function (ie, a "callback") that it wants to get called for any
+"candidate" primitive encountered by the traversal. This lambda can
+then do whatever that type of query needs to do with that primitive,
+and can additionally return a new maximum query radius that the
+traversal can then use for subsequent traversal steps. To do this, the
+user would simply define a lambda function that implements the
+specific per-primitive callback code, and pass that to a
+`cuBQL::shrinkingRadiusQuery::forEachPrim(...)` traversal template:
+
+```
+   inline __device__ void myQuery(bvh3f myBVH, 
+                                  MyPrim *myPrims, 
+								  vec3f myQueryPoint,
+								  ...) 
+   {
+      auto myQueryLambda = [...](int primID) -> float {
+	     ...
+	  };
+	  cuBQL::shrinkingRadiusQuery(myQueryLambda,
+	                              myQueryPoint,myBVH, ...);
+   }
+```
+
+For example, a `find closest point` kernel can then be realized
+by having the lamdba callback simply keep track of the currently 
+closest point:
+
+```
+   void findClosestPoint(...)
+   {
+      float closestDist = INFINITY;
+	  int   closestID   = -1;
+      auto myQueryLambda = [&closestDist,&closestID,...](int primID) -> float {
+	     float dist = distance(queryPoint,myPrims[primID]);
+		 if (dist < closestDist) 
+		   { closestDist = dist; closestID = primID; }
+	     return closestDist;
+	  };
+   }
+```
+Note that this same patters works for both point-to-point or point-to-triangular-surface 
+data! Also, the exact same pattern works for `float3` data as for `int2`, etc.
+
+# Specific geometric queries
+
+As described above, by far the main focus of cuBQL is the BVH
+builders, and the traversal templates, for users to be able to write
+their own specific queries. In addition, cuBQL also contains a
+small(!) set of very specific queries such as find closest point among
+float3 points, find closest surface point on triangle-mesh surface,
+k-nearest (float3 point) neighbor, etc. These should be considered
+more "samples" (for how to use the builder and traversal templates),
+but can of course also be used directly for those that require that
+exact kernel.
+
+# Code organization:
+
+- all of the cuBQL *library* are under `~/cuBQL/`
+  - `~/cuBQL/bvh.h` defines the various BVH types
+  - `~/cuBQL/builder/cuda.h` and `~/cuBQL/builder/host.h` provides the
+    (header-only) source for the various builder(s)
+  - `~/cuBQL/traversal/...` provides the traversal templates
+- various specific queries are under `~/cuBQL/queries/` (also all header-only)
+- some specific sample codes are under `~/samples/`, and some tools for more 
+  comprehensive testing are under `~/testing/`
+  
+Most users should only every need what is under `~/cuBQL/`, in fact
+most should only need the builder(s) and possibly traversal
+templates. Everything else should predominantly be viewed as examples
+of how to use those.
+
+  
