@@ -134,10 +134,10 @@ gets invoked as follows:
 ```
 #include "cuBQL/bvh.h"
 ...
-	box3f *d_boxes  = 0;
-	int    numBoxes = 0;
-	userCodeForGeneratingPrims(&d_boxes,&numBoxes, ...);
-	...
+    box3f *d_boxes  = 0;
+    int    numBoxes = 0;
+    userCodeForGeneratingPrims(&d_boxes,&numBoxes, ...);
+    ...
     cuBQL::BinaryBVH<float,3> bvh;
 	cuBQL::BuildConfig buildParams;
     cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,buildParams);
