@@ -199,9 +199,10 @@ To use `cuBQL`, you need:
 
 # Building
 
-As all builders *can* be used in a header-only form, cuBQL can be used
-from within any compiler and build system, by simply providing the proper
-include paths and including the `cuBQL/bvh.h` or other header files as required.
+As all of cuBQL's BVH builders and traversers *can* be used in a
+header-only form, cuBQL can be used from within any compiler and build
+system, by simply providing the proper include paths and including the
+`cuBQL/bvh.h` or other header files as required.
 
 However, we strongly suggest to use `cmake`, include cuBQL as a cmake
 `add_subdirectory(...)`, and then `target_link_libraries(...)` with
