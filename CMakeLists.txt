@@ -15,7 +15,7 @@
 # ======================================================================== #
 
 cmake_policy(SET CMP0048 NEW)
-project(cuBQL VERSION 0.0.1 LANGUAGES C CXX CUDA)
+project(cuBQL VERSION 1.0.0 LANGUAGES C CXX CUDA)
 
 cmake_minimum_required(VERSION 3.16)
 set(CMAKE_CXX_STANDARD 14)
