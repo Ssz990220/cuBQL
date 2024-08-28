@@ -188,77 +188,7 @@ A few notes:
   such as, for example, `cuBQL_cuda_float3` or `cuBQL_host_int4` that
   will then build that specific device and type specific builder(s).
   
-# Dependencies
-
-To use `cuBQL`, you need:
-
-- CUDA, version 12 and up. In theory some versions of CUDA 11 should work too, but 
-  using 12.2 and upwards is highly recommended.
-- `cmake`
-
-
-# Building
-
-As all of cuBQL's BVH builders and traversers *can* be used in a
-header-only form, cuBQL can be used from within any compiler and build
-system, by simply providing the proper include paths and including the
-`cuBQL/bvh.h` or other header files as required.
-
-However, we strongly suggest to use `cmake`, include cuBQL as a cmake
-`add_subdirectory(...)`, and then `target_link_libraries(...)` with
-the desired cuBQL cmake target.
-
-## Building in Header-only (explicit instantiation) mode:
-
-- in your own CUDA sources (say, `userMain.cu`):
-``` 
-#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
-#include <cuBQL/bvh.h>
-...
-void foo(...) {
-	cuBQL::gpuBuilder(...)
-}
-```
-
-- in your own `CMakeLists.txt`:
-```
-add_subdirectory(<pathTo>/cuBQL)
-	
-add_executable(userExec ... 
-    userMain.cu ...)
-	
-target_link_libraries(userExec ...
-    cuBQL)
-```
-
-In this case, the 'cuBQL' target that we link to is only a cmake
-`INTERFACE` target that merely sets up the right include paths, but
-does not build any actual library.
-
-## Building with predefined target (eg, for float3 data)
-
-- in your own CUDA sources (say, `userMain.cu`):
-```
-// do NOT define CUBQL_GPU_BUILDER_IMPLEMENTATION 
-#include <cuBQL/bvh.h>
-...
-void foo(...) {
-   cuBQL::gpuBuilder(...)
-}
-```
-
-- in your own `CMakeLists.txt`:
-```
-add_subdirectory(<pathTo>/cuBQL)
-	
-add_executable(userExec ... 
-   userMain.cu ...)
-	
-target_link_libraries(userExec ...
-   cuBQL_cuda_float3)
-```
-
-# Traveral Templates
+# Traversal Templates
 
 CuBQL is the fourth one of different libraries that all aimed at
 providing fast, GPU-accelerated geometric queries. Throughout these
@@ -364,3 +294,73 @@ templates. Everything else should predominantly be viewed as examples
 of how to use those.
 
   
+# Dependencies
+
+To use `cuBQL`, you need:
+
+- CUDA, version 12 and up. In theory some versions of CUDA 11 should work too, but 
+  using 12.2 and upwards is highly recommended.
+- `cmake`
+
+
+# Building
+
+As all of cuBQL's BVH builders and traversers *can* be used in a
+header-only form, cuBQL can be used from within any compiler and build
+system, by simply providing the proper include paths and including the
+`cuBQL/bvh.h` or other header files as required.
+
+However, we strongly suggest to use `cmake`, include cuBQL as a cmake
+`add_subdirectory(...)`, and then `target_link_libraries(...)` with
+the desired cuBQL cmake target.
+
+## Building in Header-only (explicit instantiation) mode:
+
+- in your own CUDA sources (say, `userMain.cu`):
+``` 
+#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
+#include <cuBQL/bvh.h>
+...
+void foo(...) {
+	cuBQL::gpuBuilder(...)
+}
+```
+
+- in your own `CMakeLists.txt`:
+```
+add_subdirectory(<pathTo>/cuBQL)
+	
+add_executable(userExec ... 
+    userMain.cu ...)
+	
+target_link_libraries(userExec ...
+    cuBQL)
+```
+
+In this case, the 'cuBQL' target that we link to is only a cmake
+`INTERFACE` target that merely sets up the right include paths, but
+does not build any actual library.
+
+## Building with predefined target (eg, for float3 data)
+
+- in your own CUDA sources (say, `userMain.cu`):
+```
+// do NOT define CUBQL_GPU_BUILDER_IMPLEMENTATION 
+#include <cuBQL/bvh.h>
+...
+void foo(...) {
+   cuBQL::gpuBuilder(...)
+}
+```
+
+- in your own `CMakeLists.txt`:
+```
+add_subdirectory(<pathTo>/cuBQL)
+	
+add_executable(userExec ... 
+   userMain.cu ...)
+	
+target_link_libraries(userExec ...
+   cuBQL_cuda_float3)
+```
+
