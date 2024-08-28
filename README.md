@@ -1,4 +1,4 @@
-# cuBQL ("cubicle") - A CUDA BVH Build and Query Library
+# cuBQL ("cubicle") - A CUDA "BVH Build-and-Query" Library
 
 'Cubicle' (cuBQL) is a (mostly) header-only CUDA/C++ library for the
 easy and efficient GPU-construction and -traversal of bounding volume
