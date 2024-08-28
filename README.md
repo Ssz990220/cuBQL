@@ -212,23 +212,23 @@ the desired cuBQL cmake target.
 
 - in your own CUDA sources (say, `userMain.cu`):
 ``` 
-	#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
-	#include <cuBQL/bvh.h>
-	...
-	void foo(...) {
-	   cuBQL::gpuBuilder(...)
-	}
+#define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
+#include <cuBQL/bvh.h>
+...
+void foo(...) {
+	cuBQL::gpuBuilder(...)
+}
 ```
 
 - in your own `CMakeLists.txt`:
 ```
-	add_subdirectory(<pathTo>/cuBQL)
+add_subdirectory(<pathTo>/cuBQL)
 	
-	add_executable(userExec ... 
-	   userMain.cu ...)
+add_executable(userExec ... 
+    userMain.cu ...)
 	
-	target_link_libraries(userExec ...
-	   cuBQL)
+target_link_libraries(userExec ...
+    cuBQL)
 ```
 
 In this case, the 'cuBQL' target that we link to is only a cmake
@@ -239,23 +239,23 @@ does not build any actual library.
 
 - in your own CUDA sources (say, `userMain.cu`):
 ```
-    // do NOT define CUBQL_GPU_BUILDER_IMPLEMENTATION 
-	#include <cuBQL/bvh.h>
-	...
-	void foo(...) {
-	   cuBQL::gpuBuilder(...)
-	}
+// do NOT define CUBQL_GPU_BUILDER_IMPLEMENTATION 
+#include <cuBQL/bvh.h>
+...
+void foo(...) {
+   cuBQL::gpuBuilder(...)
+}
 ```
 
 - in your own `CMakeLists.txt`:
 ```
-	add_subdirectory(<pathTo>/cuBQL)
+add_subdirectory(<pathTo>/cuBQL)
 	
-	add_executable(userExec ... 
-	   userMain.cu ...)
+add_executable(userExec ... 
+   userMain.cu ...)
 	
-	target_link_libraries(userExec ...
-	   cuBQL_cuda_float3)
+target_link_libraries(userExec ...
+   cuBQL_cuda_float3)
 ```
 
 # Traveral Templates
@@ -301,17 +301,18 @@ specific per-primitive callback code, and pass that to a
 `cuBQL::shrinkingRadiusQuery::forEachPrim(...)` traversal template:
 
 ```
-   inline __device__ void myQuery(bvh3f myBVH, 
-                                  MyPrim *myPrims, 
-								  vec3f myQueryPoint,
-								  ...) 
-   {
-      auto myQueryLambda = [...](int primID) -> float {
-	     ...
-	  };
-	  cuBQL::shrinkingRadiusQuery(myQueryLambda,
-	                              myQueryPoint,myBVH, ...);
-   }
+inline __device__ 
+void myQuery(bvh3f myBVH, 
+             MyPrim *myPrims, 
+             vec3f myQueryPoint,
+             ...) 
+{
+  auto myQueryLambda = [...](int primID) -> float {
+   ...
+  };
+  cuBQL::shrinkingRadiusQuery(myQueryLambda,
+                              myQueryPoint,myBVH, ...);
+}
 ```
 
 For example, a `find closest point` kernel can then be realized
@@ -319,17 +320,17 @@ by having the lamdba callback simply keep track of the currently
 closest point:
 
 ```
-   void findClosestPoint(...)
-   {
-      float closestDist = INFINITY;
-	  int   closestID   = -1;
-      auto myQueryLambda = [&closestDist,&closestID,...](int primID) -> float {
-	     float dist = distance(queryPoint,myPrims[primID]);
-		 if (dist < closestDist) 
-		   { closestDist = dist; closestID = primID; }
-	     return closestDist;
-	  };
-   }
+void findClosestPoint(...)
+{
+   float closestDist = INFINITY;
+   int   closestID   = -1;
+   auto myQueryLambda = [&closestDist,&closestID,...](int primID) -> float {
+      float dist = distance(queryPoint,myPrims[primID]);
+      if (dist < closestDist) 
+         { closestDist = dist; closestID = primID; }
+      return closestDist;
+   };
+}
 ```
 Note that this same patters works for both point-to-point or point-to-triangular-surface 
 data! Also, the exact same pattern works for `float3` data as for `int2`, etc.
