@@ -194,9 +194,7 @@ To use `cuBQL`, you need:
 
 - CUDA, version 12 and up. In theory some versions of CUDA 11 should work too, but 
   using 12.2 and upwards is highly recommended.
-- `cmake` (under linux, install via `sudo apt install cmake cmake-curses-gui build-essential`)
-```
-
+- `cmake`
 
 
 # Building
