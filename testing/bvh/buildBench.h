@@ -89,7 +89,7 @@ namespace testing {
       ? cuBQL::samples::ClusteredPointGenerator<CUBQL_TEST_D>().generate(numPoints,12345)
       : cuBQL::samples::UniformPointGenerator<CUBQL_TEST_D>().generate(numPoints,12345);
 
-    std::cout << "converting to " << vecND::typeName() << std::endl;
+    std::cout << "converting to " << point_t::typeName() << std::endl;
     std::vector<point_t> dataPoints
       = cuBQL::samples::convert<CUBQL_TEST_T>(generatedPoints);
     
