@@ -17,6 +17,7 @@
 #pragma once
 
 # include <cuda_runtime_api.h>
+# include "cuBQL/math/box.h"
 
 namespace cuBQL {
 
@@ -117,19 +118,33 @@ namespace cuBQL {
 
 
   
+  // // ------------------------------------------------------------------
+  // /*! fast radix/morton builder */
+  // // ------------------------------------------------------------------
+  namespace cuda {
+    template<typename T, int D>
+    void radixBuilder(BinaryBVH<T,D>   &bvh,
+                      const box_t<T,D> *boxes,
+                      uint32_t              numPrims,
+                      BuildConfig           buildConfig,
+                      cudaStream_t          s=0,
+                      GpuMemoryResource    &memResource=defaultGpuMemResource());
+  }
+  
   // ------------------------------------------------------------------
-  /*! fast radix/morton builder for float3 data */
+  /*! fast radix/morton builder with automatic rebinning where
+    required (better for certain numerically challenging data
+      distributions) */
   // ------------------------------------------------------------------
   template<typename T, int D>
-  void mortonBuilder(BinaryBVH<T,D>   &bvh,
-                     const box_t<T,D> *boxes,
-                     int                   numPrims,
-                     BuildConfig           buildConfig,
-                     cudaStream_t          s=0,
-                     GpuMemoryResource    &memResource=defaultGpuMemResource());
+  void rebinRadixBuilder(BinaryBVH<T,D>   &bvh,
+                         const box_t<T,D> *boxes,
+                         uint32_t                   numPrims,
+                         BuildConfig           buildConfig,
+                         cudaStream_t          s,
+                         GpuMemoryResource    &memResource=defaultGpuMemResource());
   
   // ------------------------------------------------------------------
-  
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
   template<typename T, int D>
@@ -156,15 +171,16 @@ namespace cuBQL {
 }
 
 #ifdef __CUDACC__
-# if CUBQL_GPU_BUILDER_IMPLEMENTATION
+# ifdef CUBQL_GPU_BUILDER_IMPLEMENTATION
 #  include "cuBQL/builder/cuda/gpu_builder.h"  
 #  include "cuBQL/builder/cuda/sm_builder.h"  
 #  include "cuBQL/builder/cuda/sah_builder.h"  
 #  include "cuBQL/builder/cuda/elh_builder.h"  
-#  include "cuBQL/builder/cuda/morton.h"  
+#  include "cuBQL/builder/cuda/radix.h"  
 #  include "cuBQL/builder/cuda/wide_gpu_builder.h"  
 # endif
 #endif
+
 
 
 

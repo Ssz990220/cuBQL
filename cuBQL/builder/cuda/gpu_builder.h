@@ -91,34 +91,4 @@ namespace cuBQL {
 }
 
 
-#define CUBQL_INSTANTIATE_BINARY_BVH(T,D)                              \
-  namespace cuBQL {                                                    \
-    template void gpuBuilder(BinaryBVH<T,D>    &bvh,                   \
-                             const box_t<T,D>  *boxes,                 \
-                             uint32_t           numBoxes,              \
-                             BuildConfig        buildConfig,           \
-                             cudaStream_t       s,                     \
-                             GpuMemoryResource &mem_resource);         \
-    template void free(BinaryBVH<T,D>    &bvh,                         \
-                       cudaStream_t       s,                           \
-                       GpuMemoryResource &mem_resource);               \
-    namespace cuda {                                                   \
-      template void free(BinaryBVH<T,D>    &bvh,                       \
-                         cudaStream_t       s,                         \
-                         GpuMemoryResource &mem_resource);             \
-    }                                                                  \
-  }                                                                    \
-  
-#define CUBQL_INSTANTIATE_WIDE_BVH(T,D,N)                               \
-  namespace cuBQL {                                                     \
-    template void gpuBuilder(WideBVH<T,D,N>    &bvh,                    \
-                             const box_t<T,D>  *boxes,                  \
-                             uint32_t           numBoxes,               \
-                             BuildConfig        buildConfig,            \
-                             cudaStream_t       s,                      \
-                             GpuMemoryResource &mem_resource);          \
-    template void free(WideBVH<T,D,N>  &bvh,                            \
-                       cudaStream_t s,                                  \
-                       GpuMemoryResource& mem_resource);                \
-  }
 

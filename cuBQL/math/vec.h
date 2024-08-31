@@ -147,6 +147,7 @@ namespace cuBQL {
     }
     
     inline __cubql_both T         get(int i) const { return (*this)[i]; }
+    inline static std::string typeName();
   };
 
   template<typename T>
@@ -173,6 +174,37 @@ namespace cuBQL {
     
     inline __cubql_both vec_t &operator=(cuda_t o)
     { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+    
+    inline static std::string typeName();
+  };
+  
+  template<typename T>
+  struct vec_t<T,4> : public vec_t_data<T,4> {
+    enum { numDims = 4 };
+    using scalar_t = T;
+    using cuda_t = typename cuda_eq_t<T,4>::type;
+    using vec_t_data<T,4>::x;
+    using vec_t_data<T,4>::y;
+    using vec_t_data<T,4>::z;
+    using vec_t_data<T,4>::w;
+
+    inline __cubql_both vec_t() {}
+    inline __cubql_both vec_t(const T &t) { x = y = z = w = t; }
+    inline __cubql_both vec_t(T x, T y, T z, T w)
+    { this->x = x; this->y = y; this->z = z; this->w = w; }
+    inline __cubql_both vec_t(const vec_t_data<T,4> &o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+    inline __cubql_both vec_t(const cuda_t &o) 
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+
+    template<typename OT>
+    explicit __cubql_both vec_t(const vec_t_data<OT,4> &o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+    
+    inline __cubql_both vec_t &operator=(cuda_t o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+    
+    inline static std::string typeName();
   };
   
   using vec2f = vec_t<float,2>;
@@ -311,6 +343,66 @@ namespace cuBQL {
   CUBQL_OPERATOR(operator/,/)
 #undef CUBQL_OPERATOR
 
+  // --------- vec << int -------------
+  inline __cubql_both vec_t<int,2> operator<<(vec_t<int,2> v, int b)
+  { return vec_t<int,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<int,3> operator<<(vec_t<int,3> v, int b)
+  { return vec_t<int,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<int,4> operator<<(vec_t<int,4> v, int b)
+  { return vec_t<int,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+
+  inline __cubql_both vec_t<uint32_t,2> operator<<(vec_t<uint32_t,2> v, int b)
+  { return vec_t<uint32_t,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<uint32_t,3> operator<<(vec_t<uint32_t,3> v, int b)
+  { return vec_t<uint32_t,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<uint32_t,4> operator<<(vec_t<uint32_t,4> v, int b)
+  { return vec_t<uint32_t,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+  
+  inline __cubql_both vec_t<longlong,2> operator<<(vec_t<longlong,2> v, int b)
+  { return vec_t<longlong,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<longlong,3> operator<<(vec_t<longlong,3> v, int b)
+  { return vec_t<longlong,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<longlong,4> operator<<(vec_t<longlong,4> v, int b)
+  { return vec_t<longlong,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+  
+  inline __cubql_both vec_t<uint64_t,2> operator<<(vec_t<uint64_t,2> v, int b)
+  { return vec_t<uint64_t,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<uint64_t,3> operator<<(vec_t<uint64_t,3> v, int b)
+  { return vec_t<uint64_t,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<uint64_t,4> operator<<(vec_t<uint64_t,4> v, int b)
+  { return vec_t<uint64_t,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+  
+  // --------- vec >> int -------------
+  inline __cubql_both vec_t<int,2> operator>>(vec_t<int,2> v, int b)
+  { return vec_t<int,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<int,3> operator>>(vec_t<int,3> v, int b)
+  { return vec_t<int,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<int,4> operator>>(vec_t<int,4> v, int b)
+  { return vec_t<int,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+
+  inline __cubql_both vec_t<uint32_t,2> operator>>(vec_t<uint32_t,2> v, int b)
+  { return vec_t<uint32_t,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<uint32_t,3> operator>>(vec_t<uint32_t,3> v, int b)
+  { return vec_t<uint32_t,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<uint32_t,4> operator>>(vec_t<uint32_t,4> v, int b)
+  { return vec_t<uint32_t,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+  
+  inline __cubql_both vec_t<longlong,2> operator>>(vec_t<longlong,2> v, int b)
+  { return vec_t<longlong,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<longlong,3> operator>>(vec_t<longlong,3> v, int b)
+  { return vec_t<longlong,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<longlong,4> operator>>(vec_t<longlong,4> v, int b)
+  { return vec_t<longlong,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+  
+  inline __cubql_both vec_t<uint64_t,2> operator>>(vec_t<uint64_t,2> v, int b)
+  { return vec_t<uint64_t,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<uint64_t,3> operator>>(vec_t<uint64_t,3> v, int b)
+  { return vec_t<uint64_t,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<uint64_t,4> operator>>(vec_t<uint64_t,4> v, int b)
+  { return vec_t<uint64_t,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+  
+
+  
 #define CUBQL_UNARY(op)                         \
   template<typename T, int D>                   \
   inline __cubql_both                           \
@@ -528,6 +620,24 @@ namespace cuBQL {
     return o;
   }
 
+
+  template<typename T>
+  inline std::string toString();
+  template<> inline std::string toString<float>()    { return "float"; }
+  template<> inline std::string toString<int>()      { return "int"; }
+  template<> inline std::string toString<double>()   { return "double"; }
+  template<> inline std::string toString<longlong>() { return "long"; }
+
+  template<typename T, int D>
+  std::string vec_t<T,D>::typeName()
+  { return cuBQL::toString<T>()+std::to_string(D); }
+  template<typename T>
+  std::string vec_t<T,3>::typeName()
+  { return cuBQL::toString<T>()+std::to_string(3); }
+  template<typename T>
+  std::string vec_t<T,4>::typeName()
+  { return cuBQL::toString<T>()+std::to_string(4); }
+  
   /*! @} */
   // ------------------------------------------------------------------
   

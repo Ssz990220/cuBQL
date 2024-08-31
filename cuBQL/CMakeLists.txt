@@ -36,7 +36,7 @@ target_sources(cuBQL INTERFACE
   builder/cuda/sm_builder.h
   builder/cuda/sah_builder.h
   builder/cuda/gpu_builder.h
-  builder/cuda/morton.h
+  builder/cuda/radix.h
   builder/cuda/rebinMortonBuilder.h
   builder/cuda/wide_gpu_builder.h
   )

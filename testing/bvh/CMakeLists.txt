@@ -14,14 +14,35 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-add_library(cuBQL_testing_common
-  INTERFACE
-  )
-target_link_libraries(cuBQL_testing_common
-  INTERFACE
-  cuBQL_samples_common
-  )
+# =========================================================================
+# 'closestPoint': both query points and data are regular points of
+# type <typeN> (float2, int3, etc). For each query point, find the
+# closest data point.
+# =========================================================================
+function(add_testing_target sampleName device suffix T D)
+  # sampleName - name of sample
+  # device - host or cuda
+  # T - scalar type
+  # D - dimension
+    add_executable(testing_${sampleName}_${device}_${T}${D}
+      ${sampleName}.h
+      ${sampleName}.${suffix}
+      )
+    target_link_libraries(testing_${sampleName}_${device}_${T}${D}
+      PUBLIC
+      cuBQL_testing_common
+      cuBQL_${device}_${T}${D}
+      )
+    target_compile_definitions(testing_${sampleName}_${device}_${T}${D}
+      PUBLIC
+      -DCUBQL_TEST_T=${T}
+      -DCUBQL_TEST_D=${D}
+      )
+endfunction()
 
-add_subdirectory(common)
-add_subdirectory(bvh)
-add_subdirectory(points)
+foreach(T IN ITEMS float int double longlong)
+  foreach(D IN ITEMS 2 3 4)
+    add_testing_target(buildBench cuda cu ${T} ${D})
+    add_testing_target(buildBench host cpp ${T} ${D})
+  endforeach()
+endforeach()

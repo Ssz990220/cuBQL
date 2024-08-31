@@ -19,7 +19,7 @@
 #include "cuBQL/builder/cuda/sm_builder.h"
 
 namespace cuBQL {
-  namespace mortonBuilder_impl {
+  namespace radixBuilder_impl {
     using gpuBuilder_impl::atomic_grow;
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
@@ -29,7 +29,7 @@ namespace cuBQL {
     template<int D> struct numMortonBits;
     template<> struct numMortonBits<2> { enum { value = 31 }; };
     template<> struct numMortonBits<3> { enum { value = 21 }; };
-    template<> struct numMortonBits<4> { enum { value =  15 }; };
+    template<> struct numMortonBits<4> { enum { value = 15 }; };
     // template<> struct numMortonBits<2> { enum { value = 15 }; };
     // template<> struct numMortonBits<3> { enum { value = 10 }; };
     // template<> struct numMortonBits<4> { enum { value =  7 }; };
@@ -44,7 +44,7 @@ namespace cuBQL {
         quantizeBias
           = centBounds.lower;
         quantizeScale
-          = vec_t(1<<numMortonBits<D>::value)
+          = vec_t(1u<<numMortonBits<D>::value)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
       }
         
@@ -53,14 +53,14 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui((1<<numMortonBits<D>::value)-1));
+        cell = min(cell,vec_ui(uint32_t(((1u<<numMortonBits<D>::value)-1))));
         return cell;
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
       vec_t CUBQL_ALIGN(16) quantizeBias;
       vec_t CUBQL_ALIGN(16) quantizeScale;
     };
@@ -75,7 +75,7 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui((1<<numMortonBits<D>::value)-1));
+        cell = min(cell,vec_ui((1u<<numMortonBits<D>::value)-1));
         return cell;
       }
         
@@ -89,9 +89,9 @@ namespace cuBQL {
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
       vec_t CUBQL_ALIGN(16) quantizeBias;
       vec_t CUBQL_ALIGN(16) quantizeScale;
     };
@@ -117,9 +117,37 @@ namespace cuBQL {
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t quantizeBias;
+      int   shlBits;
+    };
+    
+    template<int D>
+    struct Quantizer<int64_t,D> {
+      using vec_t = cuBQL::vec_t<int64_t,D>;
+      using box_t = cuBQL::box_t<int64_t,D>;
+      
+      inline __device__ void init(cuBQL::box_t<int64_t,D> centBounds)
+      {
+        quantizeBias = centBounds.lower;
+        uint64_t maxValue = reduce_max(centBounds.size());
+        shlBits = __clzll(maxValue);
+      }
+
+      inline __device__ cuBQL::vec_t<uint32_t,D> quantize(vec_t P) const
+      {
+        cuBQL::vec_t<int64_t,D> cell = cuBQL::vec_t<int64_t,D>(P-quantizeBias);
+        // move all relevant bits to top
+        cell = cell << shlBits;
+        return cuBQL::vec_t<uint32_t,D>(cell >> (64-numMortonBits<D>::value));
+      }
+        
+      /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
       vec_t quantizeBias;
       int   shlBits;
     };
@@ -139,8 +167,8 @@ namespace cuBQL {
       int numNodesAlloced;
 
       /*! number of *valid* prims that get put into the BVH; this will
-          be computed by sarting with the input number of prims, and
-          removing those that have invalid/empty bounds */
+        be computed by sarting with the input number of prims, and
+        removing those that have invalid/empty bounds */
       int numValidPrims;
       
       /*! bounds of prim centers, relative to which we will computing
@@ -198,7 +226,7 @@ namespace cuBQL {
     __global__
     void finishBuildState(BuildState<T,D>  *buildState)
     {
-      using ctx_t = BuildState<float,3>;
+      using ctx_t = BuildState<float,D>;
       using atomic_box_t = typename ctx_t::atomic_box_t;
       using box_t        = typename ctx_t::box_t;
       
@@ -252,7 +280,42 @@ namespace cuBQL {
     inline __device__
     uint64_t shiftBits(uint64_t x, uint64_t maskOfBitstoMove, int howMuchToShift)
     { return ((x & maskOfBitstoMove)<<howMuchToShift) | (x & ~maskOfBitstoMove); }
+
+    /*! insert 2 zeroes in-between every two successive bits of the
+      input. ie, bit 0 stays at 0, bit 1 goes to 3, etc */
+    inline __device__
+    uint64_t bitInterleave11(uint64_t x)
+    {
+      // current x is this:                      FEDC.BAzy.xwvu.tsrq.ponm.lkji.hgfe.dcba
+
+      // 0000.0000:0000.0000:0000.0000:0000.0000:FEDC.BAzy:xwvu.tsrq:ponm.lkji:hgfe.dcba
+
+      x = shiftBits(x,0xffffffff00000000ull,16);
+      
+      // 0000.0000:0000.0000:FEDC.BAzy:xwvu.tsrq:0000.0000:0000.0000:ponm.lkji:hgfe.dcba
+
+      x = shiftBits(x,0b0000000000000000111111110000000000000000000000001111111100000000ull,8);
+      
+      // 0000.0000:FEDC.BAzy:0000.0000:xwvu.tsrq:0000.0000:ponm.lkji:0000.0000:hgfe.dcba
+
+      x = shiftBits(x,0b0000000011110000000000001111000000000000111100000000000011110000ull,4);
+      
+      // 0000.FEDC:0000.BAzy:0000.xwvu:0000.tsrq:0000.ponm:0000.lkji:0000.hgfe:0000.dcba
+
+      x = shiftBits(x,0b0000110000001100000011000000110000001100000011000000110000001100ull,2);
+
+      // 00FE.00DC:00BA.00zy:00xw.00vu:00ts.00rq:00po.00nm:00lk.00ji:00hg.00fe:00dc.00ba
+      
+      x = shiftBits(x,0b0010001000100010001000100010001000100010001000100010001000100010ull,1);
+      
+      // 0F0E.0D0C:0B0A.0z0y:0x0w.0v0u:0t0s.0r0q:0p0o.0n0m:0l0k.0j0i:0h0g.0f0e:0d0c.0b0a
+      return x;
+    }
     
+    /*! insert 2 zeroes in-between every two successive bits of the
+      input. ie, bit 0 stays at 0, bit 1 goes to 3, etc */
+    /*! insert 2 zeroes in-between every two successive bits of the
+      input. ie, bit 0 stays at 0, bit 1 goes to 3, etc */
     inline __device__
     uint64_t bitInterleave21(uint64_t x)
     {
@@ -270,6 +333,15 @@ namespace cuBQL {
     }
     
     inline __device__
+    uint64_t interleaveBits64(vec2ui coords)
+    {
+      return
+        (bitInterleave11(coords.x) << 0)
+        |
+        (bitInterleave11(coords.y) << 1);
+    }
+    
+    inline __device__
     uint64_t interleaveBits64(vec3ui coords)
     {
       return
@@ -278,6 +350,25 @@ namespace cuBQL {
         (bitInterleave21(coords.y) << 1)
         |
         (bitInterleave21(coords.z) << 2);
+    }
+    
+    inline __device__
+    uint64_t interleaveBits64(vec4ui coords)
+    {
+      uint32_t xz
+        =
+        (bitInterleave11(coords.x) << 0)
+        |
+        (bitInterleave11(coords.z) << 1);
+      uint32_t yw
+        =
+        (bitInterleave11(coords.y) << 0)
+        |
+        (bitInterleave11(coords.w) << 1);
+      return
+        (bitInterleave11(xz) << 0)
+        |
+        (bitInterleave11(yw) << 1);
     }
     
     template<typename T, int D>
@@ -473,9 +564,9 @@ namespace cuBQL {
     }
     
     template<typename T, int D>
-    void build(bvh_t<T,D>        &bvh,
+    void build(BinaryBVH<T,D>        &bvh,
                const typename BuildState<T,D>::box_t       *boxes,
-               int                numPrims,
+               uint32_t           numPrims,
                BuildConfig        buildConfig,
                cudaStream_t       s,
                GpuMemoryResource &memResource)
@@ -490,8 +581,8 @@ namespace cuBQL {
       // which we need for computing morton codes.
       // ==================================================================
       /* step 1.1, init build state; in particular, clear the shared
-        centbounds we need to atomically grow centroid bounds in next
-        step */
+         centbounds we need to atomically grow centroid bounds in next
+         step */
       BuildState<T,D> *d_buildState = 0;
       _ALLOC(d_buildState,1,s,memResource);
       clearBuildState<<<32,1,0,s>>>
@@ -499,7 +590,7 @@ namespace cuBQL {
       /* step 1.2, compute the centbounds we need for morton codes; we
          do this by atomically growing this shared centBounds with
          each (non-invalid) input prim */
-      fillBuildState<<<divRoundUp(numPrims,1024),1024,0,s>>>
+      fillBuildState<<<divRoundUp((int)numPrims,1024),1024,0,s>>>
         (d_buildState,boxes,numPrims);
       /* step 1.3, convert vom atomic_box to regular box, which is
          cheaper to digest for the following kernels */
@@ -529,8 +620,8 @@ namespace cuBQL {
       // morton code
       // ==================================================================
       /* 2.1, allocate mem for _unsorted_ prim IDs and morton codes,
-       then compute initial primID array (will already exclude prims
-       that are invalid) and (unsorted) morton code array */
+         then compute initial primID array (will already exclude prims
+         that are invalid) and (unsorted) morton code array */
       uint64_t *d_primKeys_unsorted;
       uint32_t *d_primIDs_unsorted;
       _ALLOC(d_primKeys_unsorted,numPrims,s,memResource);
@@ -588,9 +679,9 @@ namespace cuBQL {
 
       /* 3.2 extract nodes until no more (temp-)nodes get created */
       int numNodesAlloced = 1; /*!< device actually things it's two,
-                                  but we intentionally use 1 here to
-                                  make first round start with right
-                                  could of _valid_ nodes*/
+                                 but we intentionally use 1 here to
+                                 make first round start with right
+                                 could of _valid_ nodes*/
       
       int numNodesDone    = 0;
       while (numNodesDone < numNodesAlloced) {
@@ -640,13 +731,17 @@ namespace cuBQL {
     }
   }
 
-  template<typename T, int D>
-  void mortonBuilder(BinaryBVH<T,D>   &bvh,
-                     const box_t<T,D> *boxes,
-                     int                   numPrims,
-                     BuildConfig           buildConfig,
-                     cudaStream_t          s,
-                     GpuMemoryResource    &memResource)
-  { mortonBuilder_impl::build(bvh,boxes,numPrims,buildConfig,s,memResource); }
+  namespace cuda {
+    template<typename T, int D>
+    void radixBuilder(cuBQL::BinaryBVH<T,D>    &bvh,
+                      const cuBQL::box_t<T,D>  *boxes,
+                      uint32_t                  numPrims,
+                      cuBQL::BuildConfig        buildConfig,
+                      cudaStream_t              s,
+                      cuBQL::GpuMemoryResource &memResource)
+    {
+      radixBuilder_impl::build(bvh,boxes,numPrims,buildConfig,s,memResource);
+    }
+  }
 }
 

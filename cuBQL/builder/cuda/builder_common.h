@@ -43,14 +43,30 @@ namespace cuBQL {
       inline __device__ box_t make_box() const;
 
       inline __device__ float get_lower(int dim) const {
-        if (box_t::numDims==3) {
-          return decode(dim?((dim>1)?lower[2]:lower[1]):lower[0]);
+        if (box_t::numDims>4) 
+          return decode(lower[dim]);
+        else if (box_t::numDims==4) {
+          return decode(dim>1
+                        ?((dim>2)?lower[3]:lower[2])
+                        :((dim  )?lower[1]:lower[0]));
+        } else if (box_t::numDims==3) {
+          return decode(dim>1
+                        ?lower[2]
+                        :((dim  )?lower[1]:lower[0]));
         } else
           return decode(lower[dim]);
       }
       inline __device__ float get_upper(int dim) const {
-        if (box_t::numDims==3)
-          return decode(dim?((dim>1)?upper[2]:upper[1]):upper[0]);
+        if (box_t::numDims>4) 
+          return decode(upper[dim]);
+        else if (box_t::numDims==4) {
+          return decode(dim>1
+                        ?((dim>2)?upper[3]:upper[2])
+                        :((dim  )?upper[1]:upper[0]));
+        } else if (box_t::numDims==3)
+          return decode(dim>1
+                        ?upper[2]
+                        :((dim  )?upper[1]:upper[0]));
         else
           return decode(upper[dim]);
       }
