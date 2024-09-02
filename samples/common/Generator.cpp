@@ -802,7 +802,7 @@ namespace cuBQL {
     }
 
     // ==================================================================
-    /*! "mixture" generator - generates a new distributoin based by
+    /*! "mixture" generator - generates a new distribution based by
       randomly picking between two input distributions */
     template<int D>
     std::vector<box_t<double,D>> MixtureBoxGenerator<D>::generate(int numRequested, int seed)
@@ -827,9 +827,7 @@ namespace cuBQL {
         size_t outCount = numRequested;
         
         size_t which
-          = (inCount == outCount)
-          ? tid
-          : (rng.ui32() % inCount);
+          = (((inCount == outCount) ? tid : rng.ui32())) % inCount;
         boxes[tid] = in[which];
       }
       return boxes;

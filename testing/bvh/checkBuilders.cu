@@ -226,15 +226,19 @@ namespace testing {
 int main(int ac, char **av)
 {
   std::vector<std::string> generatorStrings
-    = { "uniform", "clustered" };
+    = {
+    "uniform",
+    "clustered",
+    "mixture .1 remap [ -10000000 ] [ 10000000 ] uniform remap [ 1000 1000 ] [ 10000000 1020 ] clustered",
+  };
   // const std::string generatorString = "uniform";
   std::vector<int> numPointsToTest = { 100,10000,10000000 };
   for (auto numPoints: numPointsToTest) {
     for (auto generatorString : generatorStrings) {
       
-      // testing::checkD<2>(generatorString,numPoints);
+      testing::checkD<2>(generatorString,numPoints);
       testing::checkD<3>(generatorString,numPoints);
-      // testing::checkD<4>(generatorString,numPoints);
+      testing::checkD<4>(generatorString,numPoints);
     }      
   }
 
@@ -242,3 +246,4 @@ int main(int ac, char **av)
 }
 
 
+ 

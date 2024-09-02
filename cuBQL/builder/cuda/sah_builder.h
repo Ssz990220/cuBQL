@@ -182,7 +182,7 @@ namespace cuBQL {
           float prim_d = 0.5f*(primBox.get_lower(d)+primBox.get_upper(d));
           float rel
             = (prim_d - centBounds.get_lower(d))
-            / (centBounds.get_upper(d)-centBounds.get_lower(d));
+            / (centBounds.get_upper(d)-centBounds.get_lower(d)+1e-20f);
           bin = int(rel*SAHBins::numBins);
           bin = max(0,min(SAHBins::numBins-1,bin));
           // printf("prim %i in node %i, pos %f %f %f in cent %f %f %f - %f %f %f; dim %i: rel %f bin %i\n",
@@ -314,7 +314,7 @@ namespace cuBQL {
       float prim_d = 0.5f*(primBox.get_lower(d)+primBox.get_upper(d));
       float rel
         = (prim_d - lo)
-        / (hi - lo);
+        / (hi - lo + 1e-20f);
       int prim_bin = int(rel*SAHBins::numBins);
       prim_bin = max(0,min(SAHBins::numBins-1,prim_bin));
       
