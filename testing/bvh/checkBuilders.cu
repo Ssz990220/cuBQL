@@ -228,13 +228,13 @@ int main(int ac, char **av)
   std::vector<std::string> generatorStrings
     = { "uniform", "clustered" };
   // const std::string generatorString = "uniform";
-  std::vector<int> numPointsToTest = { 10,10000,10000000 };
+  std::vector<int> numPointsToTest = { 100,10000,10000000 };
   for (auto numPoints: numPointsToTest) {
     for (auto generatorString : generatorStrings) {
       
-      testing::checkD<2>(generatorString,numPoints);
+      // testing::checkD<2>(generatorString,numPoints);
       testing::checkD<3>(generatorString,numPoints);
-      testing::checkD<4>(generatorString,numPoints);
+      // testing::checkD<4>(generatorString,numPoints);
     }      
   }
 

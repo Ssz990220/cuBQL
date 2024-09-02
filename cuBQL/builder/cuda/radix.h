@@ -138,7 +138,7 @@ namespace cuBQL {
 
       inline __device__ cuBQL::vec_t<uint32_t,D> quantize(vec_t P) const
       {
-        cuBQL::vec_t<int64_t,D> cell = cuBQL::vec_t<int64_t,D>(P-quantizeBias);
+        cuBQL::vec_t<uint64_t,D> cell = cuBQL::vec_t<uint64_t,D>(P-quantizeBias);
         // move all relevant bits to top
         cell = cell << shlBits;
         return cuBQL::vec_t<uint32_t,D>(cell >> (64-numMortonBits<D>::value));

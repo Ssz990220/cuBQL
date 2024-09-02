@@ -53,7 +53,7 @@ namespace cuBQL {
     };
     
     struct SAHBins {
-      enum { numBins = 8 };
+      enum { numBins = 16 };
       struct {
         struct CUBQL_ALIGN(16) {
           AtomicBox<box3f> bounds;
@@ -390,7 +390,7 @@ namespace cuBQL {
                     uint32_t     _numPrims,
                     BuildConfig  buildConfig,
                     cudaStream_t s,
-                    GpuMemoryResource& mem_resource)
+                    GpuMemoryResource& memResource)
     { throw std::runtime_error("cuBQL::cuda::sahBuilder() only makes sense for float3 data"); }
 
     template<typename T=float, int D=3>
@@ -399,7 +399,7 @@ namespace cuBQL {
                     uint32_t     _numPrims,
                     BuildConfig  buildConfig,
                     cudaStream_t s,
-                    GpuMemoryResource& mem_resource)
+                    GpuMemoryResource& memResource)
     {
       // ==================================================================
       // do build on temp nodes
@@ -411,19 +411,21 @@ namespace cuBQL {
       BuildState *buildState = 0;
       SAHBins    *sahBins    = 0;
       int maxActiveSAHs = 4+numPrims/(8*SAHBins::numBins);
-      _ALLOC(tempNodes,2*numPrims,s,mem_resource);
-      _ALLOC(nodeStates,2*numPrims,s,mem_resource);
-      _ALLOC(primStates,numPrims,s,mem_resource);
-      _ALLOC(buildState,1,s,mem_resource);
-      _ALLOC(sahBins,maxActiveSAHs,s,mem_resource);
+      _ALLOC(tempNodes,2*numPrims,s,memResource);
+      _ALLOC(nodeStates,2*numPrims,s,memResource);
+      _ALLOC(primStates,numPrims,s,memResource);
+      _ALLOC(buildState,1,s,memResource);
+      _ALLOC(sahBins,maxActiveSAHs,s,memResource);
       
-      initState<T,D><<<1,1,0,s>>>(buildState,
-                                  nodeStates,
-                                  tempNodes);
-    initPrims<T,D><<<divRoundUp(numPrims,1024),1024,0,s>>>
-      (tempNodes,
-       primStates,boxes,numPrims);
-
+      initState<T,D>
+        <<<1,1,0,s>>>(buildState,
+                      nodeStates,
+                      tempNodes);
+      initPrims<T,D>
+        <<<divRoundUp(numPrims,1024),1024,0,s>>>
+        (tempNodes,
+         primStates,boxes,numPrims);
+      
       int numDone = 0;
       int numNodes = 0;
 
@@ -437,7 +439,7 @@ namespace cuBQL {
         // close all nodes that might still be open in last round
         if (numDone > 0)
           closeOpenNodes<T,D><<<divRoundUp(numDone,1024),1024,0,s>>>
-        (buildState,nodeStates,tempNodes,numDone);
+            (buildState,nodeStates,tempNodes,numDone);
 
         // compute which nodes (by defintion, at the of the array) are
         // currently open and need binning/sah plane selection
@@ -453,7 +455,7 @@ namespace cuBQL {
 
           // clear as many of our current set of bins as we might need.
           clearBins<T,D><<<divRoundUp(numSAH,32),32,0,s>>>
-          (sahBins,numSAH);
+            (sahBins,numSAH);
 
           // bin all prims into those bins; note this will
           // automatically do an immediate return/no-op for all prims
@@ -495,24 +497,24 @@ namespace cuBQL {
       uint8_t   *d_temp_storage = NULL;
       size_t     temp_storage_bytes = 0;
       PrimState *sortedPrimStates;
-      _ALLOC(sortedPrimStates,numPrims,s,mem_resource);
+      _ALLOC(sortedPrimStates,numPrims,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
-      _ALLOC(d_temp_storage,temp_storage_bytes,s,mem_resource);
+      _ALLOC(d_temp_storage,temp_storage_bytes,s,memResource);
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
                                      numPrims,32,64,s);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(d_temp_storage,s,mem_resource);
+      _FREE(d_temp_storage,s,memResource);
       // ==================================================================
       // allocate and write BVH item list, and write offsets of leaf nodes
       // ==================================================================
 
       bvh.numPrims = numPrims;
-      _ALLOC(bvh.primIDs,numPrims,s,mem_resource);
+      _ALLOC(bvh.primIDs,numPrims,s,memResource);
       writePrimsAndLeafOffsets<T,D><<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
 
@@ -520,16 +522,18 @@ namespace cuBQL {
       // allocate and write final nodes
       // ==================================================================
       bvh.numNodes = numNodes;
-      _ALLOC(bvh.nodes,numNodes,s,mem_resource);
+      _ALLOC(bvh.nodes,numNodes,s,memResource);
       writeNodes<T,D><<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
-      _FREE(sortedPrimStates,s,mem_resource);
-      _FREE(tempNodes,s,mem_resource);
-      _FREE(nodeStates,s,mem_resource);
-      _FREE(primStates,s,mem_resource);
-      _FREE(buildState,s,mem_resource);
-      _FREE(sahBins,s,mem_resource);
+      _FREE(sortedPrimStates,s,memResource);
+      _FREE(tempNodes,s,memResource);
+      _FREE(nodeStates,s,memResource);
+      _FREE(primStates,s,memResource);
+      _FREE(buildState,s,memResource);
+      _FREE(sahBins,s,memResource);
+
+      gpuBuilder_impl::refit(bvh,boxes,s,memResource);
     }
   } // ::cuBQL::sahBuilder_impl
 
