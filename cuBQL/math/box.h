@@ -104,6 +104,10 @@ namespace cuBQL {
       this does not get modified */
     inline __cubql_both box_t including(const vec_t &v) const
     { return box_t{min(lower,v),max(upper,v)}; }
+    /*! returns a box that bounds both 'this' and another box 'b';
+      this does not get modified */
+    inline __cubql_both box_t including(const box_t &b) const
+    { return box_t{min(lower,b.lower),max(upper,b.upper)}; }
     
     inline __cubql_both box_t &grow(const vec_t &v)
     { lower = min(lower,v); upper = max(upper,v); return *this; }

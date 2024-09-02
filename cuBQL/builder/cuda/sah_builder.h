@@ -29,7 +29,7 @@ namespace cuBQL {
     using gpuBuilder_impl::OPEN_BRANCH;
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
-
+    
     struct CUBQL_ALIGN(16) TempNode {
       union {
         struct {
@@ -104,6 +104,7 @@ namespace cuBQL {
       }
     }
     
+    template<typename T, int D>
     __global__
     void initState(BuildState *buildState,
                    NodeState  *nodeStates,
@@ -121,6 +122,7 @@ namespace cuBQL {
       nodes[1].doneNode.count  = 0;
     }
 
+    template<typename T, int D>
     __global__
     void initPrims(TempNode    *nodes,
                    PrimState   *primState,
@@ -146,7 +148,7 @@ namespace cuBQL {
       }
     }
 
-    
+    template<typename T, int D>
     __global__
     void binPrims(SAHBins          *sahBins,
                   int               sahNodeBegin,
@@ -201,6 +203,7 @@ namespace cuBQL {
       }
     }
     
+    template<typename T, int D>
     __global__
     void closeOpenNodes(BuildState *buildState,
                         NodeState  *nodeStates,
@@ -227,6 +230,7 @@ namespace cuBQL {
       // cannot be anything else...
     }
     
+    template<typename T, int D>
     __global__
     void selectSplits(BuildState *buildState,
                       SAHBins    *sahBins,
@@ -278,6 +282,7 @@ namespace cuBQL {
       }
     }
 
+    template<typename T, int D>
     __global__
     void updatePrims(NodeState       *nodeStates,
                      TempNode        *nodes,
@@ -328,6 +333,7 @@ namespace cuBQL {
        bvh's primIDs[] array; and b) it writes, for each leaf nod ein
        the nodes[] array, the node.offset value to point to the first
        of this nodes' items in that bvh.primIDs[] list. */
+    template<typename T, int D>
     __global__
     void writePrimsAndLeafOffsets(TempNode        *nodes,
                                   uint32_t        *bvhItemList,
@@ -347,6 +353,7 @@ namespace cuBQL {
       atomicMin(&node.doneNode.offset,offset);
     }
 
+    template<typename T, int D>
     __global__
     void clearBins(SAHBins *sahBins, int numActive)
     {
@@ -363,8 +370,9 @@ namespace cuBQL {
     
     /* writes main phase's temp nodes into final bvh.nodes[]
        layout. actual bounds of that will NOT yet bewritten */
+    template<typename T, int D>
     __global__
-    void writeNodes(BinaryBVH<float,3>::Node *finalNodes,
+    void writeNodes(typename BinaryBVH<T,D>::Node *finalNodes,
                     TempNode  *tempNodes,
                     int        numNodes)
     {
@@ -375,9 +383,19 @@ namespace cuBQL {
       finalNodes[nodeID].admin.count  = tempNodes[nodeID].doneNode.count;
     }
 
+    template<typename T, int D>
+    void sahBuilder(BinaryBVH<T,D>  &bvh,
+                    const box_t<T,D> *boxes,
+                    uint32_t     _numPrims,
+                    BuildConfig  buildConfig,
+                    cudaStream_t s,
+                    GpuMemoryResource& mem_resource)
+    { throw std::runtime_error("cuBQL::cuda::sahBuilder() only makes sense for float3 data"); }
+
+    template<typename T=float, int D=3>
     void sahBuilder(BinaryBVH<float,3>  &bvh,
-                    const box3f *boxes,
-                    int          numPrims,
+                    const box_t<float,3> *boxes,
+                    uint32_t     _numPrims,
                     BuildConfig  buildConfig,
                     cudaStream_t s,
                     GpuMemoryResource& mem_resource)
@@ -385,7 +403,8 @@ namespace cuBQL {
       // ==================================================================
       // do build on temp nodes
       // ==================================================================
-      TempNode   *tempNodes = 0;
+      int         numPrims   = _numPrims;
+      TempNode   *tempNodes  = 0;
       NodeState  *nodeStates = 0;
       PrimState  *primStates = 0;
       BuildState *buildState = 0;
@@ -397,12 +416,12 @@ namespace cuBQL {
       _ALLOC(buildState,1,s,mem_resource);
       _ALLOC(sahBins,maxActiveSAHs,s,mem_resource);
       
-      initState<<<1,1,0,s>>>(buildState,
-                             nodeStates,
-                             tempNodes);
-      initPrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
-        (tempNodes,
-         primStates,boxes,numPrims);
+      initState<T,D><<<1,1,0,s>>>(buildState,
+                                  nodeStates,
+                                  tempNodes);
+    initPrims<T,D><<<divRoundUp(numPrims,1024),1024,0,s>>>
+      (tempNodes,
+       primStates,boxes,numPrims);
 
       int numDone = 0;
       int numNodes = 0;
@@ -416,7 +435,7 @@ namespace cuBQL {
 
         // close all nodes that might still be open in last round
         if (numDone > 0)
-          closeOpenNodes<<<divRoundUp(numDone,1024),1024,0,s>>>
+          closeOpenNodes<T,D><<<divRoundUp(numDone,1024),1024,0,s>>>
             (buildState,nodeStates,tempNodes,numDone);
 
         // compute which nodes (by defintion, at the of the array) are
@@ -432,13 +451,13 @@ namespace cuBQL {
           const int numSAH = sahEnd-sahBegin;
 
           // clear as many of our current set of bins as we might need.
-          clearBins<<<divRoundUp(numSAH,32),32,0,s>>>
+          clearBins<T,D><<<divRoundUp(numSAH,32),32,0,s>>>
             (sahBins,numSAH);
 
           // bin all prims into those bins; note this will
           // automatically do an immediate return/no-op for all prims
           // that are not in an yof the currently processed nodes.
-          binPrims<<<divRoundUp(numPrims,128),128,0,s>>>
+          binPrims<T,D><<<divRoundUp(numPrims,128),128,0,s>>>
             (sahBins,sahBegin,sahEnd,
              tempNodes,
              primStates,boxes,numPrims);
@@ -446,7 +465,7 @@ namespace cuBQL {
           // now that we have SAH bin information for all those nodes,
           // go over those active nodes and select their split plane
           // (or make them into a leaf)
-          selectSplits<<<divRoundUp(numSAH,32),32,0,s>>>
+          selectSplits<T,D><<<divRoundUp(numSAH,32),32,0,s>>>
             (buildState,
              sahBins,sahBegin,sahEnd,
              nodeStates,tempNodes,
@@ -463,7 +482,7 @@ namespace cuBQL {
         // now last step as in the simple algorithm as well: go over
         // all prims, and "move" them to their respect left or right
         // subtree (or mark as done if their node just became a leaf)
-        updatePrims<<<divRoundUp(numPrims,1024),1024,0,s>>>
+        updatePrims<T,D><<<divRoundUp(numPrims,1024),1024,0,s>>>
           (nodeStates,tempNodes,
            primStates,boxes,numPrims);
       }
@@ -493,7 +512,7 @@ namespace cuBQL {
 
       bvh.numPrims = numPrims;
       _ALLOC(bvh.primIDs,numPrims,s,mem_resource);
-      writePrimsAndLeafOffsets<<<divRoundUp(numPrims,1024),1024,0,s>>>
+      writePrimsAndLeafOffsets<T,D><<<divRoundUp(numPrims,1024),1024,0,s>>>
         (tempNodes,bvh.primIDs,sortedPrimStates,numPrims);
 
       // ==================================================================
@@ -501,7 +520,7 @@ namespace cuBQL {
       // ==================================================================
       bvh.numNodes = numNodes;
       _ALLOC(bvh.nodes,numNodes,s,mem_resource);
-      writeNodes<<<divRoundUp(numNodes,1024),1024,0,s>>>
+      writeNodes<T,D><<<divRoundUp(numNodes,1024),1024,0,s>>>
         (bvh.nodes,tempNodes,numNodes);
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(sortedPrimStates,s,mem_resource);
@@ -511,6 +530,7 @@ namespace cuBQL {
       _FREE(buildState,s,mem_resource);
       _FREE(sahBins,s,mem_resource);
     }
+    //    }; // SAHBuilder_impl
   } // ::cuBQL::sahBuilder_impl
 
 } // :: cuBQL

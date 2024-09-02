@@ -54,7 +54,7 @@ namespace testing {
   {
     if (!error.empty())
       std::cout << "Error: " << error << "\n\n";
-    std::cout << "Usage: ./cuBQL...closestPoint... -n <numPoints> [--clustered|-c] [--uniform|-u]" << std::endl;
+    std::cout << "Usage: ./cuBQL...buildBench... -n <numPoints> [--clustered|-c] [--uniform|-u]" << std::endl;
     exit(error.empty()?0:1);
   }
       

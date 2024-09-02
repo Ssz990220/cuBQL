@@ -40,6 +40,25 @@ function(add_testing_target sampleName device suffix T D)
       )
 endfunction()
 
+
+
+add_executable(cuBQL_checkBuilders
+  checkBuilders.cu
+  )
+foreach(T IN ITEMS float int double longlong)
+  foreach(D IN ITEMS 2 3 4)
+    target_link_libraries(cuBQL_checkBuilders
+      PUBLIC cuBQL_cuda_${T}${D}
+      PUBLIC cuBQL_host_${T}${D}
+      )
+  endforeach()
+endforeach()
+target_link_libraries(cuBQL_checkBuilders
+  PUBLIC cuBQL_testing_common
+  )
+
+
+    
 foreach(T IN ITEMS float int double longlong)
   foreach(D IN ITEMS 2 3 4)
     add_testing_target(buildBench cuda cu ${T} ${D})

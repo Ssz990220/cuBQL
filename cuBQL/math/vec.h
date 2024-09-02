@@ -620,7 +620,38 @@ namespace cuBQL {
     return o;
   }
 
+  // ------------------------------------------------------------------
+  template<typename T, int D>
+  inline int arg_max(vec_t<T,D> v)
+  {
+    int maxVal = v[0];
+    int maxDim = 0;
+    for (int i=1;i<D;i++)
+      if (v[i] > maxVal) { maxVal = v[i]; maxDim = i; };
+    return maxDim;
+  }
 
+  template<typename T>
+  inline int arg_max(vec_t<T,2> v)
+  {
+    return v.y > v.x ? 1 : 0;
+  }
+  template<typename T>
+  inline int arg_max(vec_t<T,3> v)
+  {
+    return v.z > max(v.x,v.y) ? 2 : (v.y > v.x ? 1 : 0);
+  }
+  template<typename T>
+  inline int arg_max(vec_t<T,4> v)
+  {
+    T mm = max(max(v.x,v.y),max(v.z,v.w));
+    int d = 3;
+    d = (mm == v.z) ? 2 : d;
+    d = (mm == v.y) ? 1 : d;
+    d = (mm == v.x) ? 0 : d;
+    return d;
+  }
+  // ------------------------------------------------------------------
   template<typename T>
   inline std::string toString();
   template<> inline std::string toString<float>()    { return "float"; }

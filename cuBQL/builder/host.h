@@ -22,6 +22,12 @@ namespace cuBQL {
   namespace host {
     
     template<typename T, int D>
+    void spatialMedian(BinaryBVH<T,D>   &bvh,
+                       const box_t<T,D> *boxes,
+                       uint32_t          numPrims,
+                       BuildConfig       buildConfig);
+    
+    template<typename T, int D>
     inline void freeBVH(BinaryBVH<T,D> &bvh)
     {
       delete[] bvh.nodes;

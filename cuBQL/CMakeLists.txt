@@ -60,7 +60,7 @@ function(add_specific_instantiation device suffix T D)
     cuBQL
     )
   target_compile_definitions(cuBQL_${device}_${T}${D}
-    PUBLIC
+    PRIVATE
     -DCUBQL_INSTANTIATE_T=${T}
     -DCUBQL_INSTANTIATE_D=${D}
     )

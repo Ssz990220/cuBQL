@@ -34,8 +34,8 @@ namespace cuBQL {
     template<typename T, int D>
     void spatialMedian(BinaryBVH<T,D>   &bvh,
                        const box_t<T,D> *boxes,
-                       int                   numPrims,
-                       BuildConfig           buildConfig);
+                       uint32_t          numPrims,
+                       BuildConfig       buildConfig);
 
     // ******************************************************************
     // IMPLEMENTATION
@@ -44,27 +44,29 @@ namespace cuBQL {
 #if CUBQL_HOST_BUILDER_IMPLEMENTATION
     namespace spatialMedian_impl {
       struct Topo {
-        int offset;
-        int count;
+        struct {
+          int offset;
+          int count;
+        } admin;
       };
 
-      void makeLeaf(int nodeID, int begin, int end,
+      inline void makeLeaf(int nodeID, int begin, int end,
                     std::vector<Topo> &topo)
       {
         auto &node = topo[nodeID];
-        node.count = end-begin;
-        node.offset = begin;
+        node.admin.count = end-begin;
+        node.admin.offset = begin;
       }
       
-      int makeInner(int nodeID,
+      inline int makeInner(int nodeID,
                     std::vector<Topo> &topo)
       {
         int childID = (int)topo.size();
         topo.push_back({});
         topo.push_back({});
         auto &node = topo[nodeID];
-        node.count = 0;
-        node.offset = childID;
+        node.admin.count = 0;
+        node.admin.offset = childID;
         return childID;
       }
       
@@ -106,8 +108,8 @@ namespace cuBQL {
           primIDs[i] = altPrimIDs[i];
         
         int childID = makeInner(nodeID,topo);
-        buildRec(childID+0,begin,mid,topo,primIDs,altPrimIDs,boxes);
-        buildRec(childID+1,mid,  end,topo,primIDs,altPrimIDs,boxes);
+        buildRec(childID+0,begin,mid,topo,primIDs,altPrimIDs,boxes,buildConfig);
+        buildRec(childID+1,mid,  end,topo,primIDs,altPrimIDs,boxes,buildConfig);
       }
       
       template<typename T, int D>
@@ -116,16 +118,16 @@ namespace cuBQL {
                  const box_t<T,D> *boxes)
       {
         auto &node = bvh.nodes[nodeID];
-        if (node.count == 0) {
-          refit(node.offset+0,bvh,boxes);
-          refit(node.offset+1,bvh,boxes);
+        if (node.admin.count == 0) {
+          refit(node.admin.offset+0,bvh,boxes);
+          refit(node.admin.offset+1,bvh,boxes);
           node.bounds = box_t<T,D>()
-            .including(bvh.nodes[node.offset+0])
-            .including(bvh.nodes[node.offset+1]);
+            .including(bvh.nodes[node.admin.offset+0].bounds)
+            .including(bvh.nodes[node.admin.offset+1].bounds);
         } else {
           node.bounds.clear();
-          for (int i=0;i<node.count;i++)
-            node.bounds.extend(boxes[bvh.primIDs[node.offset+i]]);
+          for (int i=0;i<node.admin.count;i++)
+            node.bounds.extend(boxes[bvh.primIDs[node.admin.offset+i]]);
         }
       }
                          
@@ -148,29 +150,31 @@ namespace cuBQL {
         buildRec(0,0,primIDs.size(),
                  topo,primIDs,altPrimIDs,boxes,buildConfig);
         altPrimIDs.clear();
-        bvh.primIDs = new int[primIDs.size()];
+        bvh.primIDs = new uint32_t[primIDs.size()];
+        bvh.numPrims = (uint32_t)primIDs.size();
         std::copy(primIDs.begin(),primIDs.end(),bvh.primIDs);
         primIDs.clear();
 
         bvh.nodes = new typename BinaryBVH<T,D>::Node[topo.size()];
+        bvh.numNodes = (uint32_t)topo.size();
         for (int i=0;i<(int)topo.size();i++) {
-          bvh.nodes[i].admin.count = topo[i].count;
-          bvh.nodes[i].admin.offset = topo[i].offset;
+          bvh.nodes[i].admin.count = topo[i].admin.count;
+          bvh.nodes[i].admin.offset = topo[i].admin.offset;
         }
         topo.clear();
         refit(0,bvh,boxes);
       }
-    }
+    } // spatialMedian_impl
     
     /*! a simple (and currently non parallel) recursive spatial median
       builder */
     template<typename T, int D>
     void spatialMedian(BinaryBVH<T,D>   &bvh,
                        const box_t<T,D> *boxes,
-                       int                   numPrims,
+                       uint32_t              numPrims,
                        BuildConfig           buildConfig)
     {
-      // spatialMedian_impl::build(bvh,boxes,numPrims,buildConfig);
+      spatialMedian_impl::spatialMedian(bvh,boxes,numPrims,buildConfig);
     }
 
 #endif
@@ -182,7 +186,7 @@ namespace cuBQL {
     namespace host {                                                \
       template void spatialMedian(BinaryBVH<T,D>   &bvh,            \
                                   const box_t<T,D> *boxes,          \
-                                  int               numPrims,       \
+                                  uint32_t          numPrims,       \
                                   BuildConfig       buildConfig);   \
     }                                                               \
   }                                                                 \

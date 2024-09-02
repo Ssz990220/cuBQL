@@ -1,0 +1,221 @@
+// ======================================================================== //
+// Copyright 2023-2024 Ingo Wald                                            //
+//                                                                          //
+// Licensed under the Apache License, Version 2.0 (the "License");          //
+// you may not use this file except in compliance with the License.         //
+// You may obtain a copy of the License at                                  //
+//                                                                          //
+//     http://www.apache.org/licenses/LICENSE-2.0                           //
+//                                                                          //
+// Unless required by applicable law or agreed to in writing, software      //
+// distributed under the License is distributed on an "AS IS" BASIS,        //
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. //
+// See the License for the specific language governing permissions and      //
+// limitations under the License.                                           //
+// ======================================================================== //
+
+/*! \file check.cu builds all BVH variants we can, and runs some
+    sanity and quality checks on the result */
+
+#include "cuBQL/bvh.h"
+#include "cuBQL/builder/cuda.h"
+#include "cuBQL/builder/host.h"
+#include "samples/common/CmdLine.h"
+#include "samples/common/IO.h"
+#include "testing/common/testRig.h"
+#include "samples/common/Generator.h"
+
+namespace testing {
+
+  using namespace cuBQL;
+  using namespace cuBQL::samples;
+      
+
+  template<typename T>
+  inline double costEstimate(box_t<T,2> b)
+  {
+    vec_t<T,2> dim = b.upper - b.lower;
+    return dim.x + dim.y;
+  }
+  
+  template<typename T>
+  inline double costEstimate(box_t<T,3> b)
+  {
+    vec_t<T,3> dim = b.upper - b.lower;
+    return dim.x*dim.y + dim.x*dim.z + dim.y*dim.z;
+  }
+  template<typename T>
+  inline double costEstimate(box_t<T,4> b)
+  {
+    vec_t<T,4> dim = b.upper - b.lower;
+    return
+      dim.x*dim.y + dim.x*dim.z + dim.x*dim.w
+      + dim.y*dim.z + dim.z*dim.w
+      + dim.z*dim.w;
+  }
+
+  template<typename T, int D>
+  struct Checker {
+    using vecND   = cuBQL::vec_t<double,D>;
+    using box_t   = cuBQL::box_t<T,D>;
+    using vec_t   = cuBQL::vec_t<T,D>;
+    using bvh_t   = cuBQL::bvh_t<T,D>;
+    using node_t  = typename bvh_t::Node;
+
+    Checker(const std::vector<vecND> &doublePoints)
+      : points(convert<T,D>(doublePoints))
+    {
+      for (auto point : points)
+        boxes.push_back({point,point});
+      CUBQL_CUDA_CALL(Malloc((void **)&d_boxes,boxes.size()*sizeof(boxes[0])));
+      CUBQL_CUDA_CALL(Memcpy((void*)d_boxes,boxes.data(),boxes.size()*sizeof(boxes[0]),
+                             cudaMemcpyDefault));
+    }
+
+    ~Checker()
+    {
+      CUBQL_CUDA_CALL(Free(d_boxes));
+      d_boxes = 0;
+    }
+
+    double computeSAH_rec(const std::vector<node_t> &nodes,
+                          const std::vector<int>    &primIDs,
+                          int nodeID)
+    {
+      PING; PRINT(nodeID);
+      PRINT(nodes.size());
+      auto node = nodes[nodeID];
+      double sum = costEstimate(node.bounds)*(1+node.admin.count);
+      if (node.admin.count == 0) {
+        sum += computeSAH_rec(nodes,primIDs,node.admin.offset+0);
+        sum += computeSAH_rec(nodes,primIDs,node.admin.offset+1);
+      }
+      return sum;
+    }
+    inline double computeSAH(const std::vector<node_t> &nodes,
+                             const std::vector<int>    &primIDs)
+    {
+      return computeSAH_rec(nodes,primIDs,0) / costEstimate(nodes[0].bounds);
+    }
+    
+    
+    template<
+      typename runBuilderT,
+      typename freeT,
+      typename downloadT>
+    void check(const runBuilderT &runBuilder,
+               const freeT       &freeBVH,
+               const downloadT   &download,
+               const std::string &description)
+    {
+      std::cout << "# ---- building '" << description << "'" << std::endl;
+      runBuilder();
+      std::cout << "# ---- downloading nodes" << std::endl;
+      std::vector<typename bvh_t::Node> nodes;
+      std::vector<int> primIDs;
+      download(nodes,primIDs);
+      std::cout << "# ---- freeing BVH" << std::endl;
+      freeBVH();
+      std::cout << "# ---- computing SAH cost" << std::endl;
+      std::cout << "SAH(" << description << "): " << computeSAH(nodes,primIDs) << std::endl;
+    }
+    
+    void checkHost()
+    {
+      auto freeBVH
+        = [&]()
+        {
+          cuBQL::host::freeBVH(bvh);
+          bvh = bvh_t{};
+        };
+      auto download
+        = [&](std::vector<typename bvh_t::Node> &nodes,
+              std::vector<int>                  &primIDs)
+        {
+          nodes.resize(bvh.numNodes);
+          memcpy(nodes.data(),bvh.nodes,bvh.numNodes*sizeof(nodes[0]));
+          primIDs.resize(bvh.numPrims);
+          memcpy(primIDs.data(),bvh.primIDs,bvh.numPrims*sizeof(primIDs[0]));
+        };
+      check([&](){cuBQL::host::spatialMedian(bvh,boxes.data(),boxes.size(),BuildConfig());},
+            freeBVH,
+            download,
+            "host::spatialMedian");
+    }
+
+    void checkDev()
+    {
+      auto freeBVH
+        = [&]()
+        {
+          cuBQL::cuda::free(bvh);
+          bvh = bvh_t{};
+        };
+      auto download
+        = [&](std::vector<typename bvh_t::Node> &nodes,
+              std::vector<int>                  &primIDs)
+        {
+          nodes.resize(bvh.numNodes);
+          CUBQL_CUDA_CALL(Memcpy(nodes.data(),bvh.nodes,bvh.numNodes*sizeof(nodes[0]),
+                                 cudaMemcpyDefault));
+          primIDs.resize(bvh.numPrims);
+          CUBQL_CUDA_CALL(Memcpy(primIDs.data(),bvh.primIDs,bvh.numPrims*sizeof(primIDs[0]),
+                                 cudaMemcpyDefault));
+        };
+      check([&](){cuBQL::gpuBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
+            freeBVH,
+            download,
+            "gpuBuilder");
+    }
+    
+    void run()
+    {
+      checkHost();
+      checkDev();
+    }
+
+    std::vector<vec_t> points;
+    std::vector<box_t> boxes;
+    box_t             *d_boxes = 0;
+    bvh_t bvh;
+  };
+
+  template<int D>
+  void checkD(const std::string &generator, size_t numPoints)
+  {
+    std::cout << "======== numDims = " << D << "  generator = " << generator << std::endl;
+    using vecND   = cuBQL::vec_t<double,D>;
+    
+    std::vector<vecND> points
+      = PointGenerator<D>::createFromString(generator)
+      ->generate(numPoints,290374);
+    
+    Checker<float,D>    (points).run();
+    Checker<double,D>   (points).run();
+    Checker<int,D>      (points).run();
+    Checker<longlong,D> (points).run();
+  }
+  
+  void usage(const std::string &error = "")
+  {
+    if (!error.empty())
+      std::cout << "Error: " << error << "\n\n";
+    std::cout << "Usage: ./cuBQL...cuBQL_checkBuilders [no options]" << std::endl;
+    exit(error.empty()?0:1);
+  }
+      
+} // ::testing
+
+int main(int ac, char **av)
+{
+  const std::string generatorString = "uniform";
+  size_t numPoints = 10000;
+  
+  testing::checkD<2>(generatorString,numPoints);
+  testing::checkD<3>(generatorString,numPoints);
+  testing::checkD<4>(generatorString,numPoints);
+
+  return 0;
+}
+
+
