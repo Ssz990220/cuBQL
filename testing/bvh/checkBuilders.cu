@@ -34,26 +34,30 @@ namespace testing {
   template<typename T>
   inline double costEstimate(box_t<T,2> b)
   {
-    vec_t<T,2> dim = b.upper - b.lower;
+    vec_t<double,2> dim = vec_t<double,2>(b.upper - b.lower);
     return dim.x + dim.y;
   }
   
   template<typename T>
   inline double costEstimate(box_t<T,3> b)
   {
-    vec_t<T,3> dim = b.upper - b.lower;
+    vec_t<double,3> dim = vec_t<double,3>(b.upper - b.lower);
     return dim.x*dim.y + dim.x*dim.z + dim.y*dim.z;
   }
   template<typename T>
   inline double costEstimate(box_t<T,4> b)
   {
-    vec_t<T,4> dim = b.upper - b.lower;
+    vec_t<double,4> dim = vec_t<double,4>(b.upper - b.lower);
     return
       dim.x*dim.y + dim.x*dim.z + dim.x*dim.w
       + dim.y*dim.z + dim.z*dim.w
       + dim.z*dim.w;
   }
 
+    template<typename T, int D> bool isFloat3() { return false; };
+    template<> bool isFloat3<float,3>() { return true; }
+    
+  
   template<typename T, int D>
   struct Checker {
     using vecND   = cuBQL::vec_t<double,D>;
@@ -82,8 +86,6 @@ namespace testing {
                           const std::vector<int>    &primIDs,
                           int nodeID)
     {
-      PING; PRINT(nodeID);
-      PRINT(nodes.size());
       auto node = nodes[nodeID];
       double sum = costEstimate(node.bounds)*(1+node.admin.count);
       if (node.admin.count == 0) {
@@ -98,7 +100,7 @@ namespace testing {
       return computeSAH_rec(nodes,primIDs,0) / costEstimate(nodes[0].bounds);
     }
     
-    
+
     template<
       typename runBuilderT,
       typename freeT,
@@ -108,15 +110,17 @@ namespace testing {
                const downloadT   &download,
                const std::string &description)
     {
-      std::cout << "# ---- building '" << description << "'" << std::endl;
+      // std::cout << "# ----------------------- " << description << " ----------------------------"
+      //           << std::endl;
+      // std::cout << "# ...building '" << description << "'" << std::endl;
       runBuilder();
-      std::cout << "# ---- downloading nodes" << std::endl;
+      // std::cout << "# ...downloading nodes" << std::endl;
       std::vector<typename bvh_t::Node> nodes;
       std::vector<int> primIDs;
       download(nodes,primIDs);
-      std::cout << "# ---- freeing BVH" << std::endl;
+      // std::cout << "# ...freeing BVH" << std::endl;
       freeBVH();
-      std::cout << "# ---- computing SAH cost" << std::endl;
+      // std::cout << "# ...computing SAH cost\t\t\t" << std::flush;
       std::cout << "SAH(" << description << "): " << computeSAH(nodes,primIDs) << std::endl;
     }
     
@@ -165,11 +169,22 @@ namespace testing {
       check([&](){cuBQL::gpuBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
             freeBVH,
             download,
-            "gpuBuilder");
+            "cuda::gpuBuilder");
+      check([&](){cuBQL::cuda::radixBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
+            freeBVH,
+            download,
+            "cuda::radixBuilder");
+      if (isFloat3<T,D>()) {
+        check([&](){cuBQL::cuda::sahBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
+              freeBVH,
+              download,
+              "cuda::sahBuilder");
+      }
     }
     
     void run()
     {
+      std::cout << "== " << cuBQL::vec_t<T,D>::typeName() << " ==" << std::endl;
       checkHost();
       checkDev();
     }
@@ -183,7 +198,9 @@ namespace testing {
   template<int D>
   void checkD(const std::string &generator, size_t numPoints)
   {
-    std::cout << "======== numDims = " << D << "  generator = " << generator << std::endl;
+    std::cout << "############### numDims = " << D
+              << "  generator = " << generator  << " numPoints = " << prettyNumber(numPoints)
+              << " ############### " << std::endl;
     using vecND   = cuBQL::vec_t<double,D>;
     
     std::vector<vecND> points
@@ -208,12 +225,18 @@ namespace testing {
 
 int main(int ac, char **av)
 {
-  const std::string generatorString = "uniform";
-  size_t numPoints = 10000;
-  
-  testing::checkD<2>(generatorString,numPoints);
-  testing::checkD<3>(generatorString,numPoints);
-  testing::checkD<4>(generatorString,numPoints);
+  std::vector<std::string> generatorStrings
+    = { "uniform", "clustered" };
+  // const std::string generatorString = "uniform";
+  std::vector<int> numPointsToTest = { 10,10000,10000000 };
+  for (auto numPoints: numPointsToTest) {
+    for (auto generatorString : generatorStrings) {
+      
+      testing::checkD<2>(generatorString,numPoints);
+      testing::checkD<3>(generatorString,numPoints);
+      testing::checkD<4>(generatorString,numPoints);
+    }      
+  }
 
   return 0;
 }

@@ -61,8 +61,8 @@ namespace cuBQL {
         quantization operation that does
         `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
         centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec_t CUBQL_ALIGN(16) quantizeBias;
-      vec_t CUBQL_ALIGN(16) quantizeScale;
+      vec_t quantizeBias;
+      vec_t quantizeScale;
     };
 
     template<int D>
@@ -75,7 +75,7 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui((1u<<numMortonBits<D>::value)-1));
+        cell = min(cell,vec_ui(uint32_t(((1u<<numMortonBits<D>::value)-1))));
         return cell;
       }
         
@@ -84,7 +84,7 @@ namespace cuBQL {
         quantizeBias
           = centBounds.lower;
         quantizeScale
-          = vec_t(1<<numMortonBits<D>::value)
+          = vec_t(1u<<numMortonBits<D>::value)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
       }
         
@@ -92,8 +92,8 @@ namespace cuBQL {
         quantization operation that does
         `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
         centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec_t CUBQL_ALIGN(16) quantizeBias;
-      vec_t CUBQL_ALIGN(16) quantizeScale;
+      vec_t quantizeBias;
+      vec_t quantizeScale;
     };
 
     template<int D>
@@ -290,7 +290,7 @@ namespace cuBQL {
 
       // 0000.0000:0000.0000:0000.0000:0000.0000:FEDC.BAzy:xwvu.tsrq:ponm.lkji:hgfe.dcba
 
-      x = shiftBits(x,0xffffffff00000000ull,16);
+      x = shiftBits(x,0xffff0000ull,16);
       
       // 0000.0000:0000.0000:FEDC.BAzy:xwvu.tsrq:0000.0000:0000.0000:ponm.lkji:hgfe.dcba
 
@@ -335,10 +335,21 @@ namespace cuBQL {
     inline __device__
     uint64_t interleaveBits64(vec2ui coords)
     {
+#if 0
+      uint64_t result = 0;
+      for (int i=0;i<31;i++) {
+        uint64_t bx = (coords.x >> i) & 1;
+        uint64_t by = (coords.y >> i) & 1;
+        result |= (bx << (2*i+0));
+        result |= (by << (2*i+1));
+      }
+      return result;
+#else
       return
         (bitInterleave11(coords.x) << 0)
         |
         (bitInterleave11(coords.y) << 1);
+#endif
     }
     
     inline __device__

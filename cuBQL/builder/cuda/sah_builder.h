@@ -18,6 +18,7 @@
 
 #include "cuBQL/builder/cuda/sm_builder.h"
 
+# ifdef CUBQL_GPU_BUILDER_IMPLEMENTATION
 namespace cuBQL {
   namespace sahBuilder_impl {
     using gpuBuilder_impl::AtomicBox;
@@ -436,7 +437,7 @@ namespace cuBQL {
         // close all nodes that might still be open in last round
         if (numDone > 0)
           closeOpenNodes<T,D><<<divRoundUp(numDone,1024),1024,0,s>>>
-            (buildState,nodeStates,tempNodes,numDone);
+        (buildState,nodeStates,tempNodes,numDone);
 
         // compute which nodes (by defintion, at the of the array) are
         // currently open and need binning/sah plane selection
@@ -452,7 +453,7 @@ namespace cuBQL {
 
           // clear as many of our current set of bins as we might need.
           clearBins<T,D><<<divRoundUp(numSAH,32),32,0,s>>>
-            (sahBins,numSAH);
+          (sahBins,numSAH);
 
           // bin all prims into those bins; note this will
           // automatically do an immediate return/no-op for all prims
@@ -530,8 +531,20 @@ namespace cuBQL {
       _FREE(buildState,s,mem_resource);
       _FREE(sahBins,s,mem_resource);
     }
-    //    }; // SAHBuilder_impl
   } // ::cuBQL::sahBuilder_impl
 
-} // :: cuBQL
+  namespace cuda {
+    template<typename T, int D>
+    void sahBuilder(BinaryBVH<T,D>    &bvh,
+                    const box_t<T,D>  *boxes,
+                    uint32_t           numPrims,
+                    BuildConfig        buildConfig,
+                    cudaStream_t       s,
+                    GpuMemoryResource &memResource)
+    {
+      ::cuBQL::sahBuilder_impl::sahBuilder(bvh,boxes,numPrims,buildConfig,s,memResource);
+    }
+  } // ::cuBQL::cuda
+} // ::cuBQL
+#endif
 

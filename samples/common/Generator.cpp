@@ -422,15 +422,16 @@ namespace cuBQL {
       
       double sigma = (hi-lo)/numClusters;
       std::normal_distribution<double> gaussian(0.f,sigma);
+      std::uniform_int_distribution<int> uniform_clusterID(0,numClusters-1);
       std::vector<vec_t<double,D>> points;
       for (int sID=0;sID<count;sID++) {
-        int clusterID = int(uniform(rng)*numClusters) % numClusters;
+        int clusterID = uniform_clusterID(rng);
         vec_t<double,D> pt;
         for (int i=0;i<D;i++)
           pt[i] = gaussian(rng) + clusterCenters[clusterID][i];
         points.push_back(pt);
       }
-    
+
       return points;
     }
   
@@ -517,9 +518,10 @@ namespace cuBQL {
       }
     
       std::normal_distribution<double> sizeGaussian(sizeMean,sizeSigma);
+      std::uniform_int_distribution<int> uniform_clusterID(0,numClusters-1);
       std::vector<box_t<double,D>> boxes;
       for (int sID=0;sID<count;sID++) {
-        int clusterID = int(uniform(rng)*numClusters) % numClusters;
+        int clusterID = uniform_clusterID(rng);
         vec_t<double,D> center, halfSize;
         for (int i=0;i<D;i++)
           center[i] = gaussian(rng) + clusterCenters[clusterID][i];

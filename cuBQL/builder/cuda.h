@@ -117,10 +117,22 @@ namespace cuBQL {
                   GpuMemoryResource& memResource=defaultGpuMemResource());
 
 
+  // ------------------------------------------------------------------
+  /*! SAH(surface area heuristic) based builder, only alowed for float3 */
+  // ------------------------------------------------------------------
+  namespace cuda {
+    template<typename T, int D>
+    void sahBuilder(BinaryBVH<T,D>   &bvh,
+                    const box_t<T,D> *boxes,
+                    uint32_t              numPrims,
+                    BuildConfig           buildConfig,
+                    cudaStream_t          s=0,
+                    GpuMemoryResource    &memResource=defaultGpuMemResource());
+  }
   
-  // // ------------------------------------------------------------------
-  // /*! fast radix/morton builder */
-  // // ------------------------------------------------------------------
+  // ------------------------------------------------------------------
+  /*! fast radix/morton builder */
+  // ------------------------------------------------------------------
   namespace cuda {
     template<typename T, int D>
     void radixBuilder(BinaryBVH<T,D>   &bvh,

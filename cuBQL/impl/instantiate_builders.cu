@@ -44,6 +44,12 @@
                                  BuildConfig        buildConfig,       \
                                  cudaStream_t       s,                 \
                                  GpuMemoryResource &mem_resource);     \
+      template void sahBuilder<T,D>(BinaryBVH<T,D>    &bvh,            \
+                                    const box_t<T,D>  *boxes,          \
+                                    uint32_t           numBoxes,       \
+                                    BuildConfig        buildConfig,    \
+                                    cudaStream_t       s,              \
+                                    GpuMemoryResource &mem_resource);  \
       template void free(BinaryBVH<T,D>    &bvh,                       \
                          cudaStream_t       s,                         \
                          GpuMemoryResource &mem_resource);             \
