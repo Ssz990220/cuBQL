@@ -77,6 +77,8 @@ namespace testing {
         buildType = BUILDTYPE_RADIX;
       else if (arg == "--rebin")
         buildType = BUILDTYPE_REBIN;
+      else if (arg == "--sah")
+        buildType = BUILDTYPE_SAH;
       else
         usage("un-recognized cmd-line argument '"+arg+"'");
     }

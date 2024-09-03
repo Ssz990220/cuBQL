@@ -174,6 +174,10 @@ namespace testing {
             freeBVH,
             download,
             "cuda::radixBuilder");
+      check([&](){cuBQL::cuda::rebinRadixBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
+            freeBVH,
+            download,
+            "cuda::rebinRadixBuilder");
       if (isFloat3<T,D>()) {
         check([&](){cuBQL::cuda::sahBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
               freeBVH,

@@ -77,8 +77,7 @@ namespace cuBQL {
   }
 #endif
 
-  // ------------------------------------------------------------------
-  
+  // ------------------------------------------------------------------  
   /*! builds a wide-bvh over a given set of primitive bounding boxes.
 
     builder runs on the GPU; boxes[] must be a device-readable array
@@ -92,7 +91,7 @@ namespace cuBQL {
   template<typename T, int D>
   void gpuBuilder(BinaryBVH<T,D>   &bvh,
                   /*! array of bounding boxes to build BVH over, must
-                      be in device memory */
+                    be in device memory */
                   const box_t<T,D> *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
@@ -100,16 +99,16 @@ namespace cuBQL {
                   GpuMemoryResource &memResource=defaultGpuMemResource());
   
   /*! builds a BinaryBVH over the given set of boxes (using the given
-      stream), using a simple adaptive spatial median builder (ie,
-      each subtree will be split by first computing the bounding box
-      of all its contained primitives' spatial centers, then choosing
-      a split plane that splits this cntroid bounds in the center,
-      along the widest dimension. Leaves will be created once the size
-      of a subtree get to or below buildConfig.makeLeafThreshold */
+    stream), using a simple adaptive spatial median builder (ie,
+    each subtree will be split by first computing the bounding box
+    of all its contained primitives' spatial centers, then choosing
+    a split plane that splits this cntroid bounds in the center,
+    along the widest dimension. Leaves will be created once the size
+    of a subtree get to or below buildConfig.makeLeafThreshold */
   template<typename /*scalar type*/T, int /*dims*/D, int /*branching factor*/N>
   void gpuBuilder(WideBVH<T,D,N> &bvh,
                   /*! array of bounding boxes to build BVH over, must
-                      be in device memory */
+                    be in device memory */
                   const box_t<T,D>  *boxes,
                   uint32_t          numBoxes,
                   BuildConfig       buildConfig,
@@ -122,40 +121,45 @@ namespace cuBQL {
   // ------------------------------------------------------------------
   namespace cuda {
     template<typename T, int D>
-    void sahBuilder(BinaryBVH<T,D>   &bvh,
-                    const box_t<T,D> *boxes,
-                    uint32_t              numPrims,
-                    BuildConfig           buildConfig,
-                    cudaStream_t          s=0,
-                    GpuMemoryResource    &memResource=defaultGpuMemResource());
-  }
+    void sahBuilder(BinaryBVH<T,D>    &bvh,
+                    const box_t<T,D>  *boxes,
+                    uint32_t           numPrims,
+                    BuildConfig        buildConfig,
+                    cudaStream_t       s=0,
+                    GpuMemoryResource &memResource=defaultGpuMemResource());
   
-  // ------------------------------------------------------------------
-  /*! fast radix/morton builder */
-  // ------------------------------------------------------------------
-  namespace cuda {
+    // ------------------------------------------------------------------
+    /*! fast radix/morton builder */
+    // ------------------------------------------------------------------
     template<typename T, int D>
-    void radixBuilder(BinaryBVH<T,D>   &bvh,
-                      const box_t<T,D> *boxes,
-                      uint32_t              numPrims,
-                      BuildConfig           buildConfig,
-                      cudaStream_t          s=0,
-                      GpuMemoryResource    &memResource=defaultGpuMemResource());
-  }
+    void radixBuilder(BinaryBVH<T,D>    &bvh,
+                      const box_t<T,D>  *boxes,
+                      uint32_t           numPrims,
+                      BuildConfig        buildConfig,
+                      cudaStream_t       s=0,
+                      GpuMemoryResource &memResource=defaultGpuMemResource());
   
-  // ------------------------------------------------------------------
-  /*! fast radix/morton builder with automatic rebinning where
-    required (better for certain numerically challenging data
+    // ------------------------------------------------------------------
+    /*! fast radix/morton builder with automatic rebinning where
+      required (better for certain numerically challenging data
       distributions) */
-  // ------------------------------------------------------------------
-  template<typename T, int D>
-  void rebinRadixBuilder(BinaryBVH<T,D>   &bvh,
-                         const box_t<T,D> *boxes,
-                         uint32_t                   numPrims,
-                         BuildConfig           buildConfig,
-                         cudaStream_t          s,
-                         GpuMemoryResource    &memResource=defaultGpuMemResource());
+    // ------------------------------------------------------------------
+    template<typename T, int D>
+    void rebinRadixBuilder(BinaryBVH<T,D>    &bvh,
+                           const box_t<T,D>  *boxes,
+                           uint32_t           numPrims,
+                           BuildConfig        buildConfig,
+                           cudaStream_t       s=0,
+                           GpuMemoryResource &memResource=defaultGpuMemResource());
   
+    /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+      building the BVH. this assumes */
+    template<typename T, int D>
+    void free(BinaryBVH<T,D> &bvh,
+              cudaStream_t      s=0,
+              GpuMemoryResource& memResource=defaultGpuMemResource());
+  }
+
   // ------------------------------------------------------------------
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
@@ -164,15 +168,6 @@ namespace cuBQL {
             cudaStream_t      s=0,
             GpuMemoryResource& memResource=defaultGpuMemResource());
 
-  namespace cuda {
-    /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-      building the BVH. this assumes */
-    template<typename T, int D>
-    void free(BinaryBVH<T,D> &bvh,
-              cudaStream_t      s=0,
-              GpuMemoryResource& memResource=defaultGpuMemResource());
-  }
-    
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
     building the BVH. this assumes */
   template<typename T, int D, int N>

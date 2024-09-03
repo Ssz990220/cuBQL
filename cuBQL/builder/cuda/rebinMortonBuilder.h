@@ -16,12 +16,14 @@
 
 #pragma once
 
-#include "cuBQL/impl/sm_builder.h"
+#include "cuBQL/builder/cuda/sm_builder.h"
+#include "cuBQL/builder/cuda/radix.h"
 
 #define NO_BLOCK_PHASE 1
 
+#ifdef CUBQL_GPU_BUILDER_IMPLEMENTATION
 namespace cuBQL {
-  namespace rebinMortonBuilder_impl {
+  namespace rebinRadixBuilder_impl {
     using gpuBuilder_impl::atomic_grow;
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
@@ -43,7 +45,7 @@ namespace cuBQL {
         quantizeBias
           = centBounds.lower;
         quantizeScale
-          = vec_t(1<<numMortonBits<D>::value)
+          = vec_t(1u<<numMortonBits<D>::value)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
       }
         
@@ -52,16 +54,16 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui((1<<numMortonBits<D>::value)-1));
+        cell = min(cell,vec_ui(uint32_t(((1u<<numMortonBits<D>::value)-1))));
         return cell;
       }
-        
+      
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec_t CUBQL_ALIGN(16) quantizeBias;
-      vec_t CUBQL_ALIGN(16) quantizeScale;
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t quantizeBias;
+      vec_t quantizeScale;
     };
 
     template<int D>
@@ -74,7 +76,7 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui((1<<numMortonBits<D>::value)-1));
+        cell = min(cell,vec_ui(uint32_t(((1u<<numMortonBits<D>::value)-1))));
         return cell;
       }
         
@@ -83,16 +85,16 @@ namespace cuBQL {
         quantizeBias
           = centBounds.lower;
         quantizeScale
-          = vec_t(1<<numMortonBits<D>::value)
+          = vec_t(1u<<numMortonBits<D>::value)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
-      vec_t CUBQL_ALIGN(16) quantizeBias;
-      vec_t CUBQL_ALIGN(16) quantizeScale;
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t quantizeBias;
+      vec_t quantizeScale;
     };
 
     template<int D>
@@ -116,13 +118,40 @@ namespace cuBQL {
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
-          quantization operation that does
-          `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
-          centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
       vec_t quantizeBias;
       int   shlBits;
     };
     
+    template<int D>
+    struct Quantizer<int64_t,D> {
+      using vec_t = cuBQL::vec_t<int64_t,D>;
+      using box_t = cuBQL::box_t<int64_t,D>;
+      
+      inline __device__ void init(cuBQL::box_t<int64_t,D> centBounds)
+      {
+        quantizeBias = centBounds.lower;
+        uint64_t maxValue = reduce_max(centBounds.size());
+        shlBits = __clzll(maxValue);
+      }
+
+      inline __device__ cuBQL::vec_t<uint32_t,D> quantize(vec_t P) const
+      {
+        cuBQL::vec_t<uint64_t,D> cell = cuBQL::vec_t<uint64_t,D>(P-quantizeBias);
+        // move all relevant bits to top
+        cell = cell << shlBits;
+        return cuBQL::vec_t<uint32_t,D>(cell >> (64-numMortonBits<D>::value));
+      }
+        
+      /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
+        quantization operation that does
+        `(x-centBoundsLower)/(centBoundsSize)*(1<<10)`. Ie, bias is
+        centBoundsLower, and scale is `(1<<10)/(centBoundsSize)` */
+      vec_t quantizeBias;
+      int   shlBits;
+    };
 
 
     
@@ -210,24 +239,37 @@ namespace cuBQL {
 
     template<typename T, int D>
     __global__
-    void finishBuildState(BuildState<T,D>  *buildState);
-
-    template<>
-    __global__
-    void finishBuildState(BuildState<float,3>  *buildState)
+    void finishBuildState(BuildState<T,D>  *buildState)
     {
-      using ctx_t = BuildState<float,3>;
-      using vec_t = typename ctx_t::vec_t;
-      using box_t = typename ctx_t::box_t;
-      using bvh_t = typename ctx_t::bvh_t;
+      using ctx_t = BuildState<float,D>;
       using atomic_box_t = typename ctx_t::atomic_box_t;
+      using box_t        = typename ctx_t::box_t;
       
       if (threadIdx.x != 0) return;
       
       box_t centBounds = buildState->a_centBounds.make_box();
-      // buildState->centBounds = centBounds;
       buildState->quantizer.init(centBounds);
     }
+    // template<typename T, int D>
+    // __global__
+    // void finishBuildState(BuildState<T,D>  *buildState);
+
+    // template<>
+    // __global__
+    // void finishBuildState(BuildState<float,3>  *buildState)
+    // {
+    //   using ctx_t = BuildState<float,3>;
+    //   using vec_t = typename ctx_t::vec_t;
+    //   using box_t = typename ctx_t::box_t;
+    //   using bvh_t = typename ctx_t::bvh_t;
+    //   using atomic_box_t = typename ctx_t::atomic_box_t;
+      
+    //   if (threadIdx.x != 0) return;
+      
+    //   box_t centBounds = buildState->a_centBounds.make_box();
+    //   // buildState->centBounds = centBounds;
+    //   buildState->quantizer.init(centBounds);
+    // }
 
 
     /* morton code computation: how the bits shift for 21 input bits:
@@ -277,39 +319,72 @@ namespace cuBQL {
     uint32_t shiftBits(uint32_t x, uint32_t maskOfBitstoMove, int howMuchToShift)
     { return ((x & maskOfBitstoMove)<<howMuchToShift) | (x & ~maskOfBitstoMove); }
     
-    inline __device__
-    uint64_t bitInterleave21(uint64_t x)
-    {
-      //hex    00:       00:       00:       00:       00:       10:       00:       00
-      x = shiftBits(x,0x00000000001f0000ull,32); 
-      //hex     00:      00:       00:       00:       00:       00:       ff:       00
-      x = shiftBits(x,0x000000000000ff00ull,16); 
-      //hex    00:       f0:       00:       00:       f0:       00:       00:       f0
-      x = shiftBits(x,0x00f00000f00000f0ull,8); 
-      //hex    00:       0c:       00:       c0:       0c:       00:       c0:       0c
-      x = shiftBits(x,0x000c00c00c00c00cull,4); 
-      //hex    00:       82:       08:       20:       82:       08:       20:       82
-      x = shiftBits(x,0x0082082082082082ull,2);
-      return x;
-    }
-    inline __device__
-    uint32_t bitInterleave10(uint32_t x)
-    {
-      //hex     00:      00:       00:       00:       00:       00:       ff:       00
-      x = shiftBits(x,0x0000ff00,16); 
-      //hex    00:       f0:       00:       00:       f0:       00:       00:       f0
-      x = shiftBits(x,0xf00000f0,8); 
-      //hex    00:       0c:       00:       c0:       0c:       00:       c0:       0c
-      x = shiftBits(x,0x0c00c00c,4); 
-      //hex    00:       82:       04:       20:       82:       04:       20:       82
-      x = shiftBits(x,0x82082082,2);
-      return x;
-    }
+    // inline __device__
+    // uint64_t bitInterleave21(uint64_t x)
+    // {
+    //   //hex    00:       00:       00:       00:       00:       10:       00:       00
+    //   x = shiftBits(x,0x00000000001f0000ull,32); 
+    //   //hex     00:      00:       00:       00:       00:       00:       ff:       00
+    //   x = shiftBits(x,0x000000000000ff00ull,16); 
+    //   //hex    00:       f0:       00:       00:       f0:       00:       00:       f0
+    //   x = shiftBits(x,0x00f00000f00000f0ull,8); 
+    //   //hex    00:       0c:       00:       c0:       0c:       00:       c0:       0c
+    //   x = shiftBits(x,0x000c00c00c00c00cull,4); 
+    //   //hex    00:       82:       08:       20:       82:       08:       20:       82
+    //   x = shiftBits(x,0x0082082082082082ull,2);
+    //   return x;
+    // }
+    // inline __device__
+    // uint32_t bitInterleave10(uint32_t x)
+    // {
+    //   //hex     00:      00:       00:       00:       00:       00:       ff:       00
+    //   x = shiftBits(x,0x0000ff00,16); 
+    //   //hex    00:       f0:       00:       00:       f0:       00:       00:       f0
+    //   x = shiftBits(x,0xf00000f0,8); 
+    //   //hex    00:       0c:       00:       c0:       0c:       00:       c0:       0c
+    //   x = shiftBits(x,0x0c00c00c,4); 
+    //   //hex    00:       82:       04:       20:       82:       04:       20:       82
+    //   x = shiftBits(x,0x82082082,2);
+    //   return x;
+    // }
 
+    /*! insert 1 zero in-between every two successive bits of the
+      input. ie, bit 0 stays at 0, bit 1 goes to 3, etc */
+    inline __device__
+    uint32_t bitInterleave11(uint32_t x)
+    {
+      // current x is this:                      FEDC.BAzy.xwvu.tsrq.ponm.lkji.hgfe.dcba
+
+      // 0000.0000:0000.0000:0000.0000:0000.0000:FEDC.BAzy:xwvu.tsrq:ponm.lkji:hgfe.dcba
+
+      // x = shiftBits(x,0xffff0000ull,16);
+      
+      // 0000.0000:0000.0000:FEDC.BAzy:xwvu.tsrq:0000.0000:0000.0000:ponm.lkji:hgfe.dcba
+
+      x = shiftBits(x,0b00000000000000001111111100000000u,8);
+      
+      // 0000.0000:FEDC.BAzy:0000.0000:xwvu.tsrq:0000.0000:ponm.lkji:0000.0000:hgfe.dcba
+
+      x = shiftBits(x,0b00000000111100000000000011110000u,4);
+      
+      // 0000.FEDC:0000.BAzy:0000.xwvu:0000.tsrq:0000.ponm:0000.lkji:0000.hgfe:0000.dcba
+
+      x = shiftBits(x,0b00001100000011000000110000001100u,2);
+
+      // 00FE.00DC:00BA.00zy:00xw.00vu:00ts.00rq:00po.00nm:00lk.00ji:00hg.00fe:00dc.00ba
+      
+      x = shiftBits(x,0b00100010001000100010001000100010u,1);
+      
+      // 0F0E.0D0C:0B0A.0z0y:0x0w.0v0u:0t0s.0r0q:0p0o.0n0m:0l0k.0j0i:0h0g.0f0e:0d0c.0b0a
+      return x;
+    }
+    
     inline __device__ uint32_t interleaveBits(vec2ui bits)
     {
-      printf("not implemented...\n");
-      return 0;
+      return
+        (bitInterleave11(bits.y) << 1)
+        |
+        bitInterleave11(bits.x);
     }
     
     inline __device__ uint32_t interleaveBits(vec4ui bits)
@@ -994,6 +1069,7 @@ namespace cuBQL {
     }
     
 
+    inline
     void keyValueSort(const uint64_t *d_keysValues_in,
                       uint64_t *d_keysValues_out,
                       int N,
@@ -1022,6 +1098,7 @@ namespace cuBQL {
       _FREE(d_tempMem,s,memResource);
     }                      
 
+    inline
     void keyValueSort(const uint64_t *d_keys_in,
                       uint64_t *d_keys_out,
                       const uint32_t *d_values_in,
@@ -1398,14 +1475,17 @@ namespace cuBQL {
       gpuBuilder_impl::refit(bvh,boxes,s,memResource);
     }
   }
-  
-  template<typename T, int D>
-  void rebinMortonBuilder(BinaryBVH<T,D>   &bvh,
-                     const box_t<T,D> *boxes,
-                     int                   numPrims,
-                     BuildConfig           buildConfig,
-                     cudaStream_t          s,
-                     GpuMemoryResource    &memResource)
-  { rebinMortonBuilder_impl::build<T,D>(bvh,boxes,numPrims,buildConfig,s,memResource); }
+
+  namespace cuda {
+    template<typename T, int D>
+    void rebinRadixBuilder(BinaryBVH<T,D>    &bvh,
+                            const box_t<T,D>  *boxes,
+                            uint32_t           numPrims,
+                            BuildConfig        buildConfig,
+                            cudaStream_t       s,
+                            GpuMemoryResource &memResource)
+    { rebinRadixBuilder_impl::build<T,D>(bvh,boxes,numPrims,buildConfig,s,memResource); }
+  }
 }
+#endif
 

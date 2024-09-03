@@ -50,6 +50,12 @@ namespace testing {
     case BUILDTYPE_RADIX:
       cuBQL::cuda::radixBuilder(bvh,d_boxes,numBoxes,BuildConfig(),0,defaultGpuMemResource());
       break;
+    case BUILDTYPE_REBIN:
+      cuBQL::cuda::rebinRadixBuilder(bvh,d_boxes,numBoxes,BuildConfig(),0,defaultGpuMemResource());
+      break;
+    case BUILDTYPE_SAH:
+      cuBQL::cuda::sahBuilder(bvh,d_boxes,numBoxes,BuildConfig(),0,defaultGpuMemResource());
+      break;
     default:
       throw std::runtime_error("unsupposed/unknownbuild type #"+std::to_string((int)buildType)+" !?");
     }

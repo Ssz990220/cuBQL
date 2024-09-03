@@ -18,55 +18,66 @@
 #define CUBQL_GPU_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/bvh.h"
 #include "cuBQL/builder/cuda/radix.h"
+#include "cuBQL/builder/cuda/rebinMortonBuilder.h"
 
 
-#define CUBQL_INSTANTIATE_BINARY_BVH(T,D)                              \
-  namespace cuBQL {                                                    \
-  namespace radixBuilder_impl {                                        \
-    template                                                           \
-    void build(BinaryBVH<T,D>        &bvh,                             \
-               const typename BuildState<T,D>::box_t       *boxes,     \
-               uint32_t           numPrims,                            \
-               BuildConfig        buildConfig,                         \
-               cudaStream_t       s,                                   \
-               GpuMemoryResource &memResource);                        \
-  }\
-    template void gpuBuilder(BinaryBVH<T,D>    &bvh,                   \
-                             const box_t<T,D>  *boxes,                 \
-                             uint32_t           numBoxes,              \
-                             BuildConfig        buildConfig,           \
-                             cudaStream_t       s,                     \
-                             GpuMemoryResource &mem_resource);         \
-    namespace cuda {                                                   \
-      template void radixBuilder<T,D>(BinaryBVH<T,D>    &bvh,          \
-                                 const box_t<T,D>  *boxes,             \
-                                 uint32_t           numBoxes,          \
-                                 BuildConfig        buildConfig,       \
-                                 cudaStream_t       s,                 \
-                                 GpuMemoryResource &mem_resource);     \
-      template void sahBuilder<T,D>(BinaryBVH<T,D>    &bvh,            \
-                                    const box_t<T,D>  *boxes,          \
-                                    uint32_t           numBoxes,       \
-                                    BuildConfig        buildConfig,    \
-                                    cudaStream_t       s,              \
-                                    GpuMemoryResource &mem_resource);  \
-      template void free(BinaryBVH<T,D>    &bvh,                       \
-                         cudaStream_t       s,                         \
-                         GpuMemoryResource &mem_resource);             \
-    }                                                                  \
-  }                                                                    \
-  
-#define CUBQL_INSTANTIATE_WIDE_BVH(T,D,N)                               \
+#define CUBQL_INSTANTIATE_BINARY_BVH(T,D)                               \
   namespace cuBQL {                                                     \
-    template void gpuBuilder(WideBVH<T,D,N>    &bvh,                    \
-                             const box_t<T,D>  *boxes,                  \
-                             uint32_t           numBoxes,               \
-                             BuildConfig        buildConfig,            \
-                             cudaStream_t       s,                      \
-                             GpuMemoryResource &mem_resource);          \
-    template void free(WideBVH<T,D,N>  &bvh,                            \
-                       cudaStream_t s,                                  \
-                       GpuMemoryResource& mem_resource);                \
+  namespace radixBuilder_impl {                                         \
+    template                                                            \
+    void build(BinaryBVH<T,D>        &bvh,                              \
+               const typename BuildState<T,D>::box_t       *boxes,      \
+               uint32_t           numPrims,                             \
+               BuildConfig        buildConfig,                          \
+               cudaStream_t       s,                                    \
+               GpuMemoryResource &memResource);                         \
+  }                                                                     \
+  template void gpuBuilder(BinaryBVH<T,D>    &bvh,                      \
+                           const box_t<T,D>  *boxes,                    \
+                           uint32_t           numBoxes,                 \
+                           BuildConfig        buildConfig,              \
+                           cudaStream_t       s,                        \
+                           GpuMemoryResource &mem_resource);            \
+  namespace cuda {                                                      \
+    template                                                            \
+    void radixBuilder<T,D>(BinaryBVH<T,D>    &bvh,                      \
+                           const box_t<T,D>  *boxes,                    \
+                           uint32_t           numBoxes,                 \
+                           BuildConfig        buildConfig,              \
+                           cudaStream_t       s,                        \
+                           GpuMemoryResource &mem_resource);            \
+    template                                                            \
+    void rebinRadixBuilder<T,D>(BinaryBVH<T,D>    &bvh,                 \
+                                const box_t<T,D>  *boxes,               \
+                                uint32_t           numBoxes,            \
+                                BuildConfig        buildConfig,         \
+                                cudaStream_t       s,                   \
+                                GpuMemoryResource &mem_resource);       \
+    template                                                            \
+    void sahBuilder<T,D>(BinaryBVH<T,D>    &bvh,                        \
+                         const box_t<T,D>  *boxes,                      \
+                         uint32_t           numBoxes,                   \
+                         BuildConfig        buildConfig,                \
+                         cudaStream_t       s,                          \
+                         GpuMemoryResource &mem_resource);              \
+    template                                                            \
+    void free(BinaryBVH<T,D>    &bvh,                                   \
+              cudaStream_t       s,                                     \
+              GpuMemoryResource &mem_resource);                         \
+  }                                                                     \
+  }                                                                     \
+  
+#define CUBQL_INSTANTIATE_WIDE_BVH(T,D,N)                       \
+  namespace cuBQL {                                             \
+    template void gpuBuilder(WideBVH<T,D,N>    &bvh,            \
+                             const box_t<T,D>  *boxes,          \
+                             uint32_t           numBoxes,       \
+                             BuildConfig        buildConfig,    \
+                             cudaStream_t       s,              \
+                             GpuMemoryResource &mem_resource);  \
+    template void free(WideBVH<T,D,N>  &bvh,                    \
+                       cudaStream_t s,                          \
+                       GpuMemoryResource& mem_resource);        \
   }
 
 

@@ -236,7 +236,6 @@ namespace cuBQL {
       buildState->quantizer.init(centBounds);
     }
 
-
     /* morton code computation: how the bits shift for 21 input bits:
 
        desired final step:
@@ -281,7 +280,7 @@ namespace cuBQL {
     uint64_t shiftBits(uint64_t x, uint64_t maskOfBitstoMove, int howMuchToShift)
     { return ((x & maskOfBitstoMove)<<howMuchToShift) | (x & ~maskOfBitstoMove); }
 
-    /*! insert 2 zeroes in-between every two successive bits of the
+    /*! insert 1 zero in-between every two successive bits of the
       input. ie, bit 0 stays at 0, bit 1 goes to 3, etc */
     inline __device__
     uint64_t bitInterleave11(uint64_t x)
