@@ -27,12 +27,16 @@ namespace cuBQL {
     template<typename T, int D> struct Quantizer;
 
     template<int D> struct numMortonBits;
+#if 0
     template<> struct numMortonBits<2> { enum { value = 31 }; };
     template<> struct numMortonBits<3> { enum { value = 21 }; };
     template<> struct numMortonBits<4> { enum { value = 15 }; };
-    // template<> struct numMortonBits<2> { enum { value = 15 }; };
-    // template<> struct numMortonBits<3> { enum { value = 10 }; };
-    // template<> struct numMortonBits<4> { enum { value =  7 }; };
+#else
+    // force 32-bit morton codes ... only for testing/evaluation
+    template<> struct numMortonBits<2> { enum { value = 15 }; };
+    template<> struct numMortonBits<3> { enum { value = 10 }; };
+    template<> struct numMortonBits<4> { enum { value =  7 }; };
+#endif
     
     template<int D>
     struct Quantizer<float,D> {
@@ -442,14 +446,23 @@ namespace cuBQL {
     inline __device__
     bool findSplit(int &split,
                    const uint64_t *__restrict__ keys,
-                   int begin, int end)
+                   int begin, int end,
+                   int maxAllowedLeafSize)
     {
       uint64_t firstKey = keys[begin];
       uint64_t lastKey  = keys[end-1];
       
-      if (firstKey == lastKey)
+      if (firstKey == lastKey) {
         // same keys entire range - no split in there ....
+#if 1
+        if ((end-begin) > maxAllowedLeafSize) {
+          printf("range %i %i needs split %i\n",begin,end,maxAllowedLeafSize);
+         split = (begin+end)/2;
+         return true;
+        }
+#endif
         return false;
+      }
       
       int numMatchingBits = __clzll(firstKey ^ lastKey);
       // the first key in the plane we're searching has
@@ -489,6 +502,7 @@ namespace cuBQL {
     __global__
     void createNodes(BuildState<T,D> *buildState,
                      int leafThreshold,
+                     int maxAllowedLeafSize,
                      TempNode *nodes,
                      int begin, int end,
                      const uint64_t *keys)
@@ -518,7 +532,8 @@ namespace cuBQL {
           // we WANT to make a leaf
           node.finished.offset = node.open.begin;
           node.finished.count  = size;
-        } else if (!findSplit(split,keys,node.open.begin,node.open.end)) {
+        } else if (!findSplit(split,keys,node.open.begin,node.open.end,
+                              maxAllowedLeafSize)) {
           // we HAVE TO make a leaf because we couldn't split
           node.finished.offset = node.open.begin;
           node.finished.count  = size;
@@ -698,6 +713,7 @@ namespace cuBQL {
         int numNodesStillToDo = numNodesAlloced - numNodesDone;
         createNodes<<<divRoundUp(numNodesStillToDo,1024),1024,0,s>>>
           (d_buildState,makeLeafThreshold,
+           buildConfig.maxAllowedLeafSize,
            nodes,numNodesDone,numNodesAlloced,
            d_primKeys_sorted);
         CUBQL_CUDA_CALL(MemcpyAsync(h_buildState,d_buildState,sizeof(*h_buildState),

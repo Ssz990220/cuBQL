@@ -247,6 +247,14 @@ namespace cuBQL {
   }
 
   template<typename T, int D>
+  bool operator==(const box_t<T,D> &a, const box_t<T,D> &b)
+  { return a.lower == b.lower && a.upper == b.upper; }
+
+  template<typename T, int D>
+  bool operator!=(const box_t<T,D> &a, const box_t<T,D> &b)
+  { return !(a==b); }
+
+  template<typename T, int D>
   std::ostream &operator<<(std::ostream &o, const box_t<T,D> &box)
   { o << "{" << box.lower << "," << box.upper << "}"; return o; }
 }

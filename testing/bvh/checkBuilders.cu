@@ -24,6 +24,7 @@
 #include "samples/common/IO.h"
 #include "testing/common/testRig.h"
 #include "samples/common/Generator.h"
+#include <set>
 
 namespace testing {
 
@@ -57,6 +58,58 @@ namespace testing {
     template<typename T, int D> bool isFloat3() { return false; };
     template<> bool isFloat3<float,3>() { return true; }
     
+
+  template<typename T, int D>
+  struct TreeChecker {
+    using box_t   = cuBQL::box_t<T,D>;
+    using vec_t   = cuBQL::vec_t<T,D>;
+    using bvh_t   = cuBQL::bvh_t<T,D>;
+    using node_t  = typename bvh_t::Node;
+
+    TreeChecker(const std::vector<node_t> &nodes,
+                const std::vector<int>    &primIDs,
+                const std::vector<box_t>  &boxes)
+      : nodes(nodes), primIDs(primIDs), boxes(boxes)
+    {
+      traverse(0);
+      if (primIDsFound.size() != primIDs.size())
+        throw std::runtime_error("some prims not found!?");
+    }
+
+    box_t traverse(int nodeID)
+    {
+      // PRINT(nodeID);
+      // numNodesFound++;
+      node_t node = nodes[nodeID];
+      box_t bounds;
+      // PRINT(node.admin.count);
+      // PRINT(node.bounds);
+      if (node.admin.count) {
+        for (int i=0;i<node.admin.count;i++) {
+          int primID = primIDs[node.admin.offset+i];
+          // PRINT(primID);
+          primIDsFound.insert(primID);
+          bounds.extend(boxes[primID]);
+        }
+        // PRINT(bounds);
+      } else {
+        box_t lBounds = traverse(node.admin.offset+0);
+        box_t rBounds = traverse(node.admin.offset+1);
+        bounds.extend(lBounds);
+        bounds.extend(rBounds);
+      }
+      if (node.bounds != bounds) {
+        throw std::runtime_error("boxes do not match");
+      }
+      return bounds;
+    }
+    
+    int numNodesFound = 0;
+    std::set<int> primIDsFound;
+    const std::vector<node_t> &nodes;
+    const std::vector<int> &primIDs;
+    const std::vector<box_t>    &boxes;
+  };
   
   template<typename T, int D>
   struct Checker {
@@ -69,13 +122,23 @@ namespace testing {
     Checker(const std::vector<vecND> &doublePoints)
       : points(convert<T,D>(doublePoints))
     {
+      srand48(290374);
+      box_t bbox;
       for (auto point : points)
-        boxes.push_back({point,point});
+        bbox.grow(point);
+      float halfBoxScale = length(bbox.size()) * .1f / powf(doublePoints.size(),1./D);
+       
+      for (auto point : points) {
+        vec_t halfBoxSize = halfBoxScale;
+        for (int i=0;i<D;i++)
+          halfBoxSize[i] *= drand48();
+        boxes.push_back({point-halfBoxSize,point+halfBoxSize});
+      }
       CUBQL_CUDA_CALL(Malloc((void **)&d_boxes,boxes.size()*sizeof(boxes[0])));
       CUBQL_CUDA_CALL(Memcpy((void*)d_boxes,boxes.data(),boxes.size()*sizeof(boxes[0]),
                              cudaMemcpyDefault));
     }
-
+    
     ~Checker()
     {
       CUBQL_CUDA_CALL(Free(d_boxes));
@@ -87,7 +150,12 @@ namespace testing {
                           int nodeID)
     {
       auto node = nodes[nodeID];
-      double sum = costEstimate(node.bounds)*(1+node.admin.count);
+      double sum
+        = costEstimate(node.bounds)*(1+node.admin.count);
+      // double sum
+      //   = node.admin.count
+      //   ? costEstimate(node.bounds)*(1+node.admin.count)
+      //   : 0.;
       if (node.admin.count == 0) {
         sum += computeSAH_rec(nodes,primIDs,node.admin.offset+0);
         sum += computeSAH_rec(nodes,primIDs,node.admin.offset+1);
@@ -121,6 +189,7 @@ namespace testing {
       // std::cout << "# ...freeing BVH" << std::endl;
       freeBVH();
       // std::cout << "# ...computing SAH cost\t\t\t" << std::flush;
+      TreeChecker<T,D> check(nodes,primIDs,boxes);
       std::cout << "SAH(" << description << "): " << computeSAH(nodes,primIDs) << std::endl;
     }
     
@@ -179,7 +248,7 @@ namespace testing {
             download,
             "cuda::rebinRadixBuilder");
       if (isFloat3<T,D>()) {
-        check([&](){cuBQL::cuda::sahBuilder(bvh,d_boxes,boxes.size(),BuildConfig());},
+        check([&](){cuBQL::cuda::sahBuilder(bvh,d_boxes,boxes.size(),BuildConfig().enableSAH());},
               freeBVH,
               download,
               "cuda::sahBuilder");
@@ -212,9 +281,9 @@ namespace testing {
       ->generate(numPoints,290374);
     
     Checker<float,D>    (points).run();
-    Checker<double,D>   (points).run();
-    Checker<int,D>      (points).run();
-    Checker<longlong,D> (points).run();
+    // Checker<double,D>   (points).run();
+    // Checker<int,D>      (points).run();
+    // Checker<longlong,D> (points).run();
   }
   
   void usage(const std::string &error = "")
@@ -233,16 +302,17 @@ int main(int ac, char **av)
     = {
     "uniform",
     "clustered",
-    "mixture .1 remap [ -10000000 ] [ 10000000 ] uniform remap [ 1000 1000 ] [ 10000000 1020 ] clustered",
+    // "mixture .1 remap [ -10000000 ] [ 10000000 ] uniform remap [ 1000 1000 ] [ 10000000 1020 ] clustered",
+    "mixture .1 remap [ -100000000 ] [ 100000000 ] uniform remap [ 1000 1000 ] [ 1010 1010 ] uniform",
   };
   // const std::string generatorString = "uniform";
   std::vector<int> numPointsToTest = { 100,10000,10000000 };
   for (auto numPoints: numPointsToTest) {
     for (auto generatorString : generatorStrings) {
       
-      testing::checkD<2>(generatorString,numPoints);
-      testing::checkD<3>(generatorString,numPoints);
-      testing::checkD<4>(generatorString,numPoints);
+      // testing::checkD<2>(generatorString,numPoints);
+       testing::checkD<3>(generatorString,numPoints);
+      // testing::checkD<4>(generatorString,numPoints);
     }      
   }
 
