@@ -31,6 +31,7 @@
 #include <cmath>
 #include <algorithm>
 #include <sstream>
+#include <float.h>
 #ifdef __GNUC__
 #include <execinfo.h>
 #include <sys/time.h>

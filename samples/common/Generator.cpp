@@ -260,7 +260,7 @@ namespace cuBQL {
       if (count <= 0)
         throw std::runtime_error("UniformBoxGenerator<D>::generate(): invalid count...");
       std::vector<box_t<double,D>> res(count);
-      double size = 0.5f / powf((double)count,double(1.f/D));
+      double size = 0.5 / pow((double)count,double(1.f/D));
       uniformBoxGenerator<D>(res,seed,size);
       return res;
     }
@@ -406,7 +406,7 @@ namespace cuBQL {
         
       std::uniform_real_distribution<double> uniform(lo,hi);
 
-      int numClusters = int(1+powf((double)count,(D-1.f)/D));
+      int numClusters = int(1+pow((double)count,(D-1.)/D));
       // = int(1+powf(count/50.f);
       // = int(1+sqrtf(count));
       // = this->numClusters
@@ -476,7 +476,7 @@ namespace cuBQL {
       rng.seed(seed);
       std::uniform_real_distribution<double> uniform(0.f,1.f);
   
-      int numClusters = int(1+powf((double)count,(D-1.f)/D));
+      int numClusters = int(1+pow((double)count,(D-1.f)/D));
       // int numClusters
       //   = int(1+count/50.f);
       std::vector<vec_t<double,D>> clusterCenters;
@@ -528,7 +528,7 @@ namespace cuBQL {
 
         if (sizeMean > 0) {
           for (int d=0;d<D;d++)
-            halfSize[d] = fabsf(0.5f*(double)sizeGaussian(rng));
+            halfSize[d] = fabs(0.5*(double)sizeGaussian(rng));
         } else {
           for (int d=0;d<D;d++)
             halfSize[d]
@@ -773,7 +773,7 @@ namespace cuBQL {
       for (int tid=0;tid<numRequested;tid++) {
         double r_which = rng();
         auto it = std::lower_bound(cdf.begin(),cdf.end(),r_which);
-        int triID = std::min(size_t(it - cdf.begin()),cdf.size()-1);
+        size_t triID = std::min(size_t(it - cdf.begin()),cdf.size()-1);
         auto triangle = triangles[triID];
         points.push_back(vec3d(triangle.sample(rng(),rng())));
       }

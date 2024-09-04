@@ -170,7 +170,7 @@ namespace cuBQL {
 
     template<typename OT>
     explicit __cubql_both vec_t(const vec_t_data<OT,3> &o)
-    { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+    { this->x = T(o.x); this->y = T(o.y); this->z = T(o.z); }
     
     inline __cubql_both vec_t &operator=(cuda_t o)
     { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
@@ -199,7 +199,7 @@ namespace cuBQL {
 
     template<typename OT>
     explicit __cubql_both vec_t(const vec_t_data<OT,4> &o)
-    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+    { this->x = T(o.x); this->y = T(o.y); this->z = T(o.z); this->w = T(o.w); }
     
     inline __cubql_both vec_t &operator=(cuda_t o)
     { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }

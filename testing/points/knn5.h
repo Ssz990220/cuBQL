@@ -149,7 +149,7 @@ namespace testing {
       double avg_gold = 0.f;
       int    numFinite = 0;
       for (float r : gold)
-        if (finite(r)) {
+        if (std::isfinite(r)) {
           avg_gold += r;
           numFinite++;
         } 
@@ -161,7 +161,7 @@ namespace testing {
       double threshold = differenceThreshold();
       for (int i=0;i<(int)results.size();i++) {
         double difference = fabsf(results[i] - gold[i]);
-        if (finite(difference)) {
+        if (std::isfinite(difference)) {
           max_diff = std::max(max_diff,difference);
           avg_diff += difference;
           numFinite++;

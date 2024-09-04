@@ -122,7 +122,7 @@ namespace testing {
     Checker(const std::vector<vecND> &doublePoints)
       : points(convert<T,D>(doublePoints))
     {
-      srand48(290374);
+      //srand48(290374);
       box_t bbox;
       for (auto point : points)
         bbox.grow(point);
@@ -130,8 +130,8 @@ namespace testing {
        
       for (auto point : points) {
         vec_t halfBoxSize = halfBoxScale;
-        for (int i=0;i<D;i++)
-          halfBoxSize[i] *= drand48();
+//        for (int i=0;i<D;i++)
+          //halfBoxSize[i] *= drand48();
         boxes.push_back({point-halfBoxSize,point+halfBoxSize});
       }
       CUBQL_CUDA_CALL(Malloc((void **)&d_boxes,boxes.size()*sizeof(boxes[0])));

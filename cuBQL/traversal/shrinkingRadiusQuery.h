@@ -308,8 +308,8 @@ namespace cuBQL {
             // out of down-travesal and let leaf code pop in.
             break;
 
-          uint32_t n0Idx = node.offset+0;
-          uint32_t n1Idx = node.offset+1;
+          uint32_t n0Idx = (uint32_t)node.offset+0;
+          uint32_t n1Idx = (uint32_t)node.offset+1;
           typename bvh_t<T,D>::node_t n0 = bvh.nodes[n0Idx];
           typename bvh_t<T,D>::node_t n1 = bvh.nodes[n1Idx];
           float d0 = fSqrDistance_rd(queryPoint,n0.bounds);

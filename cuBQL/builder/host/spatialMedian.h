@@ -101,7 +101,7 @@ namespace cuBQL {
           }
         }
         if (Nl == 0 || Nr == 0) {
-          if (end - begin <= maxAllowedLeafSize)
+          if (end - begin <= buildConfig.maxAllowedLeafSize)
             return makeLeaf(nodeID,begin,end,topo);
           else
             Nl = (end-begin)/2;
@@ -117,7 +117,7 @@ namespace cuBQL {
       }
       
       template<typename T, int D>
-      void refit(int nodeID,
+      void refit(uint64_t nodeID,
                  BinaryBVH<T,D>   &bvh,
                  const box_t<T,D> *boxes)
       {
@@ -151,7 +151,7 @@ namespace cuBQL {
         std::vector<int>  altPrimIDs(primIDs.size());
         std::vector<Topo> topo(1);
         
-        buildRec(0,0,primIDs.size(),
+        buildRec(0,0,(int)primIDs.size(),
                  topo,primIDs,altPrimIDs,boxes,buildConfig);
         altPrimIDs.clear();
         bvh.primIDs = new uint32_t[primIDs.size()];
