@@ -126,7 +126,7 @@ namespace testing {
       box_t bbox;
       for (auto point : points)
         bbox.grow(point);
-      float halfBoxScale = length(bbox.size()) * .1f / powf(doublePoints.size(),1./D);
+      float halfBoxScale = reduce_max(bbox.size()) * .5f / powf(doublePoints.size(),1./D);
        
       for (auto point : points) {
         vec_t halfBoxSize = halfBoxScale;
@@ -281,9 +281,9 @@ namespace testing {
       ->generate(numPoints,290374);
     
     Checker<float,D>    (points).run();
-    // Checker<double,D>   (points).run();
-    // Checker<int,D>      (points).run();
-    // Checker<longlong,D> (points).run();
+    Checker<double,D>   (points).run();
+    Checker<int,D>      (points).run();
+    Checker<longlong,D> (points).run();
   }
   
   void usage(const std::string &error = "")
@@ -303,16 +303,16 @@ int main(int ac, char **av)
     "uniform",
     "clustered",
     // "mixture .1 remap [ -10000000 ] [ 10000000 ] uniform remap [ 1000 1000 ] [ 10000000 1020 ] clustered",
-    "mixture .1 remap [ -100000000 ] [ 100000000 ] uniform remap [ 1000 1000 ] [ 1010 1010 ] uniform",
+    "mixture .1 remap [ -1000000 ] [ 1000000 ] uniform remap [ 100000 ] [ 100010 ] uniform",
   };
   // const std::string generatorString = "uniform";
   std::vector<int> numPointsToTest = { 100,10000,10000000 };
   for (auto numPoints: numPointsToTest) {
     for (auto generatorString : generatorStrings) {
       
-      // testing::checkD<2>(generatorString,numPoints);
-       testing::checkD<3>(generatorString,numPoints);
-      // testing::checkD<4>(generatorString,numPoints);
+      testing::checkD<2>(generatorString,numPoints);
+      testing::checkD<3>(generatorString,numPoints);
+      testing::checkD<4>(generatorString,numPoints);
     }      
   }
 

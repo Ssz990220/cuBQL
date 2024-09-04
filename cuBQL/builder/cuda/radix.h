@@ -27,7 +27,7 @@ namespace cuBQL {
     template<typename T, int D> struct Quantizer;
 
     template<int D> struct numMortonBits;
-#if 0
+#if 1
     template<> struct numMortonBits<2> { enum { value = 31 }; };
     template<> struct numMortonBits<3> { enum { value = 21 }; };
     template<> struct numMortonBits<4> { enum { value = 15 }; };
@@ -456,9 +456,9 @@ namespace cuBQL {
         // same keys entire range - no split in there ....
 #if 1
         if ((end-begin) > maxAllowedLeafSize) {
-          printf("range %i %i needs split %i\n",begin,end,maxAllowedLeafSize);
-         split = (begin+end)/2;
-         return true;
+          // printf("range %i %i needs split %i\n",begin,end,maxAllowedLeafSize);
+          split = (begin+end)/2;
+          return true;
         }
 #endif
         return false;
@@ -533,7 +533,7 @@ namespace cuBQL {
           node.finished.offset = node.open.begin;
           node.finished.count  = size;
         } else if (!findSplit(split,keys,node.open.begin,node.open.end,
-                              maxAllowedLeafSize)) {
+                              leafThreshold/*maxAllowedLeafSize*/)) {
           // we HAVE TO make a leaf because we couldn't split
           node.finished.offset = node.open.begin;
           node.finished.count  = size;

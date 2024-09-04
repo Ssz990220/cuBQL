@@ -100,8 +100,12 @@ namespace cuBQL {
             altPrimIDs[end - ++Nr]   = primID;
           }
         }
-        if (Nl == 0 || Nr == 0)
-          return makeLeaf(nodeID,begin,end,topo);
+        if (Nl == 0 || Nr == 0) {
+          if (end - begin <= maxAllowedLeafSize)
+            return makeLeaf(nodeID,begin,end,topo);
+          else
+            Nl = (end-begin)/2;
+        }
 
         int mid = begin+Nl;
         for (int i=begin;i<end;i++)
