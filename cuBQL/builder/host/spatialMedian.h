@@ -86,30 +86,37 @@ namespace cuBQL {
         box_t centBounds;
         for (int i=begin;i<end;i++)
           centBounds.extend(boxes[primIDs[i]].center());
-        if (centBounds.lower == centBounds.upper)
-          return makeLeaf(nodeID,begin,end,topo);
 
-        int dim = arg_max(centBounds.size());
-        T   pos = centBounds.center()[dim];
-        int Nl = 0, Nr = 0;
-        for (int i=begin;i<end;i++) {
-          int primID = primIDs[i];
-          if (boxes[primID].center()[dim] < pos) {
-            altPrimIDs[begin + Nl++] = primID;
-          } else {
-            altPrimIDs[end - ++Nr]   = primID;
-          }
-        }
-        if (Nl == 0 || Nr == 0) {
+        int mid = -1;
+        
+        if (centBounds.lower == centBounds.upper) {
           if (end - begin <= maxAllowedLeafSize)
             return makeLeaf(nodeID,begin,end,topo);
           else
-            Nl = (end-begin)/2;
-        }
+            mid = (begin+end)/2;
+        } else {
+          int dim = arg_max(centBounds.size());
+          T   pos = centBounds.center()[dim];
+          int Nl = 0, Nr = 0;
+          for (int i=begin;i<end;i++) {
+            int primID = primIDs[i];
+            if (boxes[primID].center()[dim] < pos) {
+              altPrimIDs[begin + Nl++] = primID;
+            } else {
+              altPrimIDs[end - ++Nr]   = primID;
+            }
+          }
+          if (Nl == 0 || Nr == 0) {
+            if (end - begin <= maxAllowedLeafSize)
+              return makeLeaf(nodeID,begin,end,topo);
+            else
+              Nl = (end-begin)/2;
+          }
 
-        int mid = begin+Nl;
-        for (int i=begin;i<end;i++)
-          primIDs[i] = altPrimIDs[i];
+          mid = begin+Nl;
+          for (int i=begin;i<end;i++)
+            primIDs[i] = altPrimIDs[i];
+        }
         
         int childID = makeInner(nodeID,topo);
         buildRec(childID+0,begin,mid,topo,primIDs,altPrimIDs,boxes,buildConfig);
