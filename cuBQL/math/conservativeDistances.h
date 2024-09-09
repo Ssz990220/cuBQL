@@ -68,7 +68,7 @@ namespace cuBQL {
   { return toFloat_pos_rd(v*(int64_t)v); }
   
   inline __cubql_both float fSquare_rd(int64_t v)
-  { float f = toFloat_pos_rd(v < 0 ? -v : v); return v*v; }
+  { float f = toFloat_pos_rd(v < 0 ? -v : v); return f*f; }
 
   // ------------------------------------------------------------------
   template<typename T, int D>

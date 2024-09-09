@@ -25,12 +25,17 @@
 #include "testing/common/testRig.h"
 #include "samples/common/Generator.h"
 #include <set>
+#include "cuBQL/traversal/shrinkingRadiusQuery.h"
+#include <cuda.h>
 
 namespace testing {
 
   using namespace cuBQL;
   using namespace cuBQL::samples;
-      
+
+
+
+  
 
   template<typename T>
   inline double costEstimate(box_t<T,2> b)
@@ -110,7 +115,42 @@ namespace testing {
     const std::vector<int> &primIDs;
     const std::vector<box_t>    &boxes;
   };
-  
+
+  template<typename T, int D>
+  __global__ void runQueries(uint64_t *d_numNodesVisited,
+                             uint64_t *d_numPrimsVisited,
+                             BinaryBVH<T,D> bvh,
+                             const box_t<T,D> *boxes,
+                             int numPoints)
+  {
+    using box_t   = cuBQL::box_t<T,D>;
+    using vec_t   = cuBQL::vec_t<T,D>;
+    using bvh_t   = cuBQL::bvh_t<T,D>;
+    using node_t  = typename bvh_t::Node;
+    
+    int tid = threadIdx.x+blockIdx.x*blockDim.x;
+    if (tid >= numPoints) return;
+
+    vec_t queryPoint = boxes[tid].lower;
+    uint64_t numNodesVisited = 0;
+    uint64_t numPrimsVisited = 0;
+    auto nodeDist = [&](const node_t &node) -> float
+    {
+      numNodesVisited++;
+      return fSqrDistance_rd(queryPoint,node.bounds);
+    };
+    auto primCode = [&](uint32_t primID) {
+      numPrimsVisited++;
+      vec_t point = boxes[primID].lower;
+      return fSqrDistance_rd(queryPoint,point);
+    };
+    shrinkingRadiusQuery::forEachPrim(primCode,nodeDist,bvh);
+    atomicAdd((unsigned long long int *)d_numNodesVisited,
+              (unsigned long long int)numNodesVisited);
+    atomicAdd((unsigned long long int *)d_numPrimsVisited,
+              (unsigned long long int)numPrimsVisited);
+  }
+                             
   template<typename T, int D>
   struct Checker {
     using vecND   = cuBQL::vec_t<double,D>;
@@ -122,7 +162,7 @@ namespace testing {
     Checker(const std::vector<vecND> &doublePoints)
       : points(convert<T,D>(doublePoints))
     {
-      srand48(290374);
+      //srand48(290374);
       box_t bbox;
       for (auto point : points)
         bbox.grow(point);
@@ -130,8 +170,8 @@ namespace testing {
        
       for (auto point : points) {
         vec_t halfBoxSize = halfBoxScale;
-        for (int i=0;i<D;i++)
-          halfBoxSize[i] *= drand48();
+//        for (int i=0;i<D;i++)
+          //halfBoxSize[i] *= drand48();
         boxes.push_back({point-halfBoxSize,point+halfBoxSize});
       }
       CUBQL_CUDA_CALL(Malloc((void **)&d_boxes,boxes.size()*sizeof(boxes[0])));
@@ -167,8 +207,37 @@ namespace testing {
     {
       return computeSAH_rec(nodes,primIDs,0) / costEstimate(nodes[0].bounds);
     }
-    
 
+    void runQuery(const std::string &description)
+    {
+      uint64_t *p_numNodesVisited = 0;
+      uint64_t *p_numPrimsVisited = 0;
+      CUBQL_CUDA_CALL(Malloc((void **)&p_numNodesVisited,sizeof(uint64_t)));
+      CUBQL_CUDA_CALL(Malloc((void **)&p_numPrimsVisited,sizeof(uint64_t)));
+      CUBQL_CUDA_CALL(Memset(p_numNodesVisited,0,sizeof(uint64_t)));
+      CUBQL_CUDA_CALL(Memset(p_numPrimsVisited,0,sizeof(uint64_t)));
+      int numPoints = (int)points.size();
+      runQueries<T,D>
+        <<<divRoundUp(numPoints,128),128>>>
+        (p_numNodesVisited,
+         p_numPrimsVisited,
+         bvh,d_boxes,numPoints);
+      uint64_t numNodesVisited;
+      uint64_t numPrimsVisited;
+      CUBQL_CUDA_CALL(Memcpy(&numNodesVisited,p_numNodesVisited,sizeof(numNodesVisited),
+                             cudaMemcpyDefault));
+      CUBQL_CUDA_CALL(Memcpy(&numPrimsVisited,p_numPrimsVisited,sizeof(numPrimsVisited),
+                             cudaMemcpyDefault));
+      printf("  --> num visits %20s : \tnodes %8s \tprims %8s\n",
+             description.c_str(),
+             prettyNumber(numNodesVisited).c_str(),
+             prettyNumber(numPrimsVisited).c_str());
+      // std::cout << " --> num NODES visited " << numNodesVisited << std::endl;
+      // std::cout << " --> num PRIMS visited " << numPrimsVisited << std::endl;
+      CUBQL_CUDA_CALL(Free(p_numNodesVisited));
+      CUBQL_CUDA_CALL(Free(p_numPrimsVisited));
+    }
+                  
     template<
       typename runBuilderT,
       typename freeT,
@@ -176,12 +245,18 @@ namespace testing {
     void check(const runBuilderT &runBuilder,
                const freeT       &freeBVH,
                const downloadT   &download,
-               const std::string &description)
+               const std::string &description,
+               bool runQueryAsWell=true)
     {
       // std::cout << "# ----------------------- " << description << " ----------------------------"
       //           << std::endl;
       // std::cout << "# ...building '" << description << "'" << std::endl;
       runBuilder();
+
+      if (runQueryAsWell) {
+        runQuery(description);
+      }
+      
       // std::cout << "# ...downloading nodes" << std::endl;
       std::vector<typename bvh_t::Node> nodes;
       std::vector<int> primIDs;
@@ -213,7 +288,7 @@ namespace testing {
       check([&](){cuBQL::host::spatialMedian(bvh,boxes.data(),boxes.size(),BuildConfig());},
             freeBVH,
             download,
-            "host::spatialMedian");
+            "host::spatialMedian",false);
     }
 
     void checkDev()
@@ -279,7 +354,7 @@ namespace testing {
     std::vector<vecND> points
       = PointGenerator<D>::createFromString(generator)
       ->generate(numPoints,290374);
-    
+
     Checker<float,D>    (points).run();
     Checker<double,D>   (points).run();
     Checker<int,D>      (points).run();
