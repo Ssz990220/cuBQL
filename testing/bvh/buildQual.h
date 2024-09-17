@@ -87,6 +87,7 @@ namespace testing {
     auto primCode = [&](uint32_t primID) {
       numPrimsVisited++;
       vec_t point = points[primID];
+      if (primID == tid) return INFINITY;
       return fSqrDistance_rd(queryPoint,point);
     };
     shrinkingRadiusQuery::forEachPrim(primCode,nodeDist,bvh);
