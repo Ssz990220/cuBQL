@@ -19,6 +19,8 @@
 
 #include "cuBQL/bvh.h"
 #include <cub/cub.cuh>
+#include <float.h>
+#include <limits.h>
 
 namespace cuBQL {
   namespace gpuBuilder_impl {
