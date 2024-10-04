@@ -144,6 +144,7 @@ namespace cuBQL {
       etc. All memory allocatoins done during construction will use
       the memory resource passed to the respective build function. */
   struct GpuMemoryResource {
+    virtual ~GpuMemoryResource() = default;
     virtual cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) = 0;
     virtual cudaError_t free(void* ptr, cudaStream_t s) = 0;
   };
