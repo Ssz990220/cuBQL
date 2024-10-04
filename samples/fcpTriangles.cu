@@ -15,8 +15,8 @@
 // ======================================================================== //
 
 /*! \file samples/closestPointOnTrianglesSurface Simple example of
-    building bvhes over, and quering closest points on, sets of 3D
-    triangles
+    building bvhes over, and querying closest points on, sets of 3D
+    triangles.
 
     This example will, in successive steps:
 
@@ -24,10 +24,10 @@
 
     2) build BVH over those triangles
 
-    3) run some sample find-closst-point queries: generate a grid of
+    3) run some sample find-closest-point queries: generate a grid of
     512x512x512 cells (stretched over the bounding box of the model),
     then for each cell center, perform a bvh fcp closest-point query
-    on those line segmetns.
+    on those line segments.
 */
 
 // cuBQL:

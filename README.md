@@ -7,7 +7,7 @@ GPU BVH construction that I am currently working on, with the goal of
 being able to test, verify, and time the various kernels on various
 forms of input data. To also measure how well the generated BVHes will
 actually do on real-world applications this library also conains a
-(intentinoally) small set of sample query kernels (in CUDA); hwoever,
+(intentionally) small set of sample query kernels (in CUDA); however,
 the main goal of _this_ library is the easy and GPU-accelerated
 _building_ of BVHes, not to be a library for any type of query for any
 type of data.
@@ -16,7 +16,7 @@ A second important point to note is that the builder routine(s) used
 in this library are, first and foremost, designed and intended for
 *simplicity*. I.e., all operations in this library are designed to run
 on the GPU, run in parallel, and be "reasonably" fast; but if in doubt
-this library picks simplicy (and thus, maintainability, rubustness,
+this library picks simplicy (and thus, maintainability, robustness,
 and ease of use) over speed-of-light performance.
 
 To build this library (see below) you need CUDA 11.2 or later, and
@@ -56,7 +56,7 @@ inner node; however, some of these may be 'null' (marked as not
 valid).
 
 Though most of the algorithms and data types in this library could
-absoltely be templated over both dimensionality and underlying data
+absolutely be templated over both dimensionality and underlying data
 type (i.e., a BVH over `double4` data rather than `float3`), for sake
 of readability in this particular implementation this has not been
 done (yet?). If this is a feature you would like to have, please let
@@ -64,12 +64,12 @@ me know.
 
 # Parallel GPU BVH Construction
 
-The main workhorse of this library is a CUDA-acclerated and `on
+The main workhorse of this library is a CUDA-accelerated and `on
 device` parallel BVH builder (with spatial median splits). The primary
 feature of the BVH builder is its simplicity; i.e., it is still
 "reasonably fast", but it is much simpler than other variants. Though
 performance will obviously vary for different data types, data
-distributions, etcpp, right now this builder builds a BinaryBVH over
+distributions, etc..., right now this builder builds a BinaryBVH over
 10 million uniformly distributed random points in under 13ms; that's
 not the fastest builder I have, but I believe is still quite
 reasonable.
@@ -87,15 +87,15 @@ Given such an array, the builder then gets invoked as follows:
 
 ```
 #include "cuBQL/bvh.h"
-...
+  ...
 	box3f *d_boxes;
 	int numBoxes;
 	userCodeForGeneratingPrims(d_boxes,numBoxes);
 	...
-    cuBQL::BinaryBVH bvh;
+  cuBQL::BinaryBVH bvh;
 	cuBQL::BuildConfig buildParams;
-    cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,buildParams);
-...
+  cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,buildParams);
+  ...
 ```
 The builder will not modify the `d_boxes[]` array; after the build
 is complete the `bvh.primIDs[]` array contains ints referring to indices in this 
@@ -112,7 +112,7 @@ the BVH.
 The `BuildConfig` class can be used to influence things like whether
 the BVH shuld be built with a surface area heuristic (SAH) cost metric
 (more expensive build, but faster queries for some types of inputs and
-query operatoins), or how coarse vs fine the BVH should be built (ie,
+query operations), or how coarse vs fine the BVH should be built (ie,
 at which point to make a leaf).
 
 A few notes:

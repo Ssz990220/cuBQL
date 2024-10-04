@@ -33,8 +33,8 @@ namespace cuBQL {
          subtree, this first computes the centroid of each input
          primitive in that subtree, then computes the bounding box of
          those centroids, then creates a split plane along the widest
-         dimension of that centroid boundig box, right through th
-         emiddle */
+         dimension of that centroid boundig box, right through the
+         middle */
        SPATIAL_MEDIAN=0,
        /*! use good old surface area heurstic. In theory that only
          makes sense for BVHes that are used for tracing rays
@@ -42,13 +42,13 @@ namespace cuBQL {
          queries), but it seems to help even for other queries. Much
          more expensive to build, though */
        SAH,
-       /*! edge-length heuristic - expeirmental */
+       /*! edge-length heuristic - experimental */
        ELH
     } BuildMethod;
     
     /*! what leaf size the builder is _allowed_ to make; no matter
         what input is specified, the builder may never produce leaves
-        larger thn this value */
+        larger than this value */
     int maxAllowedLeafSize = 1<<15;
 
     /*! threshold below which the builder should make a leaf, no
@@ -60,7 +60,7 @@ namespace cuBQL {
   };
 
   /*! the most basic type of BVH where each BVH::Node is either a leaf
-      (and contains Node::count primitmives), or is a inner node (and
+      (and contains Node::count primitives), or is a inner node (and
       points to a pair of child nodes). Node 0 is the root node; node
       1 is always unused (so all other node pairs start on n even
       index) */
@@ -78,7 +78,7 @@ namespace cuBQL {
 
       struct Admin {
       /*! For inner nodes, this points into the nodes[] array, with
-        left child at nodes.offset+0, and right chlid at
+        left child at nodes.offset+0, and right child at
         nodes.offset+1. For leaf nodes, this points into the
         primIDs[] array, which first prim beign primIDs[offset],
         next one primIDs[offset+1], etc. */
@@ -138,10 +138,10 @@ namespace cuBQL {
 
   // ------------------------------------------------------------------
   /*! defines a 'memory resource' that can be used for allocating gpu
-      memory; this allows the user to switch between usign
-      cudaMallocAsync (where avialble) vs regular cudaMalloc (where
+      memory; this allows the user to switch between using
+      cudaMallocAsync (where available) vs regular cudaMalloc (where
       not), or to use their own memory pool, to use managed memory,
-      etc. All memory allocatoins done during construction will use
+      etc... All memory allocations done during construction will use
       the memory resource passed to the respective build function. */
   struct GpuMemoryResource {
     virtual cudaError_t malloc(void** ptr, size_t size, cudaStream_t s) = 0;

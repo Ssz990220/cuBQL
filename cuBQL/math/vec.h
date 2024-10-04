@@ -34,14 +34,14 @@ namespace cuBQL {
   using std::max;
 #endif
   
-  template<typename /* scalar type */T, int /*! dimensoins */D>
+  template<typename /* scalar type */T, int /*! dimension */D>
   struct vec_t_data {
     inline __cubql_both T  operator[](int i) const { return v[i]; }
     inline __cubql_both T &operator[](int i)       { return v[i]; }
     T v[D];
   };
 
-  /*! defines a "invalid" type to allow for using as a paramter where
+  /*! defines a "invalid" type to allow for using as a parameter where
     no "actual" type for something exists. e.g., a vec<float,4> has
     a cuda equivalent type of float4, but a vec<float,5> does not */
   struct invalid_t {};
