@@ -194,15 +194,15 @@ namespace cuBQL {
 
   // ------------------------------------------------------------------
   
-  /*! builds a wide-bvh over a given set of primitive bounding boxes.
+  /*! Builds a BinaryBVH over a given set of primitive bounding boxes.
 
-    builder runs on the GPU; boxes[] must be a device-readable array
-    (managed or device mem); bvh arrays will be allocated in device mem 
+    The builder runs on the GPU; boxes[] must be a device-readable array
+    (managed or device mem); bvh arrays will be allocated in device mem.
 
-    input primitives may be marked as "inactive/invalid" by using a
+    Input primitives may be marked as "inactive/invalid" by using a
     bounding box whose lower/upper coordinates are inverted; such
-    primitmives will be ignored, and will thus neither be visited
-    during traversal nor mess up the tree in any way, shape, or form
+    primitives will be ignored, and will thus neither be visited
+    during traversal nor mess up the tree in any way, shape, or form.
   */
   template<typename T, int D>
   void gpuBuilder(BinaryBVH<T,D>   &bvh,
@@ -214,13 +214,14 @@ namespace cuBQL {
                   cudaStream_t      s=0,
                   GpuMemoryResource &memResource=defaultGpuMemResource());
   
-  /*! builds a BinaryBVH over the given set of boxes (using the given
+  /*! Builds a WideBVH over the given set of boxes (using the given
       stream), using a simple adaptive spatial median builder (ie,
       each subtree will be split by first computing the bounding box
       of all its contained primitives' spatial centers, then choosing
-      a split plane that splits this cntroid bounds in the center,
+      a split plane that splits this centroid bounds in the center,
       along the widest dimension. Leaves will be created once the size
-      of a subtree get to or below buildConfig.makeLeafThreshold */
+      of a subtree get to or below buildConfig.makeLeafThreshold.
+  */
   template<typename /*scalar type*/T, int /*dims*/D, int /*branching factor*/N>
   void gpuBuilder(WideBVH<T,D,N> &bvh,
                   /*! array of bounding boxes to build BVH over, must
@@ -246,15 +247,17 @@ namespace cuBQL {
   
   // ------------------------------------------------------------------
   
-  /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-    building the BVH. this assumes */
+  /*! Frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+      building the BVH.
+  */
   template<typename T, int D>
   void free(BinaryBVH<T,D> &bvh,
             cudaStream_t      s=0,
             GpuMemoryResource& memResource=defaultGpuMemResource());
 
-  /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-    building the BVH. this assumes */
+  /*! Frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+      building the BVH.
+  */
   template<typename T, int D, int N>
   void free(WideBVH<T,D,N> &bvh,
             cudaStream_t      s=0,
