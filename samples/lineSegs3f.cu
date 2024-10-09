@@ -15,14 +15,15 @@
 // ======================================================================== //
 
 /*! \file samples/lineSegs3f Simple example of building bvhes over,
-    and quering, 3D line segments 
+    and querying, 3D line segments.
 
     This example will, in successive steps:
 
-    1) generate 1M random points as seed points (to use for generating linesegments)
+    1) generate 1M random points as seed points (to use for generating line
+    segments)
 
     2) build BVH over those seed points, so we can run fcp queries to
-    find cloest-pairs (to use asline segments)
+    find closest-pairs (to use as line segments)
 
     3) compute all-closest-pairs between these points, using the
     _point_ fcp kernel; and create a line segment (LineSeg3f) for each
@@ -32,7 +33,7 @@
 
     5) run some sample find-closst-point-on-line-segments query:
     generate a grid of 512x512x512 cells, for each cell center,
-    perform a bvh fcp closest-point query on those line segmetns.
+    perform a bvh fcp closest-point query on those line segments.
 */
 
 // cuBQL:
