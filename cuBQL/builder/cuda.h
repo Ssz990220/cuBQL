@@ -24,7 +24,7 @@ namespace cuBQL {
   // ------------------------------------------------------------------
   /*! defines a 'memory resource' that can be used for allocating gpu
       memory; this allows the user to switch between usign
-      cudaMallocAsync (where avialble) vs regular cudaMalloc (where
+      cudaMallocAsync (where avialable) vs regular cudaMalloc (where
       not), or to use their own memory pool, to use managed memory,
       etc. All memory allocatoins done during construction will use
       the memory resource passed to the respective build function. */

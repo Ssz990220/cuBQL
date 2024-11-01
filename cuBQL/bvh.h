@@ -37,8 +37,8 @@ namespace cuBQL {
          subtree, this first computes the centroid of each input
          primitive in that subtree, then computes the bounding box of
          those centroids, then creates a split plane along the widest
-         dimension of that centroid boundig box, right through th
-         emiddle */
+         dimension of that centroid boundig box, right through the
+         middle */
        SPATIAL_MEDIAN=0,
        /*! use good old surface area heurstic. In theory that only
          makes sense for BVHes that are used for tracing rays
@@ -46,13 +46,13 @@ namespace cuBQL {
          queries), but it seems to help even for other queries. Much
          more expensive to build, though */
        SAH,
-       /*! edge-length heuristic - expeirmental */
+       /*! edge-length heuristic - experimental */
        ELH
     } BuildMethod;
     
     /*! what leaf size the builder is _allowed_ to make; no matter
         what input is specified, the builder may never produce leaves
-        larger thn this value */
+        larger than this value */
     int maxAllowedLeafSize = 1<<15;
 
     /*! threshold below which the builder should make a leaf, no
@@ -64,7 +64,7 @@ namespace cuBQL {
   };
 
   /*! the most basic type of BVH where each BVH::Node is either a leaf
-      (and contains Node::count primitmives), or is a inner node (and
+      (and contains Node::count primitives), or is a inner node (and
       points to a pair of child nodes). Node 0 is the root node; node
       1 is always unused (so all other node pairs start on n even
       index) */
@@ -82,7 +82,7 @@ namespace cuBQL {
 
       struct Admin {
       /*! For inner nodes, this points into the nodes[] array, with
-        left child at nodes.offset+0, and right chlid at
+        left child at nodes.offset+0, and right child at
         nodes.offset+1. For leaf nodes, this points into the
         primIDs[] array, which first prim beign primIDs[offset],
         next one primIDs[offset+1], etc. */
@@ -139,6 +139,78 @@ namespace cuBQL {
     uint32_t *primIDs  = 0;
     uint32_t  numPrims = 0;
   };
+
+
+  // // ------------------------------------------------------------------
+  
+  // /*! Builds a BinaryBVH over a given set of primitive bounding boxes.
+
+  //   The builder runs on the GPU; boxes[] must be a device-readable array
+  //   (managed or device mem); bvh arrays will be allocated in device mem.
+
+  //   Input primitives may be marked as "inactive/invalid" by using a
+  //   bounding box whose lower/upper coordinates are inverted; such
+  //   primitives will be ignored, and will thus neither be visited
+  //   during traversal nor mess up the tree in any way, shape, or form.
+  // */
+  // template<typename T, int D>
+  // void gpuBuilder(BinaryBVH<T,D>   &bvh,
+  //                 /*! array of bounding boxes to build BVH over, must
+  //                     be in device memory */
+  //                 const box_t<T,D> *boxes,
+  //                 uint32_t          numBoxes,
+  //                 BuildConfig       buildConfig,
+  //                 cudaStream_t      s=0,
+  //                 GpuMemoryResource &memResource=defaultGpuMemResource());
+  
+  // /*! Builds a WideBVH over the given set of boxes (using the given
+  //     stream), using a simple adaptive spatial median builder (ie,
+  //     each subtree will be split by first computing the bounding box
+  //     of all its contained primitives' spatial centers, then choosing
+  //     a split plane that splits this centroid bounds in the center,
+  //     along the widest dimension. Leaves will be created once the size
+  //     of a subtree get to or below buildConfig.makeLeafThreshold.
+  // */
+  // template<typename /*scalar type*/T, int /*dims*/D, int /*branching factor*/N>
+  // void gpuBuilder(WideBVH<T,D,N> &bvh,
+  //                 /*! array of bounding boxes to build BVH over, must
+  //                     be in device memory */
+  //                 const box_t<T,D>  *boxes,
+  //                 uint32_t          numBoxes,
+  //                 BuildConfig       buildConfig,
+  //                 cudaStream_t      s=0,
+  //                 GpuMemoryResource& memResource=defaultGpuMemResource());
+
+
+  
+  // // ------------------------------------------------------------------
+  // /*! fast radix/morton builder for float3 data */
+  // // ------------------------------------------------------------------
+  // template<typename T, int D>
+  // void mortonBuilder(BinaryBVH<T,D>   &bvh,
+  //                    const box_t<T,D> *boxes,
+  //                    int                   numPrims,
+  //                    BuildConfig           buildConfig,
+  //                    cudaStream_t          s=0,
+  //                    GpuMemoryResource    &memResource=defaultGpuMemResource());
+  
+  // // ------------------------------------------------------------------
+  
+  // /*! Frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+  //     building the BVH.
+  // */
+  // template<typename T, int D>
+  // void free(BinaryBVH<T,D> &bvh,
+  //           cudaStream_t      s=0,
+  //           GpuMemoryResource& memResource=defaultGpuMemResource());
+
+  // /*! Frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+  //     building the BVH.
+  // */
+  // template<typename T, int D, int N>
+  // void free(WideBVH<T,D,N> &bvh,
+  //           cudaStream_t      s=0,
+  //           GpuMemoryResource& memResource=defaultGpuMemResource());
 
   template<typename T, int D>
   using bvh_t = BinaryBVH<T,D>;

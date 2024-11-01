@@ -21,19 +21,25 @@
 namespace cuBQL {
   namespace points {
 
+<<<<<<< HEAD:cuBQL/points/fcp.h
+    /*! Find closest point, up to (and excluding) provided maximum
+        query distance. Return value is index of point in data points
+        array, or -1 if none was found. */
+=======
     /*! find closest point, up to (and exluding) provided maximum
         query distance. return value is index of point in data points
         array, or -1 if none was found */
+>>>>>>> devel:cuBQL/queries/points/old_fcp.h
     inline __device__
     int fcp(const vec3f  queryPoint,
             const bvh3f  bvh,
             const vec3f *dataPoints,
             float        sqrMaxQueryDist=INFINITY);
 
-    /*! same as regular fcp function, but explicitly _excluding_ the
-        primitive index specified in the first paramter */
+    /*! Same as regular fcp function, but explicitly _excluding_ the
+        primitive index specified in the first parameter. */
     inline __device__
-    int fcp_excluding(/*! primitmive that will NOT be accepted as fcp
+    int fcp_excluding(/*! primitive that will NOT be accepted as fcp
                           point, in case the query point itself is
                           part of the input data set */
                       int          primIDtoIgnore,

@@ -91,6 +91,14 @@ these may be 'null' (marked as not valid). Note that most builders
 will only work for binary BVHes; these can then "collapsed" into
 Wide-BVHes.
 
+<<<<<<< HEAD
+Though most of the algorithms and data types in this library could
+absolutely be templated over both dimensionality and underlying data
+type (i.e., a BVH over `double4` data rather than `float3`), for sake
+of readability in this particular implementation this has not been
+done (yet?). If this is a feature you would like to have, please let
+me know.
+=======
 For readability, cuBQL offers many pre-defined types for specific type
 and dimensionality of data: for the (arguably) most common use case of
 `float3` type of data there are `vec3f`s, `box3f`s, and `bvh3f`s (for
@@ -100,15 +108,16 @@ to just float3 data, but all BVH types (and traversal routines) are
 templated over both scalar type (`float`, `int`, `double`, `long`) and
 dimensionality (2,3,4). In fact, `bvh3f` is simply an instantiation
 (not even a specialization) of `cuBQL::BinaryBVH<float,3>`.
+>>>>>>> devel
 
 # (on-GPU) BVH Construction
 
-The main workhorse of this library is a CUDA-acclerated and `on
+The main workhorse of this library is a CUDA-accelerated and `on
 device` parallel BVH builder (with spatial median splits). The primary
 feature of the BVH builder is its simplicity; i.e., it is still
 "reasonably fast", but it is much simpler than other variants. Though
 performance will obviously vary for different data types, data
-distributions, etcpp, right now this builder builds a BinaryBVH over
+distributions, etc..., right now this builder builds a BinaryBVH over
 10 million uniformly distributed random points in under 13ms; that's
 not the fastest builder I have, but IMHO quite reasonable for most
 applications. In addition to this `cuBQL::gpuBuilder()` there are also
@@ -132,15 +141,24 @@ gets invoked as follows:
 
 ```
 #include "cuBQL/bvh.h"
+<<<<<<< HEAD
+  ...
+	box3f *d_boxes;
+	int numBoxes;
+	userCodeForGeneratingPrims(d_boxes,numBoxes);
+	...
+  cuBQL::BinaryBVH bvh;
+=======
 ...
     box3f *d_boxes  = 0;
     int    numBoxes = 0;
     userCodeForGeneratingPrims(&d_boxes,&numBoxes, ...);
     ...
     cuBQL::BinaryBVH<float,3> bvh;
+>>>>>>> devel
 	cuBQL::BuildConfig buildParams;
-    cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,buildParams);
-...
+  cuBQL::gpuBuilder(bvh,d_boxes,numBoxes,buildParams);
+  ...
 ```
 Builds for other data types (such as, e.g., `<int,4>` or <double,2>`)
 work exactly the same way (though obviously, the scalar type and dimensionality of the
@@ -160,10 +178,17 @@ box.upper`) are considered valid primitives, and will get included in
 the BVH.
 
 The `BuildConfig` class can be used to influence things like whether
+<<<<<<< HEAD
+the BVH shuld be built with a surface area heuristic (SAH) cost metric
+(more expensive build, but faster queries for some types of inputs and
+query operations), or how coarse vs fine the BVH should be built (ie,
+at which point to make a leaf).
+=======
 the BVH should be built with a surface area heuristic (SAH) cost
 metric (more expensive build, but faster queries for some types of
 inputs and query operations), or how coarse vs how fine the BVH should
 be built (ie, at which point to make a leaf).
+>>>>>>> devel
 
 A few notes:
 
