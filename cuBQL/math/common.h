@@ -29,6 +29,7 @@
 #include <string>
 #include <math.h>
 #include <cmath>
+#include <cfloat>
 #include <algorithm>
 #include <sstream>
 #ifdef __GNUC__
@@ -101,6 +102,9 @@
 #endif
 
 namespace cuBQL {
+
+  using longlong = int64_t;
+  
   namespace detail {
     inline static std::string backtrace()
     {
@@ -289,6 +293,9 @@ namespace cuBQL {
     return s.substr(s.size()-suffix.size()) == suffix;
   }
 
+  template<typename T> struct is_real { enum { value = false }; };
+  template<> struct is_real<float> { enum { value = true }; };
+  template<> struct is_real<double> { enum { value = true }; };
 } // ::cubql
 
 

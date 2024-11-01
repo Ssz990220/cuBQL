@@ -147,6 +147,7 @@ namespace cuBQL {
     }
     
     inline __cubql_both T         get(int i) const { return (*this)[i]; }
+    inline static std::string typeName();
   };
 
   template<typename T>
@@ -169,15 +170,50 @@ namespace cuBQL {
 
     template<typename OT>
     explicit __cubql_both vec_t(const vec_t_data<OT,3> &o)
-    { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+    { this->x = T(o.x); this->y = T(o.y); this->z = T(o.z); }
     
     inline __cubql_both vec_t &operator=(cuda_t o)
     { this->x = (o.x); this->y = (o.y); this->z = (o.z); }
+    
+    inline static std::string typeName();
+  };
+  
+  template<typename T>
+  struct vec_t<T,4> : public vec_t_data<T,4> {
+    enum { numDims = 4 };
+    using scalar_t = T;
+    using cuda_t = typename cuda_eq_t<T,4>::type;
+    using vec_t_data<T,4>::x;
+    using vec_t_data<T,4>::y;
+    using vec_t_data<T,4>::z;
+    using vec_t_data<T,4>::w;
+
+    inline __cubql_both vec_t() {}
+    inline __cubql_both vec_t(const T &t) { x = y = z = w = t; }
+    inline __cubql_both vec_t(T x, T y, T z, T w)
+    { this->x = x; this->y = y; this->z = z; this->w = w; }
+    inline __cubql_both vec_t(const vec_t_data<T,4> &o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+    inline __cubql_both vec_t(const cuda_t &o) 
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+
+    template<typename OT>
+    explicit __cubql_both vec_t(const vec_t_data<OT,4> &o)
+    { this->x = T(o.x); this->y = T(o.y); this->z = T(o.z); this->w = T(o.w); }
+    
+    inline __cubql_both vec_t &operator=(cuda_t o)
+    { this->x = (o.x); this->y = (o.y); this->z = (o.z); this->w = (o.w); }
+    
+    inline static std::string typeName();
   };
   
   using vec2f = vec_t<float,2>;
   using vec3f = vec_t<float,3>;
   using vec4f = vec_t<float,4>;
+
+  using vec2d = vec_t<double,2>;
+  using vec3d = vec_t<double,3>;
+  using vec4d = vec_t<double,4>;
 
   using vec2i = vec_t<int,2>;
   using vec3i = vec_t<int,3>;
@@ -307,6 +343,66 @@ namespace cuBQL {
   CUBQL_OPERATOR(operator/,/)
 #undef CUBQL_OPERATOR
 
+  // --------- vec << int -------------
+  inline __cubql_both vec_t<int,2> operator<<(vec_t<int,2> v, int b)
+  { return vec_t<int,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<int,3> operator<<(vec_t<int,3> v, int b)
+  { return vec_t<int,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<int,4> operator<<(vec_t<int,4> v, int b)
+  { return vec_t<int,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+
+  inline __cubql_both vec_t<uint32_t,2> operator<<(vec_t<uint32_t,2> v, int b)
+  { return vec_t<uint32_t,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<uint32_t,3> operator<<(vec_t<uint32_t,3> v, int b)
+  { return vec_t<uint32_t,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<uint32_t,4> operator<<(vec_t<uint32_t,4> v, int b)
+  { return vec_t<uint32_t,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+  
+  inline __cubql_both vec_t<longlong,2> operator<<(vec_t<longlong,2> v, int b)
+  { return vec_t<longlong,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<longlong,3> operator<<(vec_t<longlong,3> v, int b)
+  { return vec_t<longlong,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<longlong,4> operator<<(vec_t<longlong,4> v, int b)
+  { return vec_t<longlong,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+  
+  inline __cubql_both vec_t<uint64_t,2> operator<<(vec_t<uint64_t,2> v, int b)
+  { return vec_t<uint64_t,2>( v.x << b, v.y << b ); }
+  inline __cubql_both vec_t<uint64_t,3> operator<<(vec_t<uint64_t,3> v, int b)
+  { return vec_t<uint64_t,3>( v.x << b, v.y << b, v.z << b ); }
+  inline __cubql_both vec_t<uint64_t,4> operator<<(vec_t<uint64_t,4> v, int b)
+  { return vec_t<uint64_t,4>( v.x << b, v.y << b, v.z << b, v.w << b ); }
+  
+  // --------- vec >> int -------------
+  inline __cubql_both vec_t<int,2> operator>>(vec_t<int,2> v, int b)
+  { return vec_t<int,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<int,3> operator>>(vec_t<int,3> v, int b)
+  { return vec_t<int,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<int,4> operator>>(vec_t<int,4> v, int b)
+  { return vec_t<int,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+
+  inline __cubql_both vec_t<uint32_t,2> operator>>(vec_t<uint32_t,2> v, int b)
+  { return vec_t<uint32_t,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<uint32_t,3> operator>>(vec_t<uint32_t,3> v, int b)
+  { return vec_t<uint32_t,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<uint32_t,4> operator>>(vec_t<uint32_t,4> v, int b)
+  { return vec_t<uint32_t,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+  
+  inline __cubql_both vec_t<longlong,2> operator>>(vec_t<longlong,2> v, int b)
+  { return vec_t<longlong,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<longlong,3> operator>>(vec_t<longlong,3> v, int b)
+  { return vec_t<longlong,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<longlong,4> operator>>(vec_t<longlong,4> v, int b)
+  { return vec_t<longlong,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+  
+  inline __cubql_both vec_t<uint64_t,2> operator>>(vec_t<uint64_t,2> v, int b)
+  { return vec_t<uint64_t,2>( v.x >> b, v.y >> b ); }
+  inline __cubql_both vec_t<uint64_t,3> operator>>(vec_t<uint64_t,3> v, int b)
+  { return vec_t<uint64_t,3>( v.x >> b, v.y >> b, v.z >> b ); }
+  inline __cubql_both vec_t<uint64_t,4> operator>>(vec_t<uint64_t,4> v, int b)
+  { return vec_t<uint64_t,4>( v.x >> b, v.y >> b, v.z >> b, v.w >> b ); }
+  
+
+  
 #define CUBQL_UNARY(op)                         \
   template<typename T, int D>                   \
   inline __cubql_both                           \
@@ -336,9 +432,28 @@ namespace cuBQL {
   CUBQL_BINARY(max)
 #undef CUBQL_FUNCTOR
 
+
+  /*! host-side equivalent(s) of various cuda functions */
+  namespace host {
+    inline float __ull2float_rd(uint64_t ul) {
+      float f = float(ul);
+      if ((uint64_t)f > ul)
+        f = nextafterf(f,-INFINITY);
+      return f;
+    }
+    inline float __udouble2float_rd(double ud) {
+      float f = float(ud);
+      if ((uint64_t)f > ud)
+        f = nextafterf(f,-INFINITY);
+      return f;
+    }
+  }
+  
   template<typename T> struct dot_result_t;
+  template<> struct dot_result_t<double> { using type = double; };
   template<> struct dot_result_t<float> { using type = float; };
   template<> struct dot_result_t<int32_t> { using type = int64_t; };
+  template<> struct dot_result_t<long long int> { using type = int64_t; };
 
   template<typename T, int D> inline __cubql_both
   typename dot_result_t<T>::type dot(vec_t<T,D> a, vec_t<T,D> b)
@@ -346,27 +461,10 @@ namespace cuBQL {
     typename dot_result_t<T>::type result = 0;
     CUBQL_PRAGMA_UNROLL
       for (int i=0;i<D;i++)
-        result += a[i]*b[i];
+        result += a[i]*(typename dot_result_t<T>::type)b[i];
     return result;
   }
 
-  /*! approximate-conservative square distance between two
-    points. whatever type the points are, the result will be
-    returned in floats, including whatever rounding error that might
-    incur. we will, however, always round downwars, so if this is
-    used for culling it will, if anything, under-estiamte the
-    distance to a subtree (and thus, still traverse it) rather than
-    wrongly skipping it*/
-  template<typename T> inline __cubql_both float fSqrLength(T v);
-  template<> inline __cubql_both float fSqrLength<float>(float v)
-  { return v*v; }
-
-#ifdef __CUDA_ARCH__
-  template<> inline __cubql_both float fSqrLength<int>(int _v)
-  { float v = __int2float_rz(_v); return v*v; }
-#else
-  template<> inline __cubql_both float fSqrLength<int>(int _v);
-#endif
 
   /*! accurate square-length of a vector; due to the 'square' involved
     in computing the distance this may need to change the type from
@@ -394,22 +492,22 @@ namespace cuBQL {
     return sqrLength(a-b);
   }
 
-  /*! approximate-conservative square distance between two
-    points. whatever type the points are, the result will be
-    returned in floats, including whatever rounding error that might
-    incur. we will, however, always round downwars, so if this is
-    used for culling it will, if anything, under-estiamte the
-    distance to a subtree (and thus, still traverse it) rather than
-    wrongly skipping it*/
-  template<typename T, int D> inline __cubql_both
-  float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
-  {
-    float sum = 0.f;
-    CUBQL_PRAGMA_UNROLL
-      for (int i=0;i<D;i++)
-        sum += fSqrLength(a[i]-b[i]);
-    return sum;
-  }
+  // /*! approximate-conservative square distance between two
+  //   points. whatever type the points are, the result will be
+  //   returned in floats, including whatever rounding error that might
+  //   incur. we will, however, always round downwars, so if this is
+  //   used for culling it will, if anything, under-estiamte the
+  //   distance to a subtree (and thus, still traverse it) rather than
+  //   wrongly skipping it*/
+  // template<typename T, int D> inline __cubql_both
+  // float fSqrDistance(vec_t<T,D> a, vec_t<T,D> b)
+  // {
+  //   float sum = 0.f;
+  //   CUBQL_PRAGMA_UNROLL
+  //     for (int i=0;i<D;i++)
+  //       sum += fSqrLength(a[i]-b[i]);
+  //   return sum;
+  // }
 
   
   // ------------------------------------------------------------------
@@ -509,6 +607,67 @@ namespace cuBQL {
   inline __cubql_both
   bool any_less_than(const vec_t<T,4> &a, const vec_t<T,4> &b)
   { return a.x < b.x | a.y < b.y | a.z < b.z | a.w < b.w; }
+
+  template<typename T, int D>
+  std::ostream &operator<<(std::ostream &o, const vec_t<T,D> &v)
+  {
+    o << "(";
+    for (int i=0;i<D;i++) {
+      if (i) o << ",";
+      o << v[i];
+    }
+    o << ")";
+    return o;
+  }
+
+  // ------------------------------------------------------------------
+  template<typename T, int D>
+  inline int arg_max(vec_t<T,D> v)
+  {
+    int maxVal = v[0];
+    int maxDim = 0;
+    for (int i=1;i<D;i++)
+      if (v[i] > maxVal) { maxVal = v[i]; maxDim = i; };
+    return maxDim;
+  }
+
+  template<typename T>
+  inline int arg_max(vec_t<T,2> v)
+  {
+    return v.y > v.x ? 1 : 0;
+  }
+  template<typename T>
+  inline int arg_max(vec_t<T,3> v)
+  {
+    return v.z > max(v.x,v.y) ? 2 : (v.y > v.x ? 1 : 0);
+  }
+  template<typename T>
+  inline int arg_max(vec_t<T,4> v)
+  {
+    T mm = max(max(v.x,v.y),max(v.z,v.w));
+    int d = 3;
+    d = (mm == v.z) ? 2 : d;
+    d = (mm == v.y) ? 1 : d;
+    d = (mm == v.x) ? 0 : d;
+    return d;
+  }
+  // ------------------------------------------------------------------
+  template<typename T>
+  inline std::string toString();
+  template<> inline std::string toString<float>()    { return "float"; }
+  template<> inline std::string toString<int>()      { return "int"; }
+  template<> inline std::string toString<double>()   { return "double"; }
+  template<> inline std::string toString<longlong>() { return "long"; }
+
+  template<typename T, int D>
+  std::string vec_t<T,D>::typeName()
+  { return cuBQL::toString<T>()+std::to_string(D); }
+  template<typename T>
+  std::string vec_t<T,3>::typeName()
+  { return cuBQL::toString<T>()+std::to_string(3); }
+  template<typename T>
+  std::string vec_t<T,4>::typeName()
+  { return cuBQL::toString<T>()+std::to_string(4); }
   
   /*! @} */
   // ------------------------------------------------------------------

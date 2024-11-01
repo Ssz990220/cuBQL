@@ -1,5 +1,5 @@
 # ======================================================================== #
-# Copyright 2023-2024 Ingo Wald                                            #
+# Copyright 2024-2024 Ingo Wald                                            #
 #                                                                          #
 # Licensed under the Apache License, Version 2.0 (the "License");          #
 # you may not use this file except in compliance with the License.         #
@@ -14,14 +14,13 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-add_library(cuBQL_testing_common
-  INTERFACE
+# ==================================================================
+# generate points (according to cmdline-generator), and dump to file
+# ==================================================================
+add_executable(cuBQL_generatePoints
+  generatePoints.cpp
   )
-target_link_libraries(cuBQL_testing_common
-  INTERFACE
+target_link_libraries(cuBQL_generatePoints
+  PUBLIC
   cuBQL_samples_common
   )
-
-add_subdirectory(common)
-add_subdirectory(bvh)
-add_subdirectory(points)

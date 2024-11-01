@@ -14,14 +14,3 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-add_library(cuBQL_testing_common
-  INTERFACE
-  )
-target_link_libraries(cuBQL_testing_common
-  INTERFACE
-  cuBQL_samples_common
-  )
-
-add_subdirectory(common)
-add_subdirectory(bvh)
-add_subdirectory(points)

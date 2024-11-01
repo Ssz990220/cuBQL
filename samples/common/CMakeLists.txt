@@ -1,5 +1,5 @@
 # ======================================================================== #
-# Copyright 2023-2024 Ingo Wald                                            #
+# Copyright 2024-2024 Ingo Wald                                            #
 #                                                                          #
 # Licensed under the Apache License, Version 2.0 (the "License");          #
 # you may not use this file except in compliance with the License.         #
@@ -14,36 +14,40 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-# common stuff - data generators and IO for loading/generating test data
-add_subdirectory(common)
+set(CUBQL_USER_DIM "" CACHE STRING "user-specified dim for tests w/ dim!=2,3,4")
+
+add_library(cuBQL_samples_common
+  Generator.h
+  Generator.cpp
+  tiny_obj_loader.h
+  loadOBJ.h
+  loadOBJ.cpp
+  )
+target_link_libraries(cuBQL_samples_common
+  PUBLIC
+  cuBQL
+  )
 
 # ==================================================================
-# sample that performs gpu-side closest-point queries between sets of
-# float3 points
+# for testing, allow to specify a compile-time but user-defined
+# arbitrary dimensionality. not all tests might respect that (eg,
+# triangles only work for float3), but some will
 # ==================================================================
-add_executable(cuBQL_sample01_points_closestPoint_cuda
-  s01_closestPoint_points_gpu/closestPointGPU.cu
-  )
-target_link_libraries(cuBQL_sample01_points_closestPoint_cuda
-  # the cuda-side builders for float3 data
-  cuBQL_cuda_float3
-  # common samples stuff
+if (NOT ("${CUBQL_USER_DIM}" STREQUAL ""))
+  target_compile_definitions(cuBQL_samples_common
+    PUBLIC
+    CUBQL_USER_DIM=${CUBQL_USER_DIM})
+endif()
+  
+
+
+
+# ==================================================================
+# tool that runs a 2d generator, and writes the points to an svg file
+# ==================================================================
+add_executable(cuBQL_plotPoints
+  plotPoints.cu)
+target_link_libraries(cuBQL_plotPoints
+  PRIVATE
   cuBQL_samples_common
   )
-
-
-# ==================================================================
-# sample that performs gpu-side closest-point queries between sets of
-# float3 points
-# ==================================================================
-add_executable(cuBQL_sample02_distanceToTriangleMesh
-  s02_distanceToTriangleMesh/distanceToTriangleMesh.cu
-  )
-target_link_libraries(cuBQL_sample02_distanceToTriangleMesh
-  # the cuda-side builders for float3 data
-  cuBQL_cuda_float3
-  # common samples stuff
-  cuBQL_samples_common
-  )
-
-
