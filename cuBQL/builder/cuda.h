@@ -153,27 +153,43 @@ namespace cuBQL {
                            GpuMemoryResource &memResource=defaultGpuMemResource());
   
     /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-      building the BVH. this assumes */
+      building the BVH. this assumes that the 'memResource' provided
+      here was the same that was used during building */
     template<typename T, int D>
     void free(BinaryBVH<T,D> &bvh,
+              cudaStream_t      s=0,
+              GpuMemoryResource& memResource=defaultGpuMemResource());
+    /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
+      building the BVH. this assumes that the 'memResource' provided
+      here was the same that was used during building */
+    template<typename T, int D, int W>
+    void free(WideBVH<T,D,W> &bvh,
               cudaStream_t      s=0,
               GpuMemoryResource& memResource=defaultGpuMemResource());
   }
 
   // ------------------------------------------------------------------
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-    building the BVH. this assumes */
+    building the BVH. this assumes that the 'memResource' provided
+    here was the same that was used during building. This function is
+    deprecated; it should be replaced by a call to
+    cuBQL::cuda::free(..) */
   template<typename T, int D>
-  void free(BinaryBVH<T,D> &bvh,
+  inline void free(BinaryBVH<T,D> &bvh,
             cudaStream_t      s=0,
-            GpuMemoryResource& memResource=defaultGpuMemResource());
+            GpuMemoryResource& memResource=defaultGpuMemResource())
+  { cuda::free(bvh,s,memResource); }
 
   /*! frees the bvh.nodes[] and bvh.primIDs[] memory allocated when
-    building the BVH. this assumes */
+    building the BVH. this assumes that the 'memResource' provided
+    here was the same that was used during building. This function is
+    deprecated; it should be replaced by a call to
+    cuBQL::cuda::free(..) */
   template<typename T, int D, int N>
-  void free(WideBVH<T,D,N> &bvh,
+  inline void free(WideBVH<T,D,N> &bvh,
             cudaStream_t      s=0,
-            GpuMemoryResource& memResource=defaultGpuMemResource());
+            GpuMemoryResource& memResource=defaultGpuMemResource())
+  { cuda::free(bvh,s,memResource); }
 
 }
 

@@ -214,19 +214,20 @@ namespace cuBQL {
     gpuBuilder_impl::gpuBuilder(bvh,boxes,numBoxes,buildConfig,s,memResource);
   }
 
-  template<typename T, int D, int N>
-  void free(WideBVH<T,D,N>   &bvh,
-            cudaStream_t s,
-            GpuMemoryResource &memResource)
-  {
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
-    gpuBuilder_impl::_FREE(bvh.primIDs,s,memResource);
-    gpuBuilder_impl::_FREE(bvh.nodes,s,memResource);
-    // CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
-    // CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
-    CUBQL_CUDA_CALL(StreamSynchronize(s));
-    bvh.primIDs = 0;
-  }
-  
+  namespace cuda {
+    template<typename T, int D, int N>
+    void free(WideBVH<T,D,N>   &bvh,
+                     cudaStream_t s,
+                     GpuMemoryResource &memResource)
+    {
+      CUBQL_CUDA_CALL(StreamSynchronize(s));
+      gpuBuilder_impl::_FREE(bvh.primIDs,s,memResource);
+      gpuBuilder_impl::_FREE(bvh.nodes,s,memResource);
+      // CUBQL_CUDA_CALL(FreeAsync(bvh.primIDs,s));
+      // CUBQL_CUDA_CALL(FreeAsync(bvh.nodes,s));
+      CUBQL_CUDA_CALL(StreamSynchronize(s));
+      bvh.primIDs = 0;
+    }
+  }    
 } // :: cuBQL
 
