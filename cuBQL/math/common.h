@@ -29,9 +29,9 @@
 #include <string>
 #include <math.h>
 #include <cmath>
+#include <cfloat>
 #include <algorithm>
 #include <sstream>
-#include <float.h>
 #ifdef __GNUC__
 #include <execinfo.h>
 #include <sys/time.h>
