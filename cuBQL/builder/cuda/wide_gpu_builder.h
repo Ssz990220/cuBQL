@@ -217,8 +217,8 @@ namespace cuBQL {
   namespace cuda {
     template<typename T, int D, int N>
     void free(WideBVH<T,D,N>   &bvh,
-                     cudaStream_t s,
-                     GpuMemoryResource &memResource)
+              cudaStream_t s,
+              GpuMemoryResource &memResource)
     {
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       gpuBuilder_impl::_FREE(bvh.primIDs,s,memResource);
