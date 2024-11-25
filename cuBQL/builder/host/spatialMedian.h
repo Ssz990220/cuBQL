@@ -179,6 +179,14 @@ namespace cuBQL {
       spatialMedian_impl::spatialMedian(bvh,boxes,numPrims,buildConfig);
     }
 
+    
+    template<typename T, int D, int W>
+    void spatialMedian(WideBVH<T,D,W>   &bvh,
+                       const box_t<T,D> *boxes,
+                       uint32_t              numPrims,
+                       BuildConfig           buildConfig)
+    { throw std::runtime_error("not yet implemented"); }
+    
 #endif
   }
 }
@@ -192,5 +200,16 @@ namespace cuBQL {
                                   BuildConfig       buildConfig);   \
     }                                                               \
   }                                                                 \
-  
+
+
+#define CUBQL_HOST_INSTANTIATE_WIDE_BVH(T,D,W)                       \
+  namespace cuBQL {                                                 \
+    namespace host {                                                \
+      template void spatialMedian(WideBVH<T,D,W>   &bvh,            \
+                                  const box_t<T,D> *boxes,          \
+                                  uint32_t          numPrims,       \
+                                  BuildConfig       buildConfig);   \
+    }                                                               \
+  }                                                                 \
+
 

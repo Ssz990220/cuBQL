@@ -16,6 +16,7 @@
 
 #pragma once
 
+#define CUBQL_HOST_BUILDER_IMPLEMENTATION 1
 #include "cuBQL/builder/host/spatialMedian.h"
 
 namespace cuBQL {
