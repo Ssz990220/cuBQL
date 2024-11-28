@@ -16,11 +16,11 @@
 
 #pragma once
 
-#define CUBQL_HOST_BUILDER_IMPLEMENTATION 1
-#include "cuBQL/builder/host/spatialMedian.h"
+#define CUBQL_CPU_BUILDER_IMPLEMENTATION 1
+#include "cuBQL/builder/cpu/spatialMedian.h"
 
 namespace cuBQL {
-  namespace host {
+  namespace cpu {
     
     // ==================================================================
     // for regular, BINARY BVHes
@@ -58,5 +58,28 @@ namespace cuBQL {
       bvh.primIDs = 0;
     }
     
+  }
+
+  /*! non-specialized 'cuBQL::cpuBuilder' entry point purely witin the
+    cuBQL:: namespace, which wraps all builder variants */
+  template<typename T, int D, int WIDTH>
+  void cpuBuilder(WideBVH<T,D,WIDTH>   &bvh,
+                  const box_t<T,D>     *boxes,
+                  uint32_t              numPrims,
+                  BuildConfig           buildConfig)
+  {
+    /*! right now, only have a slow spatial median builder */
+    cpu::spatialMedian(bvh,boxes,numPrims,buildConfig);
+  }
+  /*! non-specialized 'cuBQL::cpuBuilder' entry point purely witin the
+    cuBQL:: namespace, which wraps all builder variants */
+  template<typename T, int D>
+  void cpuBuilder(BinaryBVH<T,D>   &bvh,
+                  const box_t<T,D>     *boxes,
+                  uint32_t              numPrims,
+                  BuildConfig           buildConfig)
+  {
+    /*! right now, only have a slow spatial median builder */
+    cpu::spatialMedian(bvh,boxes,numPrims,buildConfig);
   }
 }

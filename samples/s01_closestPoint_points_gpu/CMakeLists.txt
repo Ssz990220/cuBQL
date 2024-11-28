@@ -14,3 +14,14 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
+if (CUBQL_HAVE_CUDA)
+  add_executable(cuBQL_sample01_points_closestPoint_cuda
+    closestPoint.cu
+    )
+  target_link_libraries(cuBQL_sample01_points_closestPoint_cuda
+    # the cuda-side builders for float3 data
+    cuBQL_cuda_float3
+    # common samples stuff
+    cuBQL_samples_common
+    )
+endif()
