@@ -52,7 +52,7 @@ target_include_directories(cuBQL INTERFACE
 # type-specific targets will, in fact, only contain instantiations of
 # the specific builders for the given type and device
 function(add_specific_instantiation device suffix T D)
-  add_library(cuBQL_${device}_${T}${D} STATIC EXCLUDE_FROM_ALL
+  add_library(cuBQL_${device}_${T}${D} SHARED EXCLUDE_FROM_ALL
     impl/instantiate_builders.${suffix}
     )
   if (${device} STREQUAL "cuda")
@@ -61,11 +61,38 @@ function(add_specific_instantiation device suffix T D)
       -DCUBQL_HAVE_CUDA=1
       )
   endif()
+  set_target_properties(cuBQL_${device}_${T}${D}
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    )
   target_link_libraries(cuBQL_${device}_${T}${D}
     PUBLIC
     cuBQL
     )
   target_compile_definitions(cuBQL_${device}_${T}${D}
+    PRIVATE
+    -DCUBQL_INSTANTIATE_T=${T}
+    -DCUBQL_INSTANTIATE_D=${D}
+    )
+
+  add_library(cuBQL_${device}_${T}${D}_static STATIC EXCLUDE_FROM_ALL
+    impl/instantiate_builders.${suffix}
+    )
+  if (${device} STREQUAL "cuda")
+    target_compile_definitions(cuBQL_${device}_${T}${D}_static
+      PUBLIC
+      -DCUBQL_HAVE_CUDA=1
+      )
+  endif()
+  set_target_properties(cuBQL_${device}_${T}${D}_static
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    )
+  target_link_libraries(cuBQL_${device}_${T}${D}_static
+    PUBLIC
+    cuBQL
+    )
+  target_compile_definitions(cuBQL_${device}_${T}${D}_static
     PRIVATE
     -DCUBQL_INSTANTIATE_T=${T}
     -DCUBQL_INSTANTIATE_D=${D}
