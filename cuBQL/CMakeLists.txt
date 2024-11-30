@@ -44,8 +44,6 @@ target_include_directories(cuBQL INTERFACE
   ${PROJECT_SOURCE_DIR}
   )
   
-
-
 # helper for creating type- and device-specific implementations of
 # cubql; i.e., one for host_float4, one for cuda_int3, etc. Since
 # everything other than the builders are entirely header only these
@@ -59,6 +57,10 @@ function(add_specific_instantiation device suffix T D)
     target_compile_definitions(cuBQL_${device}_${T}${D}
       PUBLIC
       -DCUBQL_HAVE_CUDA=1
+      )
+    set_target_properties(cuBQL_${device}_${T}${D}
+      PROPERTIES
+      CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
       )
   endif()
   set_target_properties(cuBQL_${device}_${T}${D}
@@ -82,6 +84,14 @@ function(add_specific_instantiation device suffix T D)
     target_compile_definitions(cuBQL_${device}_${T}${D}_static
       PUBLIC
       -DCUBQL_HAVE_CUDA=1
+      )
+    set_target_properties(cuBQL_${device}_${T}${D}_static
+      PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      )
+    set_target_properties(cuBQL_${device}_${T}${D}_static
+      PROPERTIES
+      CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
       )
   endif()
   set_target_properties(cuBQL_${device}_${T}${D}_static

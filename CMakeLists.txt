@@ -18,11 +18,26 @@ cmake_minimum_required(VERSION 3.16)
 include(CheckLanguage)
 check_language(CUDA)
 if (CMAKE_CUDA_COMPILER)
-  message("CUDA _FOUND_! building both cuda and host libs")
+  message("#cuBQL: CUDA _FOUND_! building both cuda and host libs")
+
+  # iw - do NOT use an 'option' - they can't do strings
+  set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING
+    "Which CUDA architecture to build for")
+  if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
+    if (CMAKE_CUDA_ARCHITECTURES)
+      set(CUBQL_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES})
+    else()
+      # since cmake 3.23
+      set (CUBQL_CUDA_ARCHITECTURES all-major)
+    endif()
+    message("#cuBQL: cuda-archs set to 'auto': selected ${CUBQL_CUDA_ARCHITECTURES}")
+  else()
+    message("#cuBQL: cuda-archs explicitly set to ${CUBQL_CUDA_ARCHITECTURES}")
+  endif()
   enable_language(CUDA)
   set(CUBQL_HAVE_CUDA ON)
 else()
-  message("count not find CUDA - going to build only host libs")
+  message("could not find CUDA - going to build only host libs")
   set(CUBQL_HAVE_CUDA OFF)
 endif()
 
@@ -44,35 +59,6 @@ endif()
 
 
 
-
-if (CUBQL_HAVE_CUDA)
-  set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING "which CUDA arch to use for building cuBQL" )
-
-  if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
-    # leave CMAKE_CUDA_ARCHITECTURES to whatever the may may or may not have set
-  else()
-    set(CMAKE_CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES})
-  endif()
-
-  if (NOT (DEFINED CMAKE_CUDA_ARCHITECTURES))
-
-    # new cmake policy: make sure that CMAKE_CUDA_ARCHITECTURES is set
-    # to _something_, even if it's only "OFF". iw - seems to not apply on ubuntu 20.04!?
-    if (NOT CMAKE_VERSION VERSION_LESS "3.17")
-      set(CMAKE_CUDA_ARCHITECTURES OFF)
-    endif()
-  endif()
-  mark_as_advanced(CUBQL_CUDA_ARCHITECTURES)
-
-  if(${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.17)
-    # nothing to do, setting CMAKE_CUDA_ARCHITECTURES is hte way to go
-  else()
-    foreach (arch IN ITEMS ${CMAKE_CUDA_ARCHITECTURES})
-      set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
-    endforeach()
-  endif()
-
-endif()
 
 
 # ------------------------------------------------------------------
