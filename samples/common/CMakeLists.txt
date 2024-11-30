@@ -45,9 +45,12 @@ endif()
 # ==================================================================
 # tool that runs a 2d generator, and writes the points to an svg file
 # ==================================================================
-add_executable(cuBQL_plotPoints
-  plotPoints.cu)
-target_link_libraries(cuBQL_plotPoints
-  PRIVATE
-  cuBQL_samples_common
-  )
+if (CUBQL_HAVE_CUDA)
+  add_executable(cuBQL_plotPoints
+    plotPoints.cu
+    )
+  target_link_libraries(cuBQL_plotPoints
+    PRIVATE
+    cuBQL_samples_common
+    )
+endif()

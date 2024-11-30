@@ -14,10 +14,41 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-cmake_policy(SET CMP0048 NEW)
-project(cuBQL VERSION 1.0.0 LANGUAGES C CXX CUDA)
-
 cmake_minimum_required(VERSION 3.16)
+
+
+
+cmake_policy(SET CMP0048 NEW)
+project(cuBQL VERSION 1.0.0 LANGUAGES C CXX)
+
+
+include(CheckLanguage)
+check_language(CUDA)
+if (CMAKE_CUDA_COMPILER)
+  message("#cuBQL: CUDA _FOUND_! building both cuda and host libs")
+
+  # iw - do NOT use an 'option' - they can't do strings
+  set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING
+    "Which CUDA architecture to build for")
+  if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
+    if (CMAKE_CUDA_ARCHITECTURES)
+      set(CUBQL_CUDA_ARCHITECTURES ${CMAKE_CUDA_ARCHITECTURES})
+    else()
+      # since cmake 3.23
+      set (CUBQL_CUDA_ARCHITECTURES all-major)
+    endif()
+    message("#cuBQL: cuda-archs set to 'auto': selected ${CUBQL_CUDA_ARCHITECTURES}")
+  else()
+    message("#cuBQL: cuda-archs explicitly set to ${CUBQL_CUDA_ARCHITECTURES}")
+  endif()
+  enable_language(CUDA)
+  set(CUBQL_HAVE_CUDA ON)
+else()
+  message("could not find CUDA - going to build only host libs")
+  set(CUBQL_HAVE_CUDA OFF)
+endif()
+
+
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -31,21 +62,30 @@ else()
   set(CUBQL_IS_SUBPROJECT OFF)
 endif()
 
-set(CUBQL_CUDA_ARCHITECTURES "auto" CACHE STRING "which CUDA arch to use for building cuBQL" )
 
-if (CUBQL_CUDA_ARCHITECTURES STREQUAL "auto")
-  # leave CMAKE_CUDA_ARCHITECTURES to whatever the may may or may not have set
-else()
-  set(CMAKE_CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES})
-endif()
 
-if (NOT (DEFINED CMAKE_CUDA_ARCHITECTURES))
 
-  # new cmake policy: make sure that CMAKE_CUDA_ARCHITECTURES is set
-  # to _something_, even if it's only "OFF". iw - seems to not apply on ubuntu 20.04!?
-  if (NOT CMAKE_VERSION VERSION_LESS "3.17")
-    set(CMAKE_CUDA_ARCHITECTURES OFF)
+if (CUBQL_IS_SUBPROJECT)
+  if (NOT CMAKE_CUDA_ARCHITECTURES)
+    message(WARNING
+      "#cuBQL: you've included cuBQL as a subproject, but CMAKE_CUDA_ARCHITECTURES"
+      "#cuBQL: is not set. cuBQL will automatically set some useful arch flags"
+      "#cuBQL: propagating target properties to libs that use that target we"
+      "#cuBQL: cannot automatically set the proper arch flags for ,"
+      "#cuBQL: your own targets, which will likely lead to some CUDA  "
+      "#cuBQL: errors like 'CUDA_ARCHITECTURES not set for ...'. "
+      "#cuBQL: "
+      "#cuBQL: Unless you already know what you're doing, most likely what"
+      "#cuBQL: you want is to add a like like"
+      "#cuBQL:    set(CMAKE_CUDA_ARCHITECTURES all-native)"
+      "#cuBQL: into your CMakeLists.txt."
+      )
+    message(WARNING "#cuBQL: you've included cuBQL as a subproject, but ")
   endif()
+else()
+  # make sure we set this only for ourselves, and do not pollute
+  # parent project's settings
+  set(CMAKE_CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES})
 endif()
 
 
@@ -53,7 +93,6 @@ endif()
 # general cmake project configs
 # ------------------------------------------------------------------
 if (CUBQL_IS_SUBPROJECT)
-  mark_as_advanced(CUBQL_CUDA_ARCHITECTURES)
 else()
   if(NOT SET_UP_CONFIGURATIONS_DONE)
     set(SET_UP_CONFIGURATIONS_DONE 1)
@@ -77,17 +116,12 @@ else()
   SET(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()
 
-if(${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.17)
-  # nothing to do, setting CMAKE_CUDA_ARCHITECTURES is hte way to go
-else()
-  foreach (arch IN ITEMS ${CMAKE_CUDA_ARCHITECTURES})
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_${arch},code=sm_${arch}")
-  endforeach()
-endif()
-
 add_subdirectory(cuBQL)
 
+option(CUBQL_ENABLE_TESTING "Enable Testing?" OFF)
 if (NOT CUBQL_IS_SUBPROJECT)
   add_subdirectory(samples)
-  add_subdirectory(testing)
+  if (CUBQL_ENABLE_TESTING)
+    add_subdirectory(testing)
+  endif()
 endif()

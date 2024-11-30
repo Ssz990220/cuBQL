@@ -18,6 +18,7 @@
 # using this the user has to manulaly set CUBQL_BUILDER_INSTANTIATION
 # in one of his/her source files
 add_library(cuBQL INTERFACE)
+
 target_sources(cuBQL INTERFACE
   # main public "interface" to this library
   bvh.h
@@ -30,7 +31,7 @@ target_sources(cuBQL INTERFACE
   traversal/shrinkingRadiusQuery.h
   traversal/fixedBoxQuery.h
   # host side builder(s)
-  builder/host/spatialMedian.h
+  builder/cpu/spatialMedian.h
   # cuda side builder(s)
   builder/cuda/builder_common.h
   builder/cuda/sm_builder.h
@@ -44,22 +45,65 @@ target_include_directories(cuBQL INTERFACE
   ${PROJECT_SOURCE_DIR}
   )
   
-
-
 # helper for creating type- and device-specific implementations of
 # cubql; i.e., one for host_float4, one for cuda_int3, etc. Since
 # everything other than the builders are entirely header only these
 # type-specific targets will, in fact, only contain instantiations of
 # the specific builders for the given type and device
 function(add_specific_instantiation device suffix T D)
-  add_library(cuBQL_${device}_${T}${D} STATIC EXCLUDE_FROM_ALL
+  add_library(cuBQL_${device}_${T}${D} SHARED EXCLUDE_FROM_ALL
     impl/instantiate_builders.${suffix}
+    )
+  if (${device} STREQUAL "cuda")
+    target_compile_definitions(cuBQL_${device}_${T}${D}
+      PUBLIC
+      -DCUBQL_HAVE_CUDA=1
+      )
+    set_target_properties(cuBQL_${device}_${T}${D}
+      PROPERTIES
+      CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
+      )
+  endif()
+  set_target_properties(cuBQL_${device}_${T}${D}
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
     )
   target_link_libraries(cuBQL_${device}_${T}${D}
     PUBLIC
     cuBQL
     )
   target_compile_definitions(cuBQL_${device}_${T}${D}
+    PRIVATE
+    -DCUBQL_INSTANTIATE_T=${T}
+    -DCUBQL_INSTANTIATE_D=${D}
+    )
+
+  add_library(cuBQL_${device}_${T}${D}_static STATIC EXCLUDE_FROM_ALL
+    impl/instantiate_builders.${suffix}
+    )
+  if (${device} STREQUAL "cuda")
+    target_compile_definitions(cuBQL_${device}_${T}${D}_static
+      PUBLIC
+      -DCUBQL_HAVE_CUDA=1
+      )
+    set_target_properties(cuBQL_${device}_${T}${D}_static
+      PROPERTIES
+      POSITION_INDEPENDENT_CODE ON
+      )
+    set_target_properties(cuBQL_${device}_${T}${D}_static
+      PROPERTIES
+      CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
+      )
+  endif()
+  set_target_properties(cuBQL_${device}_${T}${D}_static
+    PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    )
+  target_link_libraries(cuBQL_${device}_${T}${D}_static
+    PUBLIC
+    cuBQL
+    )
+  target_compile_definitions(cuBQL_${device}_${T}${D}_static
     PRIVATE
     -DCUBQL_INSTANTIATE_T=${T}
     -DCUBQL_INSTANTIATE_D=${D}
@@ -78,47 +122,16 @@ endfunction()
 # ------------------------------------------------------------------
 foreach(T IN ITEMS float int double longlong)
   foreach(D IN ITEMS 2 3 4)
-    add_specific_instantiation(host cpp ${T} ${D})
-    add_specific_instantiation(cuda cu ${T} ${D})
-    # # ------------------------------------------------------------------
-    # # all host variants
-    # # ------------------------------------------------------------------
-    # add_library(cuBQL_host_${T}${D} STATIC EXCLUDE_FROM_ALL
-    #   builder/host.h
-    #   builder/host/spatialMedian.h
-    #   impl/instantiate_builders.cpp
-    #   )
-    # target_link_libraries(cuBQL_host_${T}${D}
-    #   PUBLIC
-    #   cuBQL_interface
-    #   )
-    # target_compile_definitions(cuBQL_host_${T}${D}
-    #   PUBLIC
-    #   -DCUBQL_INSTANTIATE_T=${T}
-    #   -DCUBQL_INSTANTIATE_D=${D}
-    #   )
-
-    # # ------------------------------------------------------------------
-    # # all CUDA/GPU variants
-    # # ------------------------------------------------------------------
-    # add_library(cuBQL_cuda_${T}${D} STATIC EXCLUDE_FROM_ALL 
-    #   impl/instantiate_builders.cu
-    #   )
-    # target_link_libraries(cuBQL_cuda_${T}${D}
-    #   PUBLIC
-    #   cuBQL_interface
-    #   )
-    # target_compile_definitions(cuBQL_cuda_${T}${D}
-    #   PUBLIC
-    #   -DCUBQL_INSTANTIATE_T=${T}
-    #   -DCUBQL_INSTANTIATE_D=${D}
-    #   )
+    add_specific_instantiation(cpu cpp ${T} ${D})
+    if (CUBQL_HAVE_CUDA)
+      add_specific_instantiation(cuda cu ${T} ${D})
+    endif()
   endforeach()
 endforeach()
 
 # the collection of all different type-specific queries currently
 # supplied by cubql. all these should be header-only and should all
-# automatically on both host and cuda, so this is a INTERFACE library
+# automatically on both cpu and cuda, so this is a INTERFACE library
 add_library(cuBQL_queries INTERFACE
   #
   queries/points/knn.h

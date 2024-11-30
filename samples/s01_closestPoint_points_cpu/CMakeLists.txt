@@ -14,18 +14,17 @@
 # limitations under the License.                                           #
 # ======================================================================== #
 
-if (CUBQL_HAVE_CUDA)
-  add_executable(cuBQL_sample01_points_closestPoint_cuda
-    closestPoint.cu
-    )
-  target_link_libraries(cuBQL_sample01_points_closestPoint_cuda
-    # the cuda-side builders for float3 data
-    cuBQL_cuda_float3
-    # common samples stuff
-    cuBQL_samples_common
-    )
-  set_target_properties(cuBQL_sample01_points_closestPoint_cuda
-    PROPERTIES
-    CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
-    )
-endif()
+# ==================================================================
+# sample that performs gpu-side closest-point queries between sets of
+# float3 points
+# ==================================================================
+add_executable(cuBQL_sample01_points_closestPoint_cpu
+  closestPoint.cpp
+  )
+target_link_libraries(cuBQL_sample01_points_closestPoint_cpu
+  # the cpu-side builders for float3 data
+  cuBQL_cpu_float3
+  # common samples stuff
+  cuBQL_samples_common
+  )
+

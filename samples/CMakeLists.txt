@@ -21,29 +21,27 @@ add_subdirectory(common)
 # sample that performs gpu-side closest-point queries between sets of
 # float3 points
 # ==================================================================
-add_executable(cuBQL_sample01_points_closestPoint_cuda
-  s01_closestPoint_points_gpu/closestPointGPU.cu
-  )
-target_link_libraries(cuBQL_sample01_points_closestPoint_cuda
-  # the cuda-side builders for float3 data
-  cuBQL_cuda_float3
-  # common samples stuff
-  cuBQL_samples_common
-  )
-
+add_subdirectory(s01_closestPoint_points_cpu)
+add_subdirectory(s01_closestPoint_points_gpu)
 
 # ==================================================================
 # sample that performs gpu-side closest-point queries between sets of
 # float3 points
 # ==================================================================
-add_executable(cuBQL_sample02_distanceToTriangleMesh
-  s02_distanceToTriangleMesh/distanceToTriangleMesh.cu
-  )
-target_link_libraries(cuBQL_sample02_distanceToTriangleMesh
-  # the cuda-side builders for float3 data
-  cuBQL_cuda_float3
-  # common samples stuff
-  cuBQL_samples_common
-  )
+if (CUBQL_HAVE_CUDA)
+  add_executable(cuBQL_sample02_distanceToTriangleMesh
+    s02_distanceToTriangleMesh/distanceToTriangleMesh.cu
+    )
+  target_link_libraries(cuBQL_sample02_distanceToTriangleMesh
+    # the cuda-side builders for float3 data
+    cuBQL_cuda_float3
+    # common samples stuff
+    cuBQL_samples_common
+    )
+  set_target_properties(cuBQL_sample02_distanceToTriangleMesh
+    PROPERTIES
+    CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
+    )
+endif()
 
 

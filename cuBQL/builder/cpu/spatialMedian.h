@@ -18,12 +18,12 @@
 
 #include "cuBQL/bvh.h"
 #include "cuBQL/builder/common.h"
-#if CUBQL_HOST_BUILDER_IMPLEMENTATION
+#if CUBQL_CPU_BUILDER_IMPLEMENTATION
 #include <vector>
 #endif
 
 namespace cuBQL {
-  namespace host {
+  namespace cpu {
     // ******************************************************************
     // INTERFACE
     // (which functionality this header file provides)
@@ -41,7 +41,7 @@ namespace cuBQL {
     // IMPLEMENTATION
     // ******************************************************************
     
-#if CUBQL_HOST_BUILDER_IMPLEMENTATION
+#if CUBQL_CPU_BUILDER_IMPLEMENTATION
     namespace spatialMedian_impl {
       struct Topo {
         struct {
@@ -179,18 +179,37 @@ namespace cuBQL {
       spatialMedian_impl::spatialMedian(bvh,boxes,numPrims,buildConfig);
     }
 
+    
+    template<typename T, int D, int W>
+    void spatialMedian(WideBVH<T,D,W>   &bvh,
+                       const box_t<T,D> *boxes,
+                       uint32_t              numPrims,
+                       BuildConfig           buildConfig)
+    { throw std::runtime_error("not yet implemented"); }
+    
 #endif
   }
 }
 
-#define CUBQL_HOST_INSTANTIATE_BINARY_BVH(T,D)                      \
+#define CUBQL_CPU_INSTANTIATE_BINARY_BVH(T,D)                      \
   namespace cuBQL {                                                 \
-    namespace host {                                                \
+    namespace cpu {                                                \
       template void spatialMedian(BinaryBVH<T,D>   &bvh,            \
                                   const box_t<T,D> *boxes,          \
                                   uint32_t          numPrims,       \
                                   BuildConfig       buildConfig);   \
     }                                                               \
   }                                                                 \
-  
+
+
+#define CUBQL_CPU_INSTANTIATE_WIDE_BVH(T,D,W)                       \
+  namespace cuBQL {                                                 \
+    namespace cpu {                                                \
+      template void spatialMedian(WideBVH<T,D,W>   &bvh,            \
+                                  const box_t<T,D> *boxes,          \
+                                  uint32_t          numPrims,       \
+                                  BuildConfig       buildConfig);   \
+    }                                                               \
+  }                                                                 \
+
 
