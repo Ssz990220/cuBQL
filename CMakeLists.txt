@@ -69,7 +69,7 @@ if (CUBQL_IS_SUBPROJECT)
   if (NOT CMAKE_CUDA_ARCHITECTURES)
     message(WARNING
       "#cuBQL: you've included cuBQL as a subproject, but "
-      "CMAKE_CUDA_ARCHITECTURES"
+      "CMAKE_CUDA_ARCHITECTURES "
       "is not set. cuBQL will automatically set some useful arch flags"
       "propagating target properties to libs that use that target we"
       "cannot automatically set the proper arch flags for ,"
@@ -80,7 +80,6 @@ if (CUBQL_IS_SUBPROJECT)
       "   set(CMAKE_CUDA_ARCHITECTURES all-native)\n"
       "into your CMakeLists.txt."
       )
-    message(WARNING "#cuBQL: you've included cuBQL as a subproject, but ")
   endif()
 else()
   # make sure we set this only for ourselves, and do not pollute
