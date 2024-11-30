@@ -68,17 +68,17 @@ endif()
 if (CUBQL_IS_SUBPROJECT)
   if (NOT CMAKE_CUDA_ARCHITECTURES)
     message(WARNING
-      "#cuBQL: you've included cuBQL as a subproject, but CMAKE_CUDA_ARCHITECTURES"
-      "#cuBQL: is not set. cuBQL will automatically set some useful arch flags"
-      "#cuBQL: propagating target properties to libs that use that target we"
-      "#cuBQL: cannot automatically set the proper arch flags for ,"
-      "#cuBQL: your own targets, which will likely lead to some CUDA  "
-      "#cuBQL: errors like 'CUDA_ARCHITECTURES not set for ...'. "
-      "#cuBQL: "
-      "#cuBQL: Unless you already know what you're doing, most likely what"
-      "#cuBQL: you want is to add a like like"
-      "#cuBQL:    set(CMAKE_CUDA_ARCHITECTURES all-native)"
-      "#cuBQL: into your CMakeLists.txt."
+      "#cuBQL: you've included cuBQL as a subproject, but "
+      "CMAKE_CUDA_ARCHITECTURES"
+      "is not set. cuBQL will automatically set some useful arch flags"
+      "propagating target properties to libs that use that target we"
+      "cannot automatically set the proper arch flags for ,"
+      "your own targets, which will likely lead to some CUDA  "
+      "errors like 'CUDA_ARCHITECTURES not set for ...'. "
+      "Unless you already know what you're doing, most likely what"
+      "you want is to add a like like\n"
+      "   set(CMAKE_CUDA_ARCHITECTURES all-native)\n"
+      "into your CMakeLists.txt."
       )
     message(WARNING "#cuBQL: you've included cuBQL as a subproject, but ")
   endif()
