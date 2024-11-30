@@ -24,4 +24,8 @@ if (CUBQL_HAVE_CUDA)
     # common samples stuff
     cuBQL_samples_common
     )
+  set_target_properties(cuBQL_sample01_points_closestPoint_cuda
+    PROPERTIES
+    CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES}
+    )
 endif()

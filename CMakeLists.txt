@@ -15,6 +15,13 @@
 # ======================================================================== #
 
 cmake_minimum_required(VERSION 3.16)
+
+
+
+cmake_policy(SET CMP0048 NEW)
+project(cuBQL VERSION 1.0.0 LANGUAGES C CXX)
+
+
 include(CheckLanguage)
 check_language(CUDA)
 if (CMAKE_CUDA_COMPILER)
@@ -41,8 +48,6 @@ else()
   set(CUBQL_HAVE_CUDA OFF)
 endif()
 
-cmake_policy(SET CMP0048 NEW)
-project(cuBQL VERSION 1.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +64,29 @@ endif()
 
 
 
+
+if (CUBQL_IS_SUBPROJECT)
+  if (NOT CMAKE_CUDA_ARCHITECTURES)
+    message(WARNING
+      "#cuBQL: you've included cuBQL as a subproject, but CMAKE_CUDA_ARCHITECTURES"
+      "#cuBQL: is not set. cuBQL will automatically set some useful arch flags"
+      "#cuBQL: propagating target properties to libs that use that target we"
+      "#cuBQL: cannot automatically set the proper arch flags for ,"
+      "#cuBQL: your own targets, which will likely lead to some CUDA  "
+      "#cuBQL: errors like 'CUDA_ARCHITECTURES not set for ...'. "
+      "#cuBQL: "
+      "#cuBQL: Unless you already know what you're doing, most likely what"
+      "#cuBQL: you want is to add a like like"
+      "#cuBQL:    set(CMAKE_CUDA_ARCHITECTURES all-native)"
+      "#cuBQL: into your CMakeLists.txt."
+      )
+    message(WARNING "#cuBQL: you've included cuBQL as a subproject, but ")
+  endif()
+else()
+  # make sure we set this only for ourselves, and do not pollute
+  # parent project's settings
+  set(CMAKE_CUDA_ARCHITECTURES ${CUBQL_CUDA_ARCHITECTURES})
+endif()
 
 
 # ------------------------------------------------------------------

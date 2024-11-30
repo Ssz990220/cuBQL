@@ -18,6 +18,7 @@
 # using this the user has to manulaly set CUBQL_BUILDER_INSTANTIATION
 # in one of his/her source files
 add_library(cuBQL INTERFACE)
+
 target_sources(cuBQL INTERFACE
   # main public "interface" to this library
   bvh.h
