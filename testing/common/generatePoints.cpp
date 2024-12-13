@@ -51,9 +51,6 @@ void run()
             << " points w/ seed " << seed << std::endl;
   std::vector<vec_t<double,D>> points
     = generator->generate(numPoints,seed);
-  PRINT(points.size());
-  for (int i=0;i<std::min(points.size(),(size_t)10);i++)
-    PRINT(points[i]);
   std::cout << "#cuBQL.genPoints: saving to " << outFileName << std::endl;
   saveBinary(outFileName,points);
   std::cout << "#cuBQL.genPoints: all done." << std::endl;

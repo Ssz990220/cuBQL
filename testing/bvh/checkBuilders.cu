@@ -34,9 +34,6 @@ namespace testing {
   using namespace cuBQL::samples;
 
 
-
-  
-
   template<typename T>
   inline double costEstimate(box_t<T,2> b)
   {
@@ -83,20 +80,14 @@ namespace testing {
 
     box_t traverse(int nodeID)
     {
-      // PRINT(nodeID);
-      // numNodesFound++;
       node_t node = nodes[nodeID];
       box_t bounds;
-      // PRINT(node.admin.count);
-      // PRINT(node.bounds);
       if (node.admin.count) {
         for (int i=0;i<node.admin.count;i++) {
           int primID = primIDs[node.admin.offset+i];
-          // PRINT(primID);
           primIDsFound.insert(primID);
           bounds.extend(boxes[primID]);
         }
-        // PRINT(bounds);
       } else {
         box_t lBounds = traverse(node.admin.offset+0);
         box_t rBounds = traverse(node.admin.offset+1);

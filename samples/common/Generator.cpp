@@ -500,16 +500,9 @@ namespace cuBQL {
         std::cout << "choosing size using uniform min/max distribution..." << std::endl;
         sizeMean = -1.f;
       } else {
-        // std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
-        // int avgBoxesPerCluster = count / numClusters;
-        // // double avgClusterWidth = 4.f*sigma;
-        // sizeMean = 1.f/powf(avgBoxesPerCluster,1.f/D);
-        // PRINT(sizeMean);
-        // sizeSigma = sizeMean/5.f;
         std::cout << "choosing size using auto-chosen gaussian..." << std::endl;
         double avgClusterWidth = 4*sigma;
-        // int avgBoxesPerCluster = count / numClusters;
-        sizeMean = .5f*avgClusterWidth*gaussianSize.scale;//powf(avgBoxesPerCluster,1.f/D);
+        sizeMean = .5f*avgClusterWidth*gaussianSize.scale;
         sizeSigma = sizeMean/3.f;
         std::cout << "choosing size using auto-config'ed gaussian"
                   << " mean=" << sizeMean
