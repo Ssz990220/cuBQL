@@ -44,19 +44,12 @@ namespace testing {
       point_t query = d_queries[qi];
       cuBQL::vec_t<double,CUBQL_TEST_D>
         doubleQuery = cuBQL::vec_t<double,CUBQL_TEST_D>(query);
-      // if (qi == 0)
-      //   PRINT(doubleQuery);
       float closest = INFINITY;
       for (int di=0;di<numData;di++) {
         cuBQL::vec_t<double,CUBQL_TEST_D>
           doubleData = cuBQL::vec_t<double,CUBQL_TEST_D>(d_data[di]);
         cuBQL::vec_t<double,CUBQL_TEST_D>
           diff = doubleData - doubleQuery;
-
-        // if (qi == 0) {
-        //   PRINT(di);
-        //   PRINT(doubleData);
-        // }
         
         float d = dot(diff,diff);
         closest = std::min(closest,d);
